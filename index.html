@@ -298,15 +298,16 @@ async function loadFromSheet() {
   syncing = true;
   setSyncStatus('syncing', 'Syncing...');
   try {
-    const [evalsData, clinsData, agenciesData] = await Promise.all([
+    const [evalsData, clinsData, agenciesData, qaData] = await Promise.all([
       apiGet('getEvals'),
       apiGet('getClinicians'),
-      apiGet('getAgencies')
+      apiGet('getAgencies'),
+      apiGet('getQA')
     ]);
     evals = Array.isArray(evalsData) ? evalsData : [];
     clins = Array.isArray(clinsData) ? clinsData : [];
     agencies = Array.isArray(agenciesData) ? agenciesData.map(a => a.name) : defaultAgencies;
-    parseQAFromEvals();
+    qaRecords = Array.isArray(qaData) ? qaData : [];
     render();
     renderClins();
     renderAgencies();
@@ -697,104 +698,111 @@ function ct(el) { navigator.clipboard.writeText(el.querySelector('.tpl-b').textC
 function cc() { navigator.clipboard.writeText(document.getElementById('cu').value); flash('Copied ✓'); }
 
 // ── QA TRACKER ──
+let qaRecords = []; // loaded from QA sheet
+
 function renderQA() {
   const list = document.getElementById('qaList');
   if (!list) return;
-  // Show assigned and complete evals for QA
   const qaEvals = evals.filter(e => e.status === 'assigned' || e.status === 'complete');
   if (!qaEvals.length) {
     list.innerHTML = '<div class="qa-empty">No assigned evals yet.<br>Assign clinicians on the board first.</div>';
     return;
   }
   list.innerHTML = qaEvals.map(e => {
-    const qa = e.qa || {};
-    const allDone = qa.seen && qa.scheduled;
+    // Find existing QA record for this eval
+    const qa = qaRecords.find(r => String(r.eval_id) === String(e.id)) || {};
+    const seen = qa.seen === 'YES' || qa.seen === true;
+    const orders = qa.orders_added === 'YES' || qa.orders_added === true;
+    const pta = qa.pta_assigned === 'YES' || qa.pta_assigned === true;
+    const scheduled = qa.scheduled === 'YES' || qa.scheduled === true;
+    const allDone = seen && scheduled;
+    const patient = e.note ? e.note.replace(/\|\|QA:.*$/,'').trim() : '';
     return `<div class="qa-card${allDone?' qa-done':''}">
       <div class="qa-row">
         <div>
           <div class="qa-loc">${e.location}${e.zip?` <span style="font-family:monospace;font-size:11px;color:var(--muted)">${e.zip}</span>`:''}</div>
-          <div class="qa-clin">👤 ${e.clinician||'Unassigned'} · ${e.agency} · ${e.discipline}</div>
-          ${e.note?`<div style="font-size:11px;color:var(--muted);font-style:italic">${e.note}</div>`:''}
+          <div class="qa-clin">👤 ${e.clinician||'Unassigned'} · ${e.agency||''} · ${e.discipline}</div>
+          ${patient?`<div style="font-size:11px;color:var(--muted);font-style:italic">${patient}</div>`:''}
         </div>
         <span class="badge b${e.status==='complete'?'com':'ass'}">${e.status}</span>
       </div>
       <div class="qa-checks">
-        <div class="qa-check${qa.seen?' done':''}">
-          <input type="checkbox" ${qa.seen?'checked':''} onchange="toggleQA('${e.id}','seen',this.checked)">
+        <div class="qa-check${seen?' done':''}">
+          <input type="checkbox" ${seen?'checked':''} onchange="toggleQA('${e.id}','seen',this.checked)">
           <span>Patient seen</span>
-          <input type="date" class="qa-date" value="${qa.seenDate||''}" onchange="setQADate('${e.id}','seenDate',this.value)" placeholder="Date seen">
+          <input type="date" class="qa-date" value="${qa.seen_date||''}" onchange="toggleQAField('${e.id}','seen_date',this.value)">
         </div>
-        <div class="qa-check${qa.orders?' done':''}">
-          <input type="checkbox" ${qa.orders?'checked':''} onchange="toggleQA('${e.id}','orders',this.checked)">
+        <div class="qa-check${orders?' done':''}">
+          <input type="checkbox" ${orders?'checked':''} onchange="toggleQA('${e.id}','orders_added',this.checked)">
           <span>Orders added</span>
         </div>
-        <div class="qa-check${qa.pta?' done':''}">
-          <input type="checkbox" ${qa.pta?'checked':''} onchange="toggleQA('${e.id}','pta',this.checked)">
+        <div class="qa-check${pta?' done':''}">
+          <input type="checkbox" ${pta?'checked':''} onchange="toggleQA('${e.id}','pta_assigned',this.checked)">
           <span>PTA assigned</span>
         </div>
-        <div class="qa-check${qa.scheduled?' done':''}">
-          <input type="checkbox" ${qa.scheduled?'checked':''} onchange="toggleQA('${e.id}','scheduled',this.checked)">
+        <div class="qa-check${scheduled?' done':''}">
+          <input type="checkbox" ${scheduled?'checked':''} onchange="toggleQA('${e.id}','scheduled',this.checked)">
           <span>Follow-up scheduled</span>
         </div>
       </div>
-      <div>
-        <textarea class="qa-note" placeholder="QA notes (Stephen / Evan / Kym)..." onchange="setQANote('${e.id}',this.value)">${qa.notes||''}</textarea>
+      <div style="display:flex;gap:6px;align-items:center">
+        <textarea class="qa-note" placeholder="QA notes (Stephen / Evan / Kym)..." onchange="toggleQAField('${e.id}','qa_notes',this.value)">${qa.qa_notes||''}</textarea>
       </div>
+      ${qa.last_updated?`<div style="font-size:10px;color:var(--muted);font-family:monospace">Last updated: ${qa.last_updated}</div>`:''}
     </div>`;
   }).join('');
 }
 
-async function toggleQA(id, field, val) {
-  const e = evals.find(e => String(e.id) === String(id));
-  if (!e) return;
-  if (!e.qa) e.qa = {};
-  e.qa[field] = val;
-  // If all QA steps done, mark complete
-  if (e.qa.seen && e.qa.orders && e.qa.scheduled) {
-    e.status = 'complete';
+function getQARecord(evalId) {
+  const e = evals.find(e => String(e.id) === String(evalId));
+  if (!e) return null;
+  const existing = qaRecords.find(r => String(r.eval_id) === String(evalId));
+  const patient = e.note ? e.note.replace(/\|\|QA:.*$/,'').trim() : '';
+  return {
+    eval_id: e.id,
+    location: e.location,
+    zip: e.zip || '',
+    clinician: e.clinician || '',
+    patient,
+    agency: e.agency || '',
+    discipline: e.discipline || 'PT',
+    seen: existing ? existing.seen : 'NO',
+    seen_date: existing ? existing.seen_date : '',
+    orders_added: existing ? existing.orders_added : 'NO',
+    pta_assigned: existing ? existing.pta_assigned : 'NO',
+    scheduled: existing ? existing.scheduled : 'NO',
+    qa_notes: existing ? existing.qa_notes : '',
+    qa_by: '',
+  };
+}
+
+async function toggleQA(evalId, field, val) {
+  const rec = getQARecord(evalId);
+  if (!rec) return;
+  rec[field] = val ? 'YES' : 'NO';
+  // Update or add to local qaRecords
+  const idx = qaRecords.findIndex(r => String(r.eval_id) === String(evalId));
+  if (idx >= 0) qaRecords[idx] = {...qaRecords[idx], ...rec};
+  else qaRecords.push(rec);
+  // If seen + scheduled both done, mark eval complete
+  const r = qaRecords.find(r => String(r.eval_id) === String(evalId));
+  if (r && r.seen === 'YES' && r.scheduled === 'YES') {
+    const e = evals.find(e => String(e.id) === String(evalId));
+    if (e) { e.status = 'complete'; await apiPost({action:'updateEval', eval:e}); render(); }
   }
   renderQA();
-  render();
-  // Save QA data in note field of the eval (appended)
-  const qaStr = JSON.stringify(e.qa);
-  const baseNote = (e.note || '').replace(/\|\|QA:.*$/,'');
-  e.note = baseNote + '||QA:' + qaStr;
-  await apiPost({action: 'updateEval', eval: e});
+  await apiPost({action: 'updateQA', qa: rec});
+  setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
 }
 
-async function setQADate(id, field, val) {
-  const e = evals.find(e => String(e.id) === String(id));
-  if (!e) return;
-  if (!e.qa) e.qa = {};
-  e.qa[field] = val;
-  const baseNote = (e.note || '').replace(/\|\|QA:.*$/,'');
-  e.note = baseNote + '||QA:' + JSON.stringify(e.qa);
-  await apiPost({action: 'updateEval', eval: e});
-}
-
-async function setQANote(id, val) {
-  const e = evals.find(e => String(e.id) === String(id));
-  if (!e) return;
-  if (!e.qa) e.qa = {};
-  e.qa.notes = val;
-  const baseNote = (e.note || '').replace(/\|\|QA:.*$/,'');
-  e.note = baseNote + '||QA:' + JSON.stringify(e.qa);
-  await apiPost({action: 'updateEval', eval: e});
-}
-
-// Parse QA data from note field on load
-function parseQAFromEvals() {
-  evals.forEach(e => {
-    if (!e.qa && e.note && e.note.includes('||QA:')) {
-      try {
-        const qaStr = e.note.split('||QA:')[1];
-        e.qa = JSON.parse(qaStr);
-        e.note = e.note.split('||QA:')[0];
-      } catch(err) { e.qa = {}; }
-    } else if (!e.qa) {
-      e.qa = {};
-    }
-  });
+async function toggleQAField(evalId, field, val) {
+  const rec = getQARecord(evalId);
+  if (!rec) return;
+  rec[field] = val;
+  const idx = qaRecords.findIndex(r => String(r.eval_id) === String(evalId));
+  if (idx >= 0) qaRecords[idx] = {...qaRecords[idx], ...rec};
+  else qaRecords.push(rec);
+  await apiPost({action: 'updateQA', qa: rec});
 }
 
 // ── AGENCIES ──
