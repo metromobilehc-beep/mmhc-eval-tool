@@ -349,20 +349,25 @@ function parseAdd() {
   const items = parseText(text, ag, wd, pri);
   if (!items.length) { flash('⚠️ Could not parse — try single-add below'); return; }
   document.getElementById('parseBtn').disabled = true;
-  let done = 0;
   setSyncStatus('syncing', `Saving ${items.length} evals...`);
-  items.forEach(async ev => {
-    evals.push(ev);
-    await apiPost({action: 'saveEval', eval: ev});
-    done++;
-    if (done === items.length) {
-      render();
-      document.getElementById('rt').value = '';
-      document.getElementById('parseBtn').disabled = false;
-      setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`);
-      flash(`✓ Added ${items.length} eval${items.length > 1 ? 's' : ''} to shared board`);
+  // Add all to local state immediately so board shows right away
+  items.forEach(ev => evals.push(ev));
+  render();
+  document.getElementById('rt').value = '';
+  // Save to sheet sequentially to avoid rate limits
+  let saved = 0;
+  for (const ev of items) {
+    try {
+      await apiPost({action: 'saveEval', eval: ev});
+      saved++;
+      setSyncStatus('syncing', `Saving ${saved}/${items.length}...`);
+    } catch(e) {
+      console.warn('Save failed for eval:', ev.location, e);
     }
-  });
+  }
+  document.getElementById('parseBtn').disabled = false;
+  setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
+  flash(`✓ Added ${items.length} eval${items.length > 1 ? 's' : ''} to shared board`);
 }
 
 function disc() {
@@ -437,7 +442,16 @@ function parseText(text, ag, wd, p) {
     return n.trim();
   }
 
-  const lines = text.split('\n').map(l => l.trim()).filter(l => l && !/^evals needed$/i.test(l));
+  // Strip intro/question sentences — lines with common question words and more than 4 words
+  // that don't look like city names, zips, or abbreviations
+  function isIntroLine(l) {
+    const words = l.trim().split(/\s+/);
+    if (words.length <= 2) return false; // short lines are likely city names
+    const introPatterns = /\b(do you|can you|want|would|could|please|any of|these|tomorrow|next week|this week|available|hello|hi |hey |thanks|thank you|let me know|please see|see below|following|attached|regarding|fyi|heads up|just|wanted|checking|reaching out|hope|good morning|good afternoon)\b/i;
+    return introPatterns.test(l) && words.length > 4;
+  }
+
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l && !/^evals needed$/i.test(l) && !isIntroLine(l));
 
   // ── FORMAT A: BIOS structured blocks ──
   // Detected by "LASTNAME (METRO), FIRSTNAME" clinician lines
