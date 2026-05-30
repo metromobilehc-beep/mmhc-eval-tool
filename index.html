@@ -280,22 +280,39 @@ function setSyncStatus(state, msg) {
   txt.textContent = msg;
 }
 
-async function apiGet(action) {
-  const res = await fetch(`${API}?action=${action}`);
-  return res.json();
+async function apiGet(action, retries=3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 10000);
+      const res = await fetch(`${API}?action=${action}`, {signal: controller.signal});
+      clearTimeout(timeout);
+      const text = await res.text();
+      try { return JSON.parse(text); } catch(e) { return []; }
+    } catch(e) {
+      console.warn(`apiGet attempt ${i+1} failed:`, e.message);
+      if (i < retries-1) await new Promise(r => setTimeout(r, 1000 * (i+1)));
+    }
+  }
+  return [];
 }
 
-async function apiPost(data) {
-  try {
-    // Google Apps Script requires no-cors for POST from browser
-    // Use GET with encoded payload for reliability
-    const encoded = encodeURIComponent(JSON.stringify(data));
-    const res = await fetch(`${API}?payload=${encoded}&action=${data.action}`);
-    return res.json();
-  } catch(e) {
-    console.warn('apiPost error:', e);
-    return {error: e.message};
+async function apiPost(data, retries=3) {
+  for (let i = 0; i < retries; i++) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 15000);
+      const encoded = encodeURIComponent(JSON.stringify(data));
+      const res = await fetch(`${API}?payload=${encoded}&action=${data.action}`, {signal: controller.signal});
+      clearTimeout(timeout);
+      const text = await res.text();
+      try { return JSON.parse(text); } catch(e) { return {success: true}; }
+    } catch(e) {
+      console.warn(`apiPost attempt ${i+1} failed:`, e.message);
+      if (i < retries-1) await new Promise(r => setTimeout(r, 1000 * (i+1)));
+    }
   }
+  return {error: 'Failed after retries'};
 }
 
 async function loadFromSheet() {
@@ -303,23 +320,30 @@ async function loadFromSheet() {
   syncing = true;
   setSyncStatus('syncing', 'Syncing...');
   try {
-    const [evalsData, clinsData, agenciesData, qaData] = await Promise.all([
-      apiGet('getEvals'),
-      apiGet('getClinicians'),
-      apiGet('getAgencies'),
-      apiGet('getQA')
-    ]);
+    // Load sequentially on mobile to avoid simultaneous connection limits
+    const evalsData = await apiGet('getEvals');
+    const clinsData = await apiGet('getClinicians');
+    const agenciesData = await apiGet('getAgencies');
+    const qaData = await apiGet('getQA');
+
     evals = Array.isArray(evalsData) ? evalsData : [];
     clins = Array.isArray(clinsData) ? clinsData : [];
-    agencies = Array.isArray(agenciesData) ? agenciesData.map(a => a.name) : defaultAgencies;
+    agencies = Array.isArray(agenciesData) && agenciesData.length
+      ? agenciesData.map(a => a.name)
+      : defaultAgencies;
     qaRecords = Array.isArray(qaData) ? qaData : [];
+
     render();
     renderClins();
     renderAgencies();
     renderQA();
     setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`);
   } catch(e) {
-    setSyncStatus('err', 'Sync error — retrying');
+    console.error('loadFromSheet error:', e);
+    // Use defaults if sheet fails
+    if (!agencies.length) agencies = defaultAgencies;
+    renderAgencies();
+    setSyncStatus('err', 'Sync error — check connection');
   }
   syncing = false;
 }
