@@ -247,20 +247,35 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 const API = 'https://script.google.com/macros/s/AKfycbzoT0EUpWkjdZG-jIdSJKMNbUaiIfNka1yjUoqWRA6bT-8DUjRMOAppqsWuGI82V-Sewg/exec';
 
 let evals = [];
-let clins = [];
-let agencies = [];
 let pri = 'normal';
 let fil = 'all';
 let syncing = false;
-const defaultAgencies = ['BIOS','Millennium','Faith Home Care','CareFicient','Rice Home Health','Caring Connection'];
+
+const defaultAgencies = ['BIOS','Millennium','Faith Home Care','CareFicient','Rice Home Health','Caring Connection','Vital Muskogee','Mobile'];
+const defaultClins = [
+  {name:'Evan Flanagan',role:'PT'},{name:'Kimberly Quigley',role:'PT'},
+  {name:'Lexie Henson',role:'PT'},{name:'Tina Pierce',role:'PT'},
+  {name:'Johnathan Barber',role:'PT'},{name:'Cassidy Crouch',role:'PT'},
+  {name:'Stephen Mace',role:'PT'},{name:'Marquita Tarkington',role:'PT'},
+  {name:'Kym Crane',role:'SLP'},{name:'Kasey Rideout',role:'SLP'}
+];
+
+// Start with defaults — overwritten by sheet sync if available
+let agencies = [...defaultAgencies];
+let clins = [...defaultClins];
 
 // ── INIT ──
 window.onload = () => {
   const d = new Date();
   document.getElementById('wd').value = d.toISOString().split('T')[0];
   updateWk();
+  // Render immediately with defaults so UI is never blank
+  render();
+  renderClins();
+  renderAgencies();
+  renderQA();
+  // Then sync from sheet in background
   loadFromSheet();
-  // Auto-refresh every 30 seconds
   setInterval(loadFromSheet, 30000);
 };
 
@@ -339,8 +354,7 @@ async function loadFromSheet() {
   if (savedQA) { try { qaRecords = JSON.parse(savedQA); } catch(e) {} }
 
   // Always ensure agencies has values
-  if (!agencies.length) agencies = defaultAgencies;
-  if (!clins.length) clins = [{name:'Evan Flanagan',role:'PT'},{name:'Kimberly Quigley',role:'PT'},{name:'Lexie Henson',role:'PT'},{name:'Tina Pierce',role:'PT'},{name:'Johnathan Barber',role:'PT'},{name:'Cassidy Crouch',role:'PT'},{name:'Stephen Mace',role:'PT'},{name:'Marquita Tarkington',role:'PT'},{name:'Kym Crane',role:'SLP'},{name:'Kasey Rideout',role:'SLP'}];
+  // Defaults already set at top — no need to override
 
   // Render immediately from local data
   render();
