@@ -286,11 +286,16 @@ async function apiGet(action) {
 }
 
 async function apiPost(data) {
-  const res = await fetch(API, {
-    method: 'POST',
-    body: JSON.stringify(data)
-  });
-  return res.json();
+  try {
+    // Google Apps Script requires no-cors for POST from browser
+    // Use GET with encoded payload for reliability
+    const encoded = encodeURIComponent(JSON.stringify(data));
+    const res = await fetch(`${API}?payload=${encoded}&action=${data.action}`);
+    return res.json();
+  } catch(e) {
+    console.warn('apiPost error:', e);
+    return {error: e.message};
+  }
 }
 
 async function loadFromSheet() {
