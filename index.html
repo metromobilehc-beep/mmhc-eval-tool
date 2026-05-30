@@ -467,7 +467,9 @@ function parseText(text, ag, wd, p) {
           location: city || (zipCity[zip] || 'Unknown'),
           zip, discipline: validDisc, agency: ag,
           priority: urg ? 'urgent' : p,
-          note, status: 'pending',
+          note: b.visit_type || '', 
+          patient: b.patient_raw ? cleanPatient(b.patient_raw) : '',
+          status: 'pending',
           clinician, dateAdded: evalDate, weekDate: evalDate
         });
         i = j;
@@ -608,8 +610,12 @@ function render() {
         <span class="badge b${e.status==='pending'?'pend':e.status==='assigned'?'ass':'com'}">${e.status.charAt(0).toUpperCase()+e.status.slice(1)}</span>
         ${e.clinician ? `<span class="badge bcl">👤 ${e.clinician.split(' ')[0]}</span>` : ''}
       </div>
+      ${e.patient ? `<div style="font-size:12px;font-weight:600;color:#93c5fd;">👤 ${e.patient}</div>` : ''}
       ${e.note ? `<div class="cnote">${e.note}</div>` : ''}
       <div class="cmeta"><span class="cdate">${e.dateAdded}</span><span class="agebadge ${ac}">${al} old</span></div>
+      <div style="margin-bottom:4px">
+        <input class="csel" style="font-size:11px;padding:5px 7px;" placeholder="Patient name..." value="${e.patient||''}" onchange="updatePatient('${e.id}',this.value)">
+      </div>
       <div class="cact">
         <select class="csel" onchange="asgn('${e.id}',this.value)">
           <option value="">— Assign Clinician —</option>${opts}
@@ -620,6 +626,13 @@ function render() {
       </div>
     </div>`;
   }).join('');
+}
+
+async function updatePatient(id, name) {
+  const e = evals.find(e => String(e.id) === String(id));
+  if (!e) return;
+  e.patient = name;
+  await apiPost({action: 'updateEval', eval: e});
 }
 
 async function asgn(id, name) {
