@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MMHC · Eval Workflow</title>
+<style>
+:root{--bg:#0d1117;--surface:#161b22;--border:#2a3340;--accent:#00d4aa;--red:#ef4444;--blue:#3b82f6;--text:#e2e8f0;--muted:#64748b;--pending:#f59e0b;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;min-height:100vh;}
+header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;flex-wrap:wrap;gap:8px;}
+.logo{display:flex;align-items:center;gap:10px;}
+.mark{width:32px;height:32px;background:var(--accent);border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#0d1117;flex-shrink:0;}
+.logo-text{font-weight:700;font-size:15px;}
+.logo-sub{font-size:11px;color:var(--muted);}
+.week-pill{font-family:monospace;font-size:11px;color:var(--accent);background:rgba(0,212,170,0.08);border:1px solid rgba(0,212,170,0.2);padding:5px 12px;border-radius:20px;}
+.stats{display:flex;gap:18px;}
+.stat{text-align:center;}
+.stat-n{font-size:20px;font-weight:700;font-family:monospace;}
+.stat-l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.sync-status{font-size:11px;display:flex;align-items:center;gap:5px;color:var(--muted);}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+.sync-dot.live{background:var(--accent);box-shadow:0 0 6px var(--accent);}
+.sync-dot.syncing{background:var(--pending);animation:pulse 1s infinite;}
+.sync-dot.err{background:var(--red);}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+.layout{display:grid;grid-template-columns:290px 1fr;height:calc(100vh - 61px);}
+.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
+.tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
+.tab{flex:1;padding:10px 4px;text-align:center;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--muted);cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;font-family:inherit;}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent);}
+.panel{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;}
+.hidden{display:none!important;}
+.lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:3px;}
+input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:12px;padding:7px 10px;outline:none;box-sizing:border-box;}
+textarea{resize:none;height:140px;line-height:1.7;font-family:monospace;}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);}
+.btn{padding:8px 14px;border-radius:6px;border:none;cursor:pointer;font-family:inherit;font-weight:600;font-size:12px;display:flex;align-items:center;gap:6px;justify-content:center;width:100%;}
+.btn-g{background:var(--accent);color:#0d1117;}
+.btn-g:hover{background:#00bfa0;}
+.btn-g:disabled{background:#1e4a40;color:#2a7a60;cursor:not-allowed;}
+.btn-o{background:transparent;color:var(--muted);border:1px solid var(--border);}
+.btn-o:hover{color:var(--text);border-color:var(--text);}
+.btn-r{background:rgba(239,68,68,0.1);color:var(--red);border:1px solid transparent;}
+.pri-row{display:flex;gap:6px;}
+.pb{flex:1;padding:6px 4px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
+.pb.pn{border-color:var(--accent);color:var(--accent);background:rgba(0,212,170,.08);}
+.pb.pa{border-color:var(--pending);color:var(--pending);background:rgba(245,158,11,.08);}
+.pb.pu{border-color:var(--red);color:var(--red);background:rgba(239,68,68,.08);}
+.hr{height:1px;background:var(--border);margin:2px 0;}
+.tpl{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;transition:border-color .2s;}
+.tpl:hover{border-color:var(--accent);}
+.tpl-t{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--accent);margin-bottom:5px;}
+.tpl-b{font-size:11px;color:var(--muted);line-height:1.6;font-family:monospace;}
+.cr{display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-bottom:5px;}
+.av{width:27px;height:27px;border-radius:50%;background:#1e2530;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--accent);margin-right:8px;flex-shrink:0;}
+.xbtn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;}
+.xbtn:hover{color:var(--red);}
+.board{overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;}
+.bh{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
+.bt{font-weight:700;font-size:16px;}
+.fr{display:flex;gap:6px;flex-wrap:wrap;}
+.fb{padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
+.fb.on{background:var(--accent);color:#0d1117;border-color:var(--accent);}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:10px;}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;}
+.card.sp{border-left:3px solid var(--pending);}
+.card.sa{border-left:3px solid var(--blue);}
+.card.sc{border-left:3px solid var(--accent);opacity:.55;}
+.card.pu{border-top:2px solid var(--red);}
+.card.pp{border-top:2px solid var(--pending);}
+.cloc{font-weight:700;font-size:14px;}
+.czip{font-size:11px;color:var(--muted);font-family:monospace;margin-left:4px;}
+.br{display:flex;gap:4px;flex-wrap:wrap;}
+.badge{padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
+.dPT{background:rgba(59,130,246,.15);color:#60a5fa;}
+.dOT{background:rgba(168,85,247,.15);color:#c084fc;}
+.dSLP{background:rgba(236,72,153,.15);color:#f472b6;}
+.dPTA{background:rgba(59,130,246,.1);color:#93c5fd;}
+.dCOTA{background:rgba(168,85,247,.1);color:#d8b4fe;}
+.bag{background:rgba(0,212,170,.08);color:var(--accent);}
+.burg{background:rgba(239,68,68,.15);color:#f87171;}
+.basp{background:rgba(245,158,11,.15);color:var(--pending);}
+.bpend{background:rgba(245,158,11,.1);color:var(--pending);}
+.bass{background:rgba(59,130,246,.1);color:#60a5fa;}
+.bcom{background:rgba(0,212,170,.1);color:var(--accent);}
+.bcl{background:rgba(59,130,246,.08);color:#93c5fd;font-size:10px;}
+.cnote{font-size:11px;color:var(--muted);font-style:italic;line-height:1.4;}
+.cmeta{display:flex;justify-content:space-between;align-items:center;}
+.cdate{font-size:10px;color:var(--muted);font-family:monospace;}
+.agebadge{font-size:10px;font-family:monospace;padding:2px 7px;border-radius:4px;}
+.af{background:rgba(0,212,170,.1);color:var(--accent);}
+.aa{background:rgba(245,158,11,.15);color:var(--pending);}
+.ao{background:rgba(239,68,68,.15);color:#f87171;}
+.cact{display:flex;gap:6px;}
+.csel{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:11px;padding:5px 7px;outline:none;cursor:pointer;}
+.csel:focus{border-color:var(--accent);}
+.cbtn{padding:5px 10px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;}
+.cbtn.done{color:var(--accent);border-color:var(--accent);}
+.cbtn.done:hover{background:rgba(0,212,170,.08);}
+.cbtn.del{color:var(--red);}
+.empty{text-align:center;padding:60px 20px;color:var(--muted);grid-column:1/-1;}
+.ei{font-size:40px;margin-bottom:12px;}
+.et{font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px;}
+.loading{text-align:center;padding:40px;color:var(--muted);grid-column:1/-1;}
+.spinner{display:inline-block;width:24px;height:24px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:10px;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.flash{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--accent);color:#0d1117;font-weight:700;font-size:13px;padding:9px 22px;border-radius:24px;z-index:999;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap;}
+.flash.on{opacity:1;}
+@media(max-width:680px){.layout{grid-template-columns:1fr;height:auto;}.sidebar{max-height:56vh;}.stats{display:none;}}
+</style>
+</head>
+<body>
+<header>
+  <div class="logo">
+    <div class="mark">M²</div>
+    <div><div class="logo-text">Metro Mobile Health Care</div><div class="logo-sub">Eval Workflow · Weekly Board</div></div>
+  </div>
+  <div class="week-pill" id="wk"></div>
+  <div class="sync-status">
+    <div class="sync-dot" id="syncDot"></div>
+    <span id="syncMsg">Connecting...</span>
+  </div>
+  <div class="stats">
+    <div class="stat"><div class="stat-n" id="sP" style="color:var(--pending)">0</div><div class="stat-l">Pending</div></div>
+    <div class="stat"><div class="stat-n" id="sA" style="color:var(--blue)">0</div><div class="stat-l">Assigned</div></div>
+    <div class="stat"><div class="stat-n" id="sC" style="color:var(--accent)">0</div><div class="stat-l">Done</div></div>
+  </div>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+    <div class="tabs">
+      <button class="tab on" onclick="sw('paste',this)">📋 Paste</button>
+      <button class="tab" onclick="sw('tpl',this)">💬 Templates</button>
+      <button class="tab" onclick="sw('set',this)">⚙️ Settings</button>
+    </div>
+
+    <div class="panel" id="tp-paste">
+      <div><div class="lbl">Agency</div>
+        <select id="ag"></select>
+      </div>
+      <div><div class="lbl">Paste Referral Text</div>
+        <textarea id="rt" placeholder="Evals needed&#10;Catoosa-PT&#10;Tulsa 74105-PT&#10;BA 74014-PT - needs eval ASAP&#10;&#10;or: Eval 74105 Eval 74133&#10;&#10;or: We have 2 SOC tomorrow in Tulsa and Oologah."></textarea>
+      </div>
+      <div><div class="lbl">Default Discipline</div>
+        <select id="defDisc"><option>PT</option><option>OT</option><option>SLP</option><option>PTA</option><option>COTA</option></select>
+      </div>
+      <div><div class="lbl">Priority</div>
+        <div class="pri-row">
+          <button class="pb pn" id="pbN" onclick="sp('normal')">Normal</button>
+          <button class="pb" id="pbA" onclick="sp('asap')">ASAP</button>
+          <button class="pb" id="pbU" onclick="sp('urgent')">URGENT</button>
+        </div>
+      </div>
+      <div><div class="lbl">Week of</div><input type="date" id="wd" onchange="updateWk()"></div>
+      <button class="btn btn-g" id="parseBtn" onclick="parseAdd()">⚡ Parse &amp; Add to Board</button>
+      <div class="hr"></div>
+      <div><div class="lbl">Add Single Eval</div>
+        <input id="sl" placeholder="Location / City" style="margin-bottom:5px">
+        <input id="sz" placeholder="ZIP (optional)" style="margin-bottom:5px">
+        <input id="sn" placeholder="Patient name / notes" style="margin-bottom:5px">
+        <select id="sd" style="margin-bottom:8px"><option>PT</option><option>OT</option><option>SLP</option><option>PTA</option><option>COTA</option></select>
+        <button class="btn btn-o" onclick="addOne()">+ Add Eval</button>
+      </div>
+    </div>
+
+    <div class="panel hidden" id="tp-tpl">
+      <div class="lbl">Tap to copy</div>
+      <div class="tpl" onclick="ct(this)"><div class="tpl-t">✅ Acknowledge Referral</div><div class="tpl-b">Thank you, we received your referral list. We will review availability and confirm assignments shortly.</div></div>
+      <div class="tpl" onclick="ct(this)"><div class="tpl-t">👤 Clinician Assigned</div><div class="tpl-b">Hi [CLINICIAN], you have been assigned an eval for [LOCATION]. Please confirm availability and contact the patient to schedule. Thank you!</div></div>
+      <div class="tpl" onclick="ct(this)"><div class="tpl-t">🔔 Follow-Up Unseen</div><div class="tpl-b">Hi [CLINICIAN], just following up — we have an eval still pending for [LOCATION]. Can you confirm when this will be seen? Please update ConnectTeam once scheduled.</div></div>
+      <div class="tpl" onclick="ct(this)"><div class="tpl-t">🚨 Urgent Eval Notice</div><div class="tpl-b">⚠️ URGENT: We have an eval in [LOCATION] that needs to be seen ASAP. This patient is PT only. Please respond with availability immediately.</div></div>
+      <div class="tpl" onclick="ct(this)"><div class="tpl-t">📋 SOC Reminder</div><div class="tpl-b">Hi [CLINICIAN], reminder you have a SOC scheduled tomorrow for [PATIENT] in [CITY]. Please ensure documentation is submitted within 24 hours.</div></div>
+      <div class="tpl" onclick="ct(this)"><div class="tpl-t">✔️ Eval Complete</div><div class="tpl-b">Hi [AGENCY], confirming the eval for [PATIENT] in [LOCATION] has been completed by [CLINICIAN]. Documentation submitted within 24 hours.</div></div>
+      <div><div class="lbl" style="margin-bottom:6px">Custom Message</div>
+        <textarea id="cu" style="height:80px" placeholder="Type a custom message..."></textarea>
+        <button class="btn btn-o" style="margin-top:6px" onclick="cc()">📋 Copy Custom</button>
+      </div>
+    </div>
+
+    <div class="panel hidden" id="tp-set">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:4px;">📊 Google Sheets Sync</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5;">Board is shared live with your team via Google Sheets. All changes sync automatically.</div>
+        <button class="btn btn-o" onclick="loadFromSheet()">🔄 Force Refresh</button>
+      </div>
+      <div><div class="lbl" style="margin-bottom:6px">Clinician Roster</div>
+        <div id="clinList"></div>
+        <div style="display:flex;gap:6px;margin-top:6px">
+          <input id="nn" placeholder="Name" style="flex:1">
+          <select id="nr" style="width:80px"><option>PT</option><option>PTA</option><option>OT</option><option>COTA</option><option>SLP</option></select>
+        </div>
+        <button class="btn btn-o" style="margin-top:6px" onclick="addClin()">+ Add Clinician</button>
+      </div>
+      <div class="hr"></div>
+      <div><div class="lbl" style="margin-bottom:6px">Agencies</div>
+        <div id="agencyList"></div>
+        <input id="na" placeholder="New agency name" style="margin-top:6px;margin-bottom:6px">
+        <button class="btn btn-o" onclick="addAgency()">+ Add Agency</button>
+      </div>
+      <div class="hr"></div>
+      <button class="btn btn-o" onclick="clrDone()">🗑 Clear Completed Evals</button>
+      <button class="btn btn-r" style="margin-top:4px" onclick="clrAll()">⚠️ Clear All Evals</button>
+    </div>
+  </div>
+
+  <div class="board">
+    <div class="bh">
+      <div class="bt">Weekly Eval Board</div>
+      <div class="fr">
+        <button class="fb on" onclick="sf('all',this)">All</button>
+        <button class="fb" onclick="sf('pending',this)">Pending</button>
+        <button class="fb" onclick="sf('assigned',this)">Assigned</button>
+        <button class="fb" onclick="sf('complete',this)">Complete</button>
+        <button class="fb" onclick="sf('urgent',this)">🚨 Urgent</button>
+      </div>
+    </div>
+    <div class="grid" id="grid">
+      <div class="loading"><div class="spinner"></div><br>Loading shared board...</div>
+    </div>
+  </div>
+</div>
+
+<div class="flash" id="fl"></div>
+
+<script>
+const API = 'https://script.google.com/macros/s/AKfycbzoT0EUpWkjdZG-jIdSJKMNbUaiIfNka1yjUoqWRA6bT-8DUjRMOAppqsWuGI82V-Sewg/exec';
+
+let evals = [];
+let clins = [];
+let agencies = [];
+let pri = 'normal';
+let fil = 'all';
+let syncing = false;
+const defaultAgencies = ['BIOS','Millennium','Faith Home Care','CareFicient','Rice Home Health','Caring Connection'];
+
+// ── INIT ──
+window.onload = () => {
+  const d = new Date();
+  document.getElementById('wd').value = d.toISOString().split('T')[0];
+  updateWk();
+  loadFromSheet();
+  // Auto-refresh every 30 seconds
+  setInterval(loadFromSheet, 30000);
+};
+
+function updateWk() {
+  const d = new Date(document.getElementById('wd').value + 'T12:00:00');
+  const s = new Date(d); s.setDate(d.getDate() - d.getDay());
+  const e = new Date(s); e.setDate(s.getDate() + 6);
+  const f = x => x.toLocaleDateString('en-US', {month:'short', day:'numeric'});
+  document.getElementById('wk').textContent = `Week of ${f(s)} – ${f(e)}`;
+}
+
+// ── SYNC ──
+function setSyncStatus(state, msg) {
+  const dot = document.getElementById('syncDot');
+  const txt = document.getElementById('syncMsg');
+  dot.className = 'sync-dot' + (state === 'live' ? ' live' : state === 'syncing' ? ' syncing' : state === 'err' ? ' err' : '');
+  txt.textContent = msg;
+}
+
+async function apiGet(action) {
+  const res = await fetch(`${API}?action=${action}`);
+  return res.json();
+}
+
+async function apiPost(data) {
+  const res = await fetch(API, {
+    method: 'POST',
+    body: JSON.stringify(data)
+  });
+  return res.json();
+}
+
+async function loadFromSheet() {
+  if (syncing) return;
+  syncing = true;
+  setSyncStatus('syncing', 'Syncing...');
+  try {
+    const [evalsData, clinsData, agenciesData] = await Promise.all([
+      apiGet('getEvals'),
+      apiGet('getClinicians'),
+      apiGet('getAgencies')
+    ]);
+    evals = Array.isArray(evalsData) ? evalsData : [];
+    clins = Array.isArray(clinsData) ? clinsData : [];
+    agencies = Array.isArray(agenciesData) ? agenciesData.map(a => a.name) : defaultAgencies;
+    render();
+    renderClins();
+    renderAgencies();
+    setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`);
+  } catch(e) {
+    setSyncStatus('err', 'Sync error — retrying');
+  }
+  syncing = false;
+}
+
+// ── TABS ──
+function sw(name, el) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
+  document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
+  el.classList.add('on');
+  document.getElementById('tp-' + name).classList.remove('hidden');
+}
+
+// ── PRIORITY ──
+function sp(p) {
+  pri = p;
+  document.getElementById('pbN').className = 'pb' + (p === 'normal' ? ' pn' : '');
+  document.getElementById('pbA').className = 'pb' + (p === 'asap' ? ' pa' : '');
+  document.getElementById('pbU').className = 'pb' + (p === 'urgent' ? ' pu' : '');
+}
+
+// ── PARSE ──
+function parseAdd() {
+  const text = document.getElementById('rt').value.trim();
+  if (!text) { flash('⚠️ Nothing to parse'); return; }
+  const ag = document.getElementById('ag').value;
+  const wd = document.getElementById('wd').value;
+  const items = parseText(text, ag, wd, pri);
+  if (!items.length) { flash('⚠️ Could not parse — try single-add below'); return; }
+  document.getElementById('parseBtn').disabled = true;
+  let done = 0;
+  setSyncStatus('syncing', `Saving ${items.length} evals...`);
+  items.forEach(async ev => {
+    evals.push(ev);
+    await apiPost({action: 'saveEval', eval: ev});
+    done++;
+    if (done === items.length) {
+      render();
+      document.getElementById('rt').value = '';
+      document.getElementById('parseBtn').disabled = false;
+      setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`);
+      flash(`✓ Added ${items.length} eval${items.length > 1 ? 's' : ''} to shared board`);
+    }
+  });
+}
+
+function disc() {
+  const el = document.getElementById('defDisc');
+  return el ? el.value : 'PT';
+}
+
+function parseText(text, ag, wd, p) {
+  const out = [];
+  const urg = /asap|urgent/i.test(text);
+
+  // ── Lookup tables ──
+  const abbrMap = {
+    BA:'Broken Arrow', TUL:'Tulsa', OKM:'Okmulgee', CLA:'Claremore',
+    JEN:'Jenks', OWA:'Owasso', SS:'Sand Springs', MFD:'Mannford',
+    SKT:'Skiatook', HEN:'Henryetta', BIX:'Bixby', SAP:'Sapulpa',
+    'MAN FORD':'Mannford', MANFORD:'Mannford', MANNFORD:'Mannford'
+  };
+
+  const cityNames = [
+    'Tulsa','Oologah','Catoosa','Claremore','Broken Arrow','Okmulgee',
+    'Henryetta','Jenks','Owasso','Bixby','Skiatook','Sapulpa','Muskogee',
+    'Pryor','Wagoner','Collinsville','Sand Springs','Mannford','Bristow',
+    'Depew','Glenpool','Beggs','Drumright','Cushing','Pawhuska','Hominy',
+    'Bartlesville','Vinita','Miami','Tahlequah','Stilwell','Sallisaw',
+    'Coweta','Broken Arrow','Verdigris','Inola','Chelsea','Mazie',
+    'Chouteau','Adair','Locust Grove','Hulbert','Braggs','Okay',
+    'Muskogee','Fort Gibson','Webbers Falls','Gore','Stigler','Poteau',
+    'Henryetta','Okmulgee','Beggs','Dewar','Morris','Checotah','Eufaula'
+  ];
+
+  const zipCity = {
+    '74101':'Tulsa','74102':'Tulsa','74103':'Tulsa','74104':'Tulsa','74105':'Tulsa',
+    '74106':'Tulsa','74107':'Tulsa','74108':'Tulsa','74110':'Tulsa','74112':'Tulsa',
+    '74114':'Tulsa','74115':'Tulsa','74116':'Tulsa','74117':'Tulsa','74119':'Tulsa',
+    '74120':'Tulsa','74126':'Tulsa','74127':'Tulsa','74128':'Tulsa','74129':'Tulsa',
+    '74130':'Tulsa','74131':'Tulsa','74132':'Tulsa','74133':'Tulsa','74134':'Tulsa',
+    '74135':'Tulsa','74136':'Tulsa','74137':'Tulsa','74141':'Tulsa','74145':'Tulsa',
+    '74146':'Tulsa','74011':'Broken Arrow','74012':'Broken Arrow','74013':'Broken Arrow',
+    '74014':'Broken Arrow','74055':'Owasso','74037':'Jenks','74008':'Bixby',
+    '74063':'Sand Springs','74066':'Sapulpa','74017':'Claremore','74018':'Claremore',
+    '74015':'Catoosa','74070':'Skiatook','74021':'Collinsville','74044':'Mannford',
+    '74053':'Oologah','74401':'Muskogee','74403':'Muskogee','74447':'Okmulgee',
+    '74437':'Henryetta','74010':'Bristow','74028':'Depew','74467':'Wagoner',
+    '74429':'Coweta','74033':'Glenpool','74003':'Bartlesville','74006':'Bartlesville',
+    '74056':'Pawhuska','74301':'Vinita','74023':'Cushing','74030':'Drumright',
+    '74361':'Pryor','74464':'Tahlequah','74421':'Beggs','74035':'Hominy'
+  };
+
+  function expandZip(z) {
+    if (!z) return '';
+    z = String(z).trim().split('-')[0]; // strip extensions like 74063-4316
+    if (z.length === 5) return z;
+    return '74' + z.padStart(3,'0');
+  }
+
+  function cleanCity(c) {
+    return c.trim().replace(/\b\w/g, x => x.toUpperCase());
+  }
+
+  function cleanName(n) {
+    // "HENSON (METRO), LEXIE" -> "Lexie Henson"
+    const m = n.match(/^([A-Z]+)\s*\(METRO\),\s*([A-Z]+)/i);
+    if (m) return m[2].charAt(0).toUpperCase()+m[2].slice(1).toLowerCase()+' '+m[1].charAt(0).toUpperCase()+m[1].slice(1).toLowerCase();
+    return n.trim();
+  }
+
+  function cleanPatient(n) {
+    // "AMENT, JIMMY" -> "Jimmy Ament"
+    const m = n.match(/^([A-Z\-]+),\s*([A-Z]+)/i);
+    if (m) return m[2].charAt(0).toUpperCase()+m[2].slice(1).toLowerCase()+' '+m[1].charAt(0).toUpperCase()+m[1].slice(1).toLowerCase();
+    return n.trim();
+  }
+
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l && !/^evals needed$/i.test(l));
+
+  // ── FORMAT A: BIOS structured blocks ──
+  // Detected by "LASTNAME (METRO), FIRSTNAME" clinician lines
+  const hasBiosBlock = lines.some(l => /^[A-Z]+\s*\(METRO\),\s*[A-Z]+/i.test(l));
+  if (hasBiosBlock) {
+    let i = 0;
+    while (i < lines.length) {
+      if (/^[A-Z]+\s*\(METRO\),\s*[A-Z]+/i.test(lines[i])) {
+        const b = { clinician_raw: lines[i] };
+        let j = i + 1;
+        if (j < lines.length && /^(PT|OT|SLP|PTA|COTA)\s+(Eval|SOC|Re-?eval|Visit)/i.test(lines[j])) { b.visit_type = lines[j]; j++; }
+        if (j < lines.length && /^(METROMOBILE|METRO MOBILE|METRO)$/i.test(lines[j])) { j++; } // skip company
+        if (j < lines.length && /^[A-Z\-]+,\s*[A-Z]+/i.test(lines[j]) && !/^(PT|OT|SLP|PTA|COTA)/i.test(lines[j])) { b.patient_raw = lines[j]; j++; }
+        if (j < lines.length && !/^\d{5}/.test(lines[j]) && !/^\d{2}\//.test(lines[j])) { b.city = lines[j]; j++; }
+        if (j < lines.length && /^\d{5}/.test(lines[j])) { b.zip = lines[j]; j++; }
+        if (j < lines.length && /^\d{2}\/\d{2}\/\d{4}$/.test(lines[j])) { b.date = lines[j]; j++; }
+        const city = cleanCity(b.city || '');
+        const zip = expandZip(b.zip || '');
+        const discVal = b.visit_type ? b.visit_type.split(/\s+/)[0].toUpperCase() : disc();
+        const validDisc = ['PT','OT','SLP','PTA','COTA'].includes(discVal) ? discVal : 'PT';
+        const clinician = cleanName(b.clinician_raw);
+        const patient = b.patient_raw ? cleanPatient(b.patient_raw) : '';
+        const note = patient ? patient + (b.visit_type ? ' – ' + b.visit_type : '') : (b.visit_type || '');
+        // Convert date MM/DD/YYYY to YYYY-MM-DD for weekDate
+        let evalDate = wd;
+        if (b.date) {
+          const dp = b.date.match(/(\d{2})\/(\d{2})\/(\d{4})/);
+          if (dp) evalDate = dp[3]+'-'+dp[1]+'-'+dp[2];
+        }
+        out.push({
+          id: Date.now()+Math.random(),
+          location: city || (zipCity[zip] || 'Unknown'),
+          zip, discipline: validDisc, agency: ag,
+          priority: urg ? 'urgent' : p,
+          note, status: 'pending',
+          clinician, dateAdded: evalDate, weekDate: evalDate
+        });
+        i = j;
+      } else { i++; }
+    }
+    return out;
+  }
+
+  // ── FORMAT B: Standard batch with discipline marker "City ZIP-PT" ──
+  const hasDisciplineMarker = lines.some(l => /[-\u2013]\s*(PT|OT|SLP|PTA|COTA)/i.test(l));
+  if (hasDisciplineMarker) {
+    lines.forEach(line => {
+      const m = line.match(/^(.+?)(?:\s+(\d{3,5}))?[-\u2013]\s*(PT|OT|SLP|PTA|COTA)(.*)$/i);
+      if (m) {
+        const loc = abbrMap[m[1].trim().toUpperCase()] || m[1].trim();
+        const note = (m[4] || '').replace(/^[-\u2013\s]+/, '').trim();
+        out.push(mk(loc, expandZip(m[2]||''), m[3].toUpperCase(), ag, urg ? 'urgent' : p, note, wd));
+      }
+    });
+    if (out.length) return out;
+  }
+
+  // ── FORMAT C: SOC/patient prose message ──
+  if (/\b(SOC|eval)\b/i.test(text) && lines.length <= 8) {
+    const found = cityNames.filter(c => new RegExp('\\b'+c+'\\b','i').test(text));
+    const vt = /\bSOC\b/i.test(text) ? 'SOC' : 'Eval';
+    const nm = (text.match(/\b([A-Z][a-z]{3,}(?:swamy|shan|kumar|patel|singh)?)\b/g)||[])[0]||'';
+    (found.length ? found : ['See note']).forEach(city => {
+      out.push(mk(city, '', 'PT', ag, urg ? 'urgent' : p, nm ? nm+' \u2013 '+vt : vt, wd));
+    });
+    return out;
+  }
+
+  // ── FORMAT D: Inline zip list "Eval 74105 Eval 74133" ──
+  const inlineZips = text.match(/\b\d{5}\b/g);
+  if (inlineZips && inlineZips.length > 1 && lines.length <= 3) {
+    inlineZips.forEach(zip => {
+      const fullZip = expandZip(zip);
+      out.push(mk(zipCity[fullZip]||'Tulsa', fullZip, disc(), ag, urg ? 'urgent' : p, '', wd));
+    });
+    return out;
+  }
+
+  // ── FORMAT E: One item per line (city names and zips mixed) ──
+  lines.forEach(line => {
+    const l = line.trim();
+    if (!l) return;
+    const isZip = /^\d{3,5}$/.test(l);
+    const isAbbr = /^[A-Za-z]{2,3}(\s+\d{1,3})?$/.test(l) && !/^(PT|OT|SLP|PTA|COTA)$/i.test(l);
+
+    if (isZip) {
+      const fullZip = expandZip(l);
+      out.push(mk(zipCity[fullZip]||'Tulsa', fullZip, disc(), ag, urg ? 'urgent' : p, '', wd));
+    } else if (isAbbr) {
+      const parts = l.match(/^([A-Za-z]+)\s*(\d*)$/);
+      const locKey = (parts[1]||'').toUpperCase();
+      const loc = abbrMap[locKey] || parts[1];
+      const zip = parts[2] ? expandZip(parts[2]) : '';
+      out.push(mk(loc, zip, disc(), ag, urg ? 'urgent' : p, '', wd));
+    } else {
+      const normalized = l.replace(/\s+/g,' ').trim();
+      const noSpace = l.replace(/\s+/g,'').toLowerCase();
+      let loc = abbrMap[normalized.toUpperCase()] ||
+                cityNames.find(c => c.toLowerCase() === normalized.toLowerCase());
+      if (!loc) loc = cityNames.find(c => c.replace(/\s+/g,'').toLowerCase() === noSpace);
+      if (!loc) loc = cityNames.find(c => c.replace(/\s+/g,'').toLowerCase().includes(noSpace) || noSpace.includes(c.replace(/\s+/g,'').toLowerCase()));
+      if (!loc && noSpace.length >= 4) loc = cityNames.find(c => c.replace(/\s+/g,'').toLowerCase().startsWith(noSpace.substring(0,4)));
+      if (!loc) loc = normalized;
+      out.push(mk(loc, '', disc(), ag, urg ? 'urgent' : p, '', wd));
+    }
+  });
+
+  return out;
+}
+
+function mk(loc, zip, disc, ag, p, note, wd) {
+  return {id: Date.now() + Math.random(), location: loc, zip, discipline: disc, agency: ag, priority: p, note, status: 'pending', clinician: '', dateAdded: wd, weekDate: wd};
+}
+
+function addOne() {
+  const loc = document.getElementById('sl').value.trim();
+  if (!loc) return;
+  const wd = document.getElementById('wd').value;
+  const ev = mk(loc, document.getElementById('sz').value.trim(), document.getElementById('sd').value, document.getElementById('ag').value, pri, document.getElementById('sn').value.trim(), wd);
+  evals.push(ev);
+  render();
+  apiPost({action: 'saveEval', eval: ev});
+  ['sl','sz','sn'].forEach(id => document.getElementById(id).value = '');
+  flash('✓ Eval added to shared board');
+}
+
+// ── BOARD ──
+function sf(f, el) {
+  fil = f;
+  document.querySelectorAll('.fb').forEach(b => b.classList.remove('on'));
+  el.classList.add('on');
+  render();
+}
+
+function age(d) {
+  if (!d) return 0;
+  // Handle both date strings and full ISO timestamps from Google Sheets
+  const str = String(d).trim();
+  const parsed = str.includes('T') ? new Date(str) : new Date(str + 'T12:00:00');
+  if (isNaN(parsed.getTime())) return 0;
+  return Math.max(0, Math.floor((Date.now() - parsed.getTime()) / 86400000));
+}
+
+function render() {
+  let list = evals.slice();
+  if (fil === 'pending') list = list.filter(e => e.status === 'pending');
+  else if (fil === 'assigned') list = list.filter(e => e.status === 'assigned');
+  else if (fil === 'complete') list = list.filter(e => e.status === 'complete');
+  else if (fil === 'urgent') list = list.filter(e => e.priority === 'urgent' || e.priority === 'asap');
+  const so = {pending:0, assigned:1, complete:2}, po = {urgent:0, asap:1, normal:2};
+  list.sort((a,b) => so[a.status] !== so[b.status] ? so[a.status] - so[b.status] : (po[a.priority]||2) - (po[b.priority]||2));
+  document.getElementById('sP').textContent = evals.filter(e => e.status === 'pending').length;
+  document.getElementById('sA').textContent = evals.filter(e => e.status === 'assigned').length;
+  document.getElementById('sC').textContent = evals.filter(e => e.status === 'complete').length;
+  const g = document.getElementById('grid');
+  if (!list.length) {
+    g.innerHTML = `<div class="empty"><div class="ei">📋</div><div class="et">No evals${fil !== 'all' ? ' in this filter' : ' on the board'}</div><div style="font-size:13px;line-height:1.5">Paste a referral list using the panel on the left.</div></div>`;
+    return;
+  }
+  g.innerHTML = list.map(e => {
+    const a = age(e.dateAdded);
+    const ac = a <= 1 ? 'af' : a <= 3 ? 'aa' : 'ao';
+    const al = a === 0 ? 'Today' : a === 1 ? '1 day' : `${a} days`;
+    const opts = clins.map(c => `<option value="${c.name}"${e.clinician === c.name ? ' selected' : ''}>${c.name} (${c.role})</option>`).join('');
+    return `<div class="card s${e.status[0]} p${e.priority[0]}">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+        <div class="cloc">${e.location}${e.zip ? `<span class="czip">${e.zip}</span>` : ''}</div>
+        <div class="br"><span class="badge d${e.discipline}">${e.discipline}</span><span class="badge bag">${e.agency}</span></div>
+      </div>
+      <div class="br">
+        ${e.priority === 'urgent' ? '<span class="badge burg">🚨 Urgent</span>' : ''}
+        ${e.priority === 'asap' ? '<span class="badge basp">⚡ ASAP</span>' : ''}
+        <span class="badge b${e.status==='pending'?'pend':e.status==='assigned'?'ass':'com'}">${e.status.charAt(0).toUpperCase()+e.status.slice(1)}</span>
+        ${e.clinician ? `<span class="badge bcl">👤 ${e.clinician.split(' ')[0]}</span>` : ''}
+      </div>
+      ${e.note ? `<div class="cnote">${e.note}</div>` : ''}
+      <div class="cmeta"><span class="cdate">${e.dateAdded}</span><span class="agebadge ${ac}">${al} old</span></div>
+      <div class="cact">
+        <select class="csel" onchange="asgn('${e.id}',this.value)">
+          <option value="">— Assign Clinician —</option>${opts}
+        </select>
+        ${e.status !== 'complete'
+          ? `<button class="cbtn done" onclick="done('${e.id}')">✓ Done</button>`
+          : `<button class="cbtn del" onclick="rm('${e.id}')">✕ Remove</button>`}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function asgn(id, name) {
+  const e = evals.find(e => String(e.id) === String(id));
+  if (!e) return;
+  e.clinician = name; e.status = name ? 'assigned' : 'pending';
+  render();
+  await apiPost({action: 'updateEval', eval: e});
+  setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`);
+}
+
+async function done(id) {
+  const e = evals.find(e => String(e.id) === String(id));
+  if (!e) return;
+  e.status = 'complete';
+  render();
+  await apiPost({action: 'updateEval', eval: e});
+  setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`);
+}
+
+async function rm(id) {
+  evals = evals.filter(e => String(e.id) !== String(id));
+  render();
+  await apiPost({action: 'deleteEval', id});
+}
+
+async function clrDone() {
+  if (!confirm('Remove all completed evals from the shared board?')) return;
+  const toDelete = evals.filter(e => e.status === 'complete');
+  evals = evals.filter(e => e.status !== 'complete');
+  render();
+  for (const e of toDelete) await apiPost({action: 'deleteEval', id: e.id});
+  flash('✓ Completed evals cleared');
+}
+
+async function clrAll() {
+  if (!confirm('Clear ALL evals from the shared board? Cannot be undone.')) return;
+  const toDelete = evals.slice();
+  evals = [];
+  render();
+  for (const e of toDelete) await apiPost({action: 'deleteEval', id: e.id});
+  flash('✓ Board cleared');
+}
+
+// ── CLINICIANS ──
+function renderClins() {
+  document.getElementById('clinList').innerHTML = clins.map((c,i) => `
+    <div class="cr">
+      <div style="display:flex;align-items:center">
+        <div class="av">${c.name.split(' ').map(w=>w[0]).join('').substring(0,2)}</div>
+        <div><div style="font-size:12px;font-weight:600">${c.name}</div><div style="font-size:10px;color:var(--muted)">${c.role}</div></div>
+      </div>
+      <button class="xbtn" onclick="rmClin('${c.name}')">×</button>
+    </div>`).join('');
+}
+
+async function addClin() {
+  const name = document.getElementById('nn').value.trim();
+  if (!name) return;
+  const c = {name, role: document.getElementById('nr').value};
+  clins.push(c);
+  renderClins(); render();
+  document.getElementById('nn').value = '';
+  await apiPost({action: 'saveClinician', clinician: c});
+  flash('✓ Clinician added');
+}
+
+async function rmClin(name) {
+  clins = clins.filter(c => c.name !== name);
+  renderClins(); render();
+  await apiPost({action: 'deleteClinician', name});
+}
+
+// ── TEMPLATES ──
+function ct(el) { navigator.clipboard.writeText(el.querySelector('.tpl-b').textContent); flash('Copied ✓'); }
+function cc() { navigator.clipboard.writeText(document.getElementById('cu').value); flash('Copied ✓'); }
+
+// ── AGENCIES ──
+function renderAgencies() {
+  const sel = document.getElementById('ag');
+  const current = sel.value;
+  sel.innerHTML = agencies.map(a => `<option value="${a}"${a===current?' selected':''}>${a}</option>`).join('');
+
+  document.getElementById('agencyList').innerHTML = agencies.map(a => `
+    <div class="cr">
+      <div style="display:flex;align-items:center">
+        <div class="av" style="background:#1e3a2a">${a.substring(0,2).toUpperCase()}</div>
+        <div style="font-size:12px;font-weight:600">${a}</div>
+      </div>
+      <button class="xbtn" onclick="rmAgency('${a}')">×</button>
+    </div>`).join('');
+}
+
+async function addAgency() {
+  const name = document.getElementById('na').value.trim();
+  if (!name || agencies.includes(name)) return;
+  agencies.push(name);
+  renderAgencies();
+  document.getElementById('na').value = '';
+  await apiPost({action: 'saveAgency', agency: {name}});
+  flash('✓ Agency added');
+}
+
+async function rmAgency(name) {
+  agencies = agencies.filter(a => a !== name);
+  renderAgencies();
+  await apiPost({action: 'deleteAgency', name});
+}
+
+// ── FLASH ──
+function flash(msg) {
+  const el = document.getElementById('fl');
+  el.textContent = msg; el.classList.add('on');
+  setTimeout(() => el.classList.remove('on'), 2200);
+}
+</script>
+</body>
+</html>
