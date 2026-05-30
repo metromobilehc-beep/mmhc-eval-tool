@@ -107,6 +107,18 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 @keyframes spin{to{transform:rotate(360deg)}}
 .flash{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--accent);color:#0d1117;font-weight:700;font-size:13px;padding:9px 22px;border-radius:24px;z-index:999;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap;}
 .flash.on{opacity:1;}
+.qa-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;display:flex;flex-direction:column;gap:8px;}
+.qa-card.qa-done{opacity:0.5;}
+.qa-row{display:flex;align-items:center;justify-content:space-between;gap:6px;}
+.qa-loc{font-weight:700;font-size:13px;}
+.qa-clin{font-size:11px;color:var(--muted);}
+.qa-checks{display:flex;flex-direction:column;gap:5px;}
+.qa-check{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;}
+.qa-check input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;}
+.qa-check.done{color:var(--muted);text-decoration:line-through;}
+.qa-date{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-family:inherit;outline:none;width:130px;}
+.qa-note{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 7px;font-family:inherit;outline:none;width:100%;resize:none;height:40px;}
+.qa-empty{text-align:center;padding:30px;color:var(--muted);font-size:13px;}
 @media(max-width:680px){.layout{grid-template-columns:1fr;height:auto;}.sidebar{max-height:56vh;}.stats{display:none;}}
 </style>
 </head>
@@ -133,6 +145,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
     <div class="tabs">
       <button class="tab on" onclick="sw('paste',this)">📋 Paste</button>
       <button class="tab" onclick="sw('tpl',this)">💬 Templates</button>
+      <button class="tab" onclick="sw('qa',this)">✅ QA</button>
       <button class="tab" onclick="sw('set',this)">⚙️ Settings</button>
     </div>
 
@@ -177,6 +190,12 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
         <textarea id="cu" style="height:80px" placeholder="Type a custom message..."></textarea>
         <button class="btn btn-o" style="margin-top:6px" onclick="cc()">📋 Copy Custom</button>
       </div>
+    </div>
+
+    <div class="panel hidden" id="tp-qa">
+      <div class="lbl">QA Tracker</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5;">Track evals after assignment — mark seen, orders added, PTA assigned, and scheduled.</div>
+      <div id="qaList"></div>
     </div>
 
     <div class="panel hidden" id="tp-set">
@@ -287,9 +306,11 @@ async function loadFromSheet() {
     evals = Array.isArray(evalsData) ? evalsData : [];
     clins = Array.isArray(clinsData) ? clinsData : [];
     agencies = Array.isArray(agenciesData) ? agenciesData.map(a => a.name) : defaultAgencies;
+    parseQAFromEvals();
     render();
     renderClins();
     renderAgencies();
+    renderQA();
     setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}`);
   } catch(e) {
     setSyncStatus('err', 'Sync error — retrying');
@@ -674,6 +695,107 @@ async function rmClin(name) {
 // ── TEMPLATES ──
 function ct(el) { navigator.clipboard.writeText(el.querySelector('.tpl-b').textContent); flash('Copied ✓'); }
 function cc() { navigator.clipboard.writeText(document.getElementById('cu').value); flash('Copied ✓'); }
+
+// ── QA TRACKER ──
+function renderQA() {
+  const list = document.getElementById('qaList');
+  if (!list) return;
+  // Show assigned and complete evals for QA
+  const qaEvals = evals.filter(e => e.status === 'assigned' || e.status === 'complete');
+  if (!qaEvals.length) {
+    list.innerHTML = '<div class="qa-empty">No assigned evals yet.<br>Assign clinicians on the board first.</div>';
+    return;
+  }
+  list.innerHTML = qaEvals.map(e => {
+    const qa = e.qa || {};
+    const allDone = qa.seen && qa.scheduled;
+    return `<div class="qa-card${allDone?' qa-done':''}">
+      <div class="qa-row">
+        <div>
+          <div class="qa-loc">${e.location}${e.zip?` <span style="font-family:monospace;font-size:11px;color:var(--muted)">${e.zip}</span>`:''}</div>
+          <div class="qa-clin">👤 ${e.clinician||'Unassigned'} · ${e.agency} · ${e.discipline}</div>
+          ${e.note?`<div style="font-size:11px;color:var(--muted);font-style:italic">${e.note}</div>`:''}
+        </div>
+        <span class="badge b${e.status==='complete'?'com':'ass'}">${e.status}</span>
+      </div>
+      <div class="qa-checks">
+        <div class="qa-check${qa.seen?' done':''}">
+          <input type="checkbox" ${qa.seen?'checked':''} onchange="toggleQA('${e.id}','seen',this.checked)">
+          <span>Patient seen</span>
+          <input type="date" class="qa-date" value="${qa.seenDate||''}" onchange="setQADate('${e.id}','seenDate',this.value)" placeholder="Date seen">
+        </div>
+        <div class="qa-check${qa.orders?' done':''}">
+          <input type="checkbox" ${qa.orders?'checked':''} onchange="toggleQA('${e.id}','orders',this.checked)">
+          <span>Orders added</span>
+        </div>
+        <div class="qa-check${qa.pta?' done':''}">
+          <input type="checkbox" ${qa.pta?'checked':''} onchange="toggleQA('${e.id}','pta',this.checked)">
+          <span>PTA assigned</span>
+        </div>
+        <div class="qa-check${qa.scheduled?' done':''}">
+          <input type="checkbox" ${qa.scheduled?'checked':''} onchange="toggleQA('${e.id}','scheduled',this.checked)">
+          <span>Follow-up scheduled</span>
+        </div>
+      </div>
+      <div>
+        <textarea class="qa-note" placeholder="QA notes (Stephen / Evan / Kym)..." onchange="setQANote('${e.id}',this.value)">${qa.notes||''}</textarea>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function toggleQA(id, field, val) {
+  const e = evals.find(e => String(e.id) === String(id));
+  if (!e) return;
+  if (!e.qa) e.qa = {};
+  e.qa[field] = val;
+  // If all QA steps done, mark complete
+  if (e.qa.seen && e.qa.orders && e.qa.scheduled) {
+    e.status = 'complete';
+  }
+  renderQA();
+  render();
+  // Save QA data in note field of the eval (appended)
+  const qaStr = JSON.stringify(e.qa);
+  const baseNote = (e.note || '').replace(/\|\|QA:.*$/,'');
+  e.note = baseNote + '||QA:' + qaStr;
+  await apiPost({action: 'updateEval', eval: e});
+}
+
+async function setQADate(id, field, val) {
+  const e = evals.find(e => String(e.id) === String(id));
+  if (!e) return;
+  if (!e.qa) e.qa = {};
+  e.qa[field] = val;
+  const baseNote = (e.note || '').replace(/\|\|QA:.*$/,'');
+  e.note = baseNote + '||QA:' + JSON.stringify(e.qa);
+  await apiPost({action: 'updateEval', eval: e});
+}
+
+async function setQANote(id, val) {
+  const e = evals.find(e => String(e.id) === String(id));
+  if (!e) return;
+  if (!e.qa) e.qa = {};
+  e.qa.notes = val;
+  const baseNote = (e.note || '').replace(/\|\|QA:.*$/,'');
+  e.note = baseNote + '||QA:' + JSON.stringify(e.qa);
+  await apiPost({action: 'updateEval', eval: e});
+}
+
+// Parse QA data from note field on load
+function parseQAFromEvals() {
+  evals.forEach(e => {
+    if (!e.qa && e.note && e.note.includes('||QA:')) {
+      try {
+        const qaStr = e.note.split('||QA:')[1];
+        e.qa = JSON.parse(qaStr);
+        e.note = e.note.split('||QA:')[0];
+      } catch(err) { e.qa = {}; }
+    } else if (!e.qa) {
+      e.qa = {};
+    }
+  });
+}
 
 // ── AGENCIES ──
 function renderAgencies() {
