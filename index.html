@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MMHC · Eval Workflow</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 :root{--bg:#0d1117;--surface:#161b22;--border:#2a3340;--accent:#00d4aa;--red:#ef4444;--blue:#3b82f6;--text:#e2e8f0;--muted:#64748b;--pending:#f59e0b;}
 *{box-sizing:border-box;margin:0;padding:0;}
@@ -18,6 +19,11 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:1
 .stat{text-align:center;}
 .stat-n{font-size:20px;font-weight:700;font-family:monospace;}
 .stat-l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
+.sync-status{font-size:11px;display:flex;align-items:center;gap:5px;color:var(--muted);}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;}
+.sync-dot.live{background:var(--accent);box-shadow:0 0 6px var(--accent);}
+.sync-dot.syncing{background:var(--pending);}
+.sync-dot.err{background:var(--red);}
 .layout{display:grid;grid-template-columns:290px 1fr;height:calc(100vh - 57px);}
 .sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
 .tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
@@ -32,6 +38,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 .btn{padding:8px 14px;border-radius:6px;border:none;cursor:pointer;font-family:inherit;font-weight:600;font-size:12px;display:flex;align-items:center;gap:6px;justify-content:center;width:100%;}
 .btn-g{background:var(--accent);color:#0d1117;}
 .btn-g:hover{background:#00bfa0;}
+.btn-g:disabled{background:#1e4a40;color:#2a7a60;cursor:not-allowed;}
 .btn-o{background:transparent;color:var(--muted);border:1px solid var(--border);}
 .btn-o:hover{color:var(--text);border-color:var(--text);}
 .btn-r{background:rgba(239,68,68,0.1);color:var(--red);border:1px solid transparent;}
@@ -52,7 +59,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 .board{overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;}
 .bh{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
 .bt{font-weight:700;font-size:16px;}
-.fr{display:flex;gap:6px;flex-wrap:wrap;}
+.fr{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
 .fb{padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
 .fb.on{background:var(--accent);color:#0d1117;border-color:var(--accent);}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:10px;}
@@ -80,7 +87,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 .bcl{background:rgba(59,130,246,.08);color:#93c5fd;font-size:10px;}
 .cnote{font-size:11px;color:var(--muted);font-style:italic;line-height:1.4;}
 .cpat{font-size:12px;font-weight:600;color:#93c5fd;}
-.cmeta{display:flex;justify-content:space-between;align-items:center;}
+.cmeta{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;}
 .cdate{font-size:10px;color:var(--muted);font-family:monospace;}
 .agebadge{font-size:10px;font-family:monospace;padding:2px 7px;border-radius:4px;}
 .af{background:rgba(0,212,170,.1);color:var(--accent);}
@@ -99,7 +106,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 .qa-loc{font-weight:700;font-size:13px;}
 .qa-clin{font-size:11px;color:var(--muted);}
 .qa-checks{display:flex;flex-direction:column;gap:6px;}
-.qa-check{display:flex;align-items:center;gap:8px;font-size:12px;cursor:pointer;}
+.qa-check{display:flex;align-items:center;gap:8px;font-size:12px;}
 .qa-check input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;}
 .qa-check.done{color:var(--muted);text-decoration:line-through;}
 .qa-date{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-family:inherit;outline:none;width:130px;}
@@ -117,6 +124,10 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
     <div><div class="logo-text">Metro Mobile Health Care</div><div class="logo-sub">Eval Workflow · Weekly Board</div></div>
   </div>
   <div class="week-pill" id="wk"></div>
+  <div class="sync-status">
+    <div class="sync-dot" id="syncDot"></div>
+    <span id="syncMsg">Connecting...</span>
+  </div>
   <div class="stats">
     <div class="stat"><div class="stat-n" id="sP" style="color:var(--pending)">0</div><div class="stat-l">Pending</div></div>
     <div class="stat"><div class="stat-n" id="sA" style="color:var(--blue)">0</div><div class="stat-l">Assigned</div></div>
@@ -136,7 +147,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
     <div class="panel" id="tp-paste">
       <div><div class="lbl">Agency</div><select id="ag"></select></div>
       <div><div class="lbl">Paste Referral Text</div>
-        <textarea id="rt" placeholder="Paste any format:&#10;&#10;Henryetta&#10;74107&#10;Bristow&#10;Ba 011&#10;&#10;or: Catoosa-PT&#10;Tulsa 74105-PT&#10;&#10;or: BIOS block format&#10;&#10;or: Eval 74105 Eval 74133"></textarea>
+        <textarea id="rt" placeholder="Paste any format:&#10;&#10;Henryetta&#10;74107, Bristow, Ba 011&#10;&#10;or: Catoosa-PT&#10;Tulsa 74105-PT&#10;&#10;or: BIOS block format"></textarea>
       </div>
       <div><div class="lbl">Default Discipline</div><select id="defDisc"><option>PT</option><option>OT</option><option>SLP</option><option>PTA</option><option>COTA</option></select></div>
       <div><div class="lbl">Priority</div>
@@ -146,7 +157,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
           <button class="pb" id="pbU" onclick="sp('urgent')">URGENT</button>
         </div>
       </div>
-      <div><div class="lbl">Week of</div><input type="date" id="wd" onchange="updateWk()"></div>
+      <div>
+        <div class="lbl">Week of</div>
+        <div style="display:flex;gap:6px;align-items:center">
+          <input type="date" id="wd" onchange="updateWk()" style="flex:1;padding:9px 10px;font-size:13px;">
+          <button onclick="setThisWeek()" style="padding:9px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">This Week</button>
+        </div>
+      </div>
       <button class="btn btn-g" id="parseBtn" onclick="parseAdd()">⚡ Parse &amp; Add to Board</button>
       <div class="hr"></div>
       <div><div class="lbl">Add Single Eval</div>
@@ -175,11 +192,21 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 
     <div class="panel hidden" id="tp-qa">
       <div class="lbl">QA Tracker</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.5">Track evals after assignment — seen, orders, PTA, scheduled.</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.5">Track evals after assignment.</div>
       <div id="qaList"></div>
     </div>
 
     <div class="panel hidden" id="tp-set">
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:4px;">👤 Your Name</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">Set your name so others can see who added or assigned evals.</div>
+        <input id="userName" placeholder="e.g. Stephen, Evan, Kym..." style="margin-bottom:6px;" onchange="saveUserName()">
+      </div>
+      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:4px;">📊 Live Shared Board</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">Real-time sync via Supabase. All devices see the same board instantly.</div>
+        <button class="btn btn-o" onclick="loadAll()">🔄 Force Refresh</button>
+      </div>
       <div><div class="lbl" style="margin-bottom:6px">Agencies</div>
         <div id="agencyList"></div>
         <input id="na" placeholder="New agency name" style="margin-top:6px;margin-bottom:6px">
@@ -202,22 +229,32 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 
   <div class="board">
     <div class="bh">
-      <div class="bt">Weekly Eval Board</div>
+      <div style="display:flex;align-items:center;gap:10px;">
+        <div class="bt">Weekly Eval Board</div>
+        <button onclick="loadAll()" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🔄 Refresh</button>
+      </div>
       <div class="fr">
         <button class="fb on" onclick="sf('all',this)">All</button>
         <button class="fb" onclick="sf('pending',this)">Pending</button>
         <button class="fb" onclick="sf('assigned',this)">Assigned</button>
         <button class="fb" onclick="sf('complete',this)">Complete</button>
         <button class="fb" onclick="sf('urgent',this)">🚨 Urgent</button>
+        <select id="monthFilter" onchange="render()" style="background:var(--bg);border:1px solid var(--border);border-radius:20px;color:var(--muted);font-family:inherit;font-size:11px;padding:4px 10px;outline:none;cursor:pointer;">
+          <option value="">All Months</option>
+        </select>
       </div>
     </div>
-    <div class="grid" id="grid"></div>
+    <div class="grid" id="grid"><div class="empty"><div class="ei">⏳</div><div class="et">Loading...</div></div></div>
   </div>
 </div>
-
 <div class="flash" id="fl"></div>
 
 <script>
+// ── SUPABASE ──
+const SUPABASE_URL = 'https://zxserlkhwkfoqiepurdr.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp4c2VybGtod2tmb3FpZXB1cmRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NDM1NDIsImV4cCI6MjA5NjAxOTU0Mn0.cA9LJSn5t4sIbIemdQGQsdwtQFwb-6Q9xIZI48UYq34';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
 // ── STATE ──
 const DEF_AGENCIES = ['BIOS','Millennium','Faith Home Care','CareFicient','Rice Home Health','Caring Connection','Vital Muskogee','Mobile'];
 const DEF_CLINS = [
@@ -227,269 +264,213 @@ const DEF_CLINS = [
   {name:'Stephen Mace',role:'PT'},{name:'Marquita Tarkington',role:'PT'},
   {name:'Kym Crane',role:'SLP'},{name:'Kasey Rideout',role:'SLP'}
 ];
-
-function load(key, def) { try { const v = localStorage.getItem(key); return v ? JSON.parse(v) : def; } catch(e) { return def; } }
-function save(key, val) { try { localStorage.setItem(key, JSON.stringify(val)); } catch(e) {} }
-
-let evals = load('mmhc_e', []);
-let clins = load('mmhc_c', DEF_CLINS);
-let agencies = load('mmhc_ag', DEF_AGENCIES);
-let qaData = load('mmhc_qa', {});
-let pri = 'normal', fil = 'all';
+let evals=[], clins=[...DEF_CLINS], agencies=[...DEF_AGENCIES];
+let pri='normal', fil='all';
+let userName = localStorage.getItem('mmhc_user')||'';
 
 // ── INIT ──
-window.onload = () => {
+window.onload = async () => {
   document.getElementById('wd').value = new Date().toISOString().split('T')[0];
   updateWk();
-  renderAgencies();
-  renderClins();
-  render();
-  renderQA();
+  if (userName) document.getElementById('userName').value = userName;
+  renderAgencies(); renderClins(); render();
+  await loadAll();
+  // Realtime subscription
+  sb.channel('evals-changes')
+    .on('postgres_changes', {event:'*', schema:'public', table:'evals'}, () => loadAll())
+    .subscribe();
 };
 
-function updateWk() {
-  const d = new Date(document.getElementById('wd').value + 'T12:00:00');
-  const s = new Date(d); s.setDate(d.getDate() - d.getDay());
-  const e = new Date(s); e.setDate(s.getDate() + 6);
-  const f = x => x.toLocaleDateString('en-US', {month:'short', day:'numeric'});
-  document.getElementById('wk').textContent = `Week of ${f(s)} – ${f(e)}`;
+function saveUserName() {
+  userName = document.getElementById('userName').value.trim();
+  localStorage.setItem('mmhc_user', userName);
+  flash('✓ Name saved: ' + userName);
 }
 
-function sw(name, el) {
-  document.querySelectorAll('.tab').forEach(t => t.classList.remove('on'));
-  document.querySelectorAll('.panel').forEach(p => p.classList.add('hidden'));
-  el.classList.add('on');
-  document.getElementById('tp-' + name).classList.remove('hidden');
-  if (name === 'qa') renderQA();
+function setSyncStatus(state, msg) {
+  const dot = document.getElementById('syncDot');
+  document.getElementById('syncMsg').textContent = msg;
+  dot.className = 'sync-dot' + (state==='live'?' live':state==='syncing'?' syncing':state==='err'?' err':'');
 }
 
-function sp(p) {
-  pri = p;
-  document.getElementById('pbN').className = 'pb' + (p==='normal'?' pn':'');
-  document.getElementById('pbA').className = 'pb' + (p==='asap'?' pa':'');
-  document.getElementById('pbU').className = 'pb' + (p==='urgent'?' pu':'');
+async function loadAll() {
+  setSyncStatus('syncing', 'Syncing...');
+  try {
+    const [evR, clR, agR] = await Promise.all([
+      sb.from('evals').select('*').order('created_at', {ascending:false}),
+      sb.from('clinicians').select('*').order('name'),
+      sb.from('agencies').select('*').order('name')
+    ]);
+    if (evR.data) evals = evR.data.map(dbToEval);
+    if (clR.data && clR.data.length) clins = clR.data.map(r=>({name:r.name,role:r.role}));
+    if (agR.data && agR.data.length) agencies = agR.data.map(r=>r.name);
+    render(); renderClins(); renderAgencies(); renderQA();
+    setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
+  } catch(e) {
+    console.error('loadAll:', e);
+    setSyncStatus('err', 'Sync error');
+  }
 }
+
+function dbToEval(r) {
+  return {
+    id: r.id, location: r.location, zip: r.zip||'',
+    discipline: r.discipline, agency: r.agency, priority: r.priority,
+    note: r.note||'', patient: r.patient||'', status: r.status,
+    clinician: r.clinician||'', addedBy: r.added_by||'',
+    assignedBy: r.assigned_by||'', dateAdded: r.date_added||'',
+    weekDate: r.week_date||'', qa: r.qa||{}
+  };
+}
+
+function evalToDB(e) {
+  return {
+    id: String(e.id), location: e.location, zip: e.zip||'',
+    discipline: e.discipline, agency: e.agency, priority: e.priority,
+    note: e.note||'', patient: e.patient||'', status: e.status,
+    clinician: e.clinician||'', added_by: e.addedBy||userName||'',
+    assigned_by: e.assignedBy||'', date_added: e.dateAdded||null,
+    week_date: e.weekDate||null, qa: e.qa||{}
+  };
+}
+
+// ── UI ──
+function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='qa')renderQA();}
+function sp(p){pri=p;document.getElementById('pbN').className='pb'+(p==='normal'?' pn':'');document.getElementById('pbA').className='pb'+(p==='asap'?' pa':'');document.getElementById('pbU').className='pb'+(p==='urgent'?' pu':'');}
+function setThisWeek(){document.getElementById('wd').value=new Date().toISOString().split('T')[0];updateWk();}
+function updateWk(){const d=new Date(document.getElementById('wd').value+'T12:00:00');const s=new Date(d);s.setDate(d.getDate()-d.getDay());const e=new Date(s);e.setDate(s.getDate()+6);const f=x=>x.toLocaleDateString('en-US',{month:'short',day:'numeric'});document.getElementById('wk').textContent=`Week of ${f(s)} – ${f(e)}`;}
+function disc(){return document.getElementById('defDisc').value||'PT';}
 
 // ── PARSE ──
-function disc() { return document.getElementById('defDisc').value || 'PT'; }
+function isIntroLine(l){const w=l.trim().split(/\s+/);if(w.length<=2)return false;return/\b(do you|can you|want|would|could|please|any of|these|tomorrow|next week|this week|available|hello|hi |hey |thanks|thank you|let me know|please see|see below|following|attached|regarding|fyi|heads up|just|wanted|checking|reaching out|hope|good morning|good afternoon)\b/i.test(l)&&w.length>4;}
 
-function isIntroLine(l) {
-  const words = l.trim().split(/\s+/);
-  if (words.length <= 2) return false;
-  return /\b(do you|can you|want|would|could|please|any of|these|tomorrow|next week|this week|available|hello|hi |hey |thanks|thank you|let me know|please see|see below|following|attached|regarding|fyi|heads up|just|wanted|checking|reaching out|hope|good morning|good afternoon)\b/i.test(l) && words.length > 4;
-}
+function parseText(text,ag,wd,p){
+  const out=[];const urg=/asap|urgent/i.test(text);
+  const abbrMap={BA:'Broken Arrow',TUL:'Tulsa',OKM:'Okmulgee',CLA:'Claremore',JEN:'Jenks',OWA:'Owasso',SS:'Sand Springs',MFD:'Mannford',SKT:'Skiatook',HEN:'Henryetta',BIX:'Bixby',SAP:'Sapulpa','MAN FORD':'Mannford',MANFORD:'Mannford',MANNFORD:'Mannford'};
+  const cityNames=['Tulsa','Oologah','Catoosa','Claremore','Broken Arrow','Okmulgee','Henryetta','Jenks','Owasso','Bixby','Skiatook','Sapulpa','Muskogee','Pryor','Wagoner','Collinsville','Sand Springs','Mannford','Bristow','Depew','Glenpool','Beggs','Drumright','Cushing','Pawhuska','Hominy','Bartlesville','Vinita','Miami','Tahlequah','Stilwell','Sallisaw','Coweta','Verdigris','Inola','Chelsea','Chouteau','Adair','Locust Grove','Fort Gibson','Checotah','Eufaula'];
+  const zipCity={'74101':'Tulsa','74102':'Tulsa','74103':'Tulsa','74104':'Tulsa','74105':'Tulsa','74106':'Tulsa','74107':'Tulsa','74108':'Tulsa','74110':'Tulsa','74112':'Tulsa','74114':'Tulsa','74115':'Tulsa','74116':'Tulsa','74117':'Tulsa','74119':'Tulsa','74120':'Tulsa','74126':'Tulsa','74127':'Tulsa','74128':'Tulsa','74129':'Tulsa','74130':'Tulsa','74131':'Tulsa','74132':'Tulsa','74133':'Tulsa','74134':'Tulsa','74135':'Tulsa','74136':'Tulsa','74137':'Tulsa','74141':'Tulsa','74145':'Tulsa','74146':'Tulsa','74011':'Broken Arrow','74012':'Broken Arrow','74013':'Broken Arrow','74014':'Broken Arrow','74055':'Owasso','74037':'Jenks','74008':'Bixby','74063':'Sand Springs','74066':'Sapulpa','74017':'Claremore','74018':'Claremore','74015':'Catoosa','74070':'Skiatook','74021':'Collinsville','74044':'Mannford','74053':'Oologah','74401':'Muskogee','74403':'Muskogee','74447':'Okmulgee','74437':'Henryetta','74010':'Bristow','74028':'Depew','74467':'Wagoner','74429':'Coweta','74033':'Glenpool','74003':'Bartlesville','74006':'Bartlesville','74056':'Pawhuska','74301':'Vinita','74023':'Cushing','74030':'Drumright','74361':'Pryor','74464':'Tahlequah','74421':'Beggs','74035':'Hominy'};
+  function expandZip(z){if(!z)return'';z=String(z).trim().split('-')[0];if(z.length===5)return z;return'74'+z.padStart(3,'0');}
+  function mkE(loc,zip,d,note,patient,clin,date){return{id:String(Date.now()+Math.random()),location:loc,zip,discipline:d,agency:ag,priority:urg?'urgent':p,note:note||'',patient:patient||'',status:'pending',clinician:clin||'',addedBy:userName||'',assignedBy:'',dateAdded:date||wd,weekDate:date||wd,qa:{}};}
+  function cleanName(n){const m=n.match(/^([A-Z]+)\s*\(METRO\),\s*([A-Z]+)/i);if(m)return m[2][0].toUpperCase()+m[2].slice(1).toLowerCase()+' '+m[1][0].toUpperCase()+m[1].slice(1).toLowerCase();return n.trim();}
+  function cleanPat(n){const m=n.match(/^([A-Z\-]+),\s*([A-Z]+)/i);if(m)return m[2][0].toUpperCase()+m[2].slice(1).toLowerCase()+' '+m[1][0].toUpperCase()+m[1].slice(1).toLowerCase();return n.trim();}
 
-function parseText(text, ag, wd, p) {
-  const out = [];
-  const urg = /asap|urgent/i.test(text);
-  const abbrMap = {
-    BA:'Broken Arrow',TUL:'Tulsa',OKM:'Okmulgee',CLA:'Claremore',
-    JEN:'Jenks',OWA:'Owasso',SS:'Sand Springs',MFD:'Mannford',
-    SKT:'Skiatook',HEN:'Henryetta',BIX:'Bixby',SAP:'Sapulpa',
-    'MAN FORD':'Mannford',MANFORD:'Mannford',MANNFORD:'Mannford'
-  };
-  const cityNames = [
-    'Tulsa','Oologah','Catoosa','Claremore','Broken Arrow','Okmulgee','Henryetta',
-    'Jenks','Owasso','Bixby','Skiatook','Sapulpa','Muskogee','Pryor','Wagoner',
-    'Collinsville','Sand Springs','Mannford','Bristow','Depew','Glenpool','Beggs',
-    'Drumright','Cushing','Pawhuska','Hominy','Bartlesville','Vinita','Miami',
-    'Tahlequah','Stilwell','Sallisaw','Coweta','Verdigris','Inola','Chelsea',
-    'Chouteau','Adair','Locust Grove','Fort Gibson','Checotah','Eufaula'
-  ];
-  const zipCity = {
-    '74101':'Tulsa','74102':'Tulsa','74103':'Tulsa','74104':'Tulsa','74105':'Tulsa',
-    '74106':'Tulsa','74107':'Tulsa','74108':'Tulsa','74110':'Tulsa','74112':'Tulsa',
-    '74114':'Tulsa','74115':'Tulsa','74116':'Tulsa','74117':'Tulsa','74119':'Tulsa',
-    '74120':'Tulsa','74126':'Tulsa','74127':'Tulsa','74128':'Tulsa','74129':'Tulsa',
-    '74130':'Tulsa','74131':'Tulsa','74132':'Tulsa','74133':'Tulsa','74134':'Tulsa',
-    '74135':'Tulsa','74136':'Tulsa','74137':'Tulsa','74141':'Tulsa','74145':'Tulsa',
-    '74146':'Tulsa','74011':'Broken Arrow','74012':'Broken Arrow','74013':'Broken Arrow',
-    '74014':'Broken Arrow','74055':'Owasso','74037':'Jenks','74008':'Bixby',
-    '74063':'Sand Springs','74066':'Sapulpa','74017':'Claremore','74018':'Claremore',
-    '74015':'Catoosa','74070':'Skiatook','74021':'Collinsville','74044':'Mannford',
-    '74053':'Oologah','74401':'Muskogee','74403':'Muskogee','74447':'Okmulgee',
-    '74437':'Henryetta','74010':'Bristow','74028':'Depew','74467':'Wagoner',
-    '74429':'Coweta','74033':'Glenpool','74003':'Bartlesville','74006':'Bartlesville',
-    '74056':'Pawhuska','74301':'Vinita','74023':'Cushing','74030':'Drumright',
-    '74361':'Pryor','74464':'Tahlequah','74421':'Beggs','74035':'Hominy'
-  };
+  // Split comma-separated input
+  const rawLines=text.split('\n');const expandedLines=[];
+  rawLines.forEach(line=>{if(line.includes(',')&&!line.match(/^[A-Z]+\s*\(METRO\)/i)){line.split(',').forEach(part=>expandedLines.push(part.trim()));}else{expandedLines.push(line.trim());}});
+  const lines=expandedLines.filter(l=>l&&!/^evals needed$/i.test(l)&&!isIntroLine(l));
 
-  function expandZip(z) {
-    if (!z) return '';
-    z = String(z).trim().split('-')[0];
-    if (z.length === 5) return z;
-    return '74' + z.padStart(3,'0');
-  }
-  function mkEval(loc, zip, d, note, patient, clin, date) {
-    return {id:Date.now()+Math.random(), location:loc, zip, discipline:d, agency:ag,
-      priority:urg?'urgent':p, note:note||'', patient:patient||'',
-      status:'pending', clinician:clin||'', dateAdded:date||wd, weekDate:date||wd, qa:{}};
-  }
-  function cleanName(n) {
-    const m = n.match(/^([A-Z]+)\s*\(METRO\),\s*([A-Z]+)/i);
-    if (m) return m[2][0].toUpperCase()+m[2].slice(1).toLowerCase()+' '+m[1][0].toUpperCase()+m[1].slice(1).toLowerCase();
-    return n.trim();
-  }
-  function cleanPatient(n) {
-    const m = n.match(/^([A-Z\-]+),\s*([A-Z]+)/i);
-    if (m) return m[2][0].toUpperCase()+m[2].slice(1).toLowerCase()+' '+m[1][0].toUpperCase()+m[1].slice(1).toLowerCase();
-    return n.trim();
-  }
-
-  const lines = text.split('\n').map(l=>l.trim()).filter(l=>l && !/^evals needed$/i.test(l) && !isIntroLine(l));
-
-  // FORMAT A: BIOS structured blocks
-  if (lines.some(l => /^[A-Z]+\s*\(METRO\),\s*[A-Z]+/i.test(l))) {
-    let i = 0;
-    while (i < lines.length) {
-      if (/^[A-Z]+\s*\(METRO\),\s*[A-Z]+/i.test(lines[i])) {
-        const b = {clinician_raw:lines[i]}; let j = i+1;
-        if (j<lines.length && /^(PT|OT|SLP|PTA|COTA)\s+(Eval|SOC)/i.test(lines[j])) { b.vt=lines[j]; j++; }
-        if (j<lines.length && /^(METROMOBILE|METRO)/i.test(lines[j])) { j++; }
-        if (j<lines.length && /^[A-Z\-]+,\s*[A-Z]+/i.test(lines[j]) && !/^(PT|OT|SLP)/i.test(lines[j])) { b.patient=lines[j]; j++; }
-        if (j<lines.length && !/^\d{5}/.test(lines[j]) && !/^\d{2}\//.test(lines[j])) { b.city=lines[j]; j++; }
-        if (j<lines.length && /^\d{5}/.test(lines[j])) { b.zip=lines[j]; j++; }
-        if (j<lines.length && /^\d{2}\/\d{2}\/\d{4}$/.test(lines[j])) { b.date=lines[j]; j++; }
-        const city = (b.city||'').trim().replace(/\b\w/g,x=>x.toUpperCase());
-        const zip = expandZip(b.zip||'');
-        const d = b.vt ? b.vt.split(/\s+/)[0].toUpperCase() : disc();
-        const validD = ['PT','OT','SLP','PTA','COTA'].includes(d)?d:'PT';
-        const clin = cleanName(b.clinician_raw);
-        const patient = b.patient ? cleanPatient(b.patient) : '';
-        let evalDate = wd;
-        if (b.date) { const dp=b.date.match(/(\d{2})\/(\d{2})\/(\d{4})/); if(dp) evalDate=dp[3]+'-'+dp[1]+'-'+dp[2]; }
-        out.push(mkEval(city||(zipCity[zip]||'Unknown'), zip, validD, b.vt||'', patient, clin, evalDate));
-        i = j;
-      } else { i++; }
+  if(lines.some(l=>/^[A-Z]+\s*\(METRO\),\s*[A-Z]+/i.test(l))){
+    let i=0;while(i<lines.length){
+      if(/^[A-Z]+\s*\(METRO\),\s*[A-Z]+/i.test(lines[i])){
+        const b={cr:lines[i]};let j=i+1;
+        if(j<lines.length&&/^(PT|OT|SLP|PTA|COTA)\s+(Eval|SOC)/i.test(lines[j])){b.vt=lines[j];j++;}
+        if(j<lines.length&&/^(METROMOBILE|METRO)/i.test(lines[j])){j++;}
+        if(j<lines.length&&/^[A-Z\-]+,\s*[A-Z]+/i.test(lines[j])&&!/^(PT|OT|SLP)/i.test(lines[j])){b.pat=lines[j];j++;}
+        if(j<lines.length&&!/^\d{5}/.test(lines[j])&&!/^\d{2}\//.test(lines[j])){b.city=lines[j];j++;}
+        if(j<lines.length&&/^\d{5}/.test(lines[j])){b.zip=lines[j];j++;}
+        if(j<lines.length&&/^\d{2}\/\d{2}\/\d{4}$/.test(lines[j])){b.date=lines[j];j++;}
+        const city=(b.city||'').trim().replace(/\b\w/g,x=>x.toUpperCase());
+        const zip=expandZip(b.zip||'');const d=b.vt?b.vt.split(/\s+/)[0].toUpperCase():disc();
+        const vd=['PT','OT','SLP','PTA','COTA'].includes(d)?d:'PT';
+        let evalDate=wd;if(b.date){const dp=b.date.match(/(\d{2})\/(\d{2})\/(\d{4})/);if(dp)evalDate=dp[3]+'-'+dp[1]+'-'+dp[2];}
+        out.push(mkE(city||(zipCity[zip]||'Unknown'),zip,vd,b.vt||'',b.pat?cleanPat(b.pat):'',cleanName(b.cr),evalDate));i=j;
+      }else{i++;}
     }
     return out;
   }
-
-  // FORMAT B: Standard batch with discipline marker
-  if (lines.some(l => /[-\u2013]\s*(PT|OT|SLP|PTA|COTA)/i.test(l))) {
-    lines.forEach(line => {
-      const m = line.match(/^(.+?)(?:\s+(\d{3,5}))?[-\u2013]\s*(PT|OT|SLP|PTA|COTA)(.*)$/i);
-      if (m) {
-        const loc = abbrMap[m[1].trim().toUpperCase()] || m[1].trim();
-        const note = (m[4]||'').replace(/^[-\u2013\s]+/,'').trim();
-        out.push(mkEval(loc, expandZip(m[2]||''), m[3].toUpperCase(), note, '', '', wd));
-      }
-    });
-    if (out.length) return out;
+  if(lines.some(l=>/[-\u2013]\s*(PT|OT|SLP|PTA|COTA)/i.test(l))){
+    lines.forEach(line=>{const m=line.match(/^(.+?)(?:\s+(\d{3,5}))?[-\u2013]\s*(PT|OT|SLP|PTA|COTA)(.*)$/i);if(m){const loc=abbrMap[m[1].trim().toUpperCase()]||m[1].trim();const note=(m[4]||'').replace(/^[-\u2013\s]+/,'').trim();out.push(mkE(loc,expandZip(m[2]||''),m[3].toUpperCase(),note,'','',wd));}});
+    if(out.length)return out;
   }
-
-  // FORMAT C: SOC/patient prose
-  if (/\b(SOC|eval)\b/i.test(text) && lines.length <= 8) {
-    const found = cityNames.filter(c => new RegExp('\\b'+c+'\\b','i').test(text));
-    const vt = /\bSOC\b/i.test(text)?'SOC':'Eval';
-    const nm = (text.match(/\b([A-Z][a-z]{3,}(?:swamy|shan|kumar|patel|singh)?)\b/g)||[])[0]||'';
-    (found.length?found:['See note']).forEach(city => out.push(mkEval(city,'','PT',nm?nm+' \u2013 '+vt:vt,'','',wd)));
+  if(/\b(SOC|eval)\b/i.test(text)&&lines.length<=8){
+    const found=cityNames.filter(c=>new RegExp('\\b'+c+'\\b','i').test(text));
+    const vt=/\bSOC\b/i.test(text)?'SOC':'Eval';
+    const nm=(text.match(/\b([A-Z][a-z]{3,}(?:swamy|shan|kumar|patel|singh)?)\b/g)||[])[0]||'';
+    (found.length?found:['See note']).forEach(city=>out.push(mkE(city,'','PT',nm?nm+' \u2013 '+vt:vt,'','',wd)));
     return out;
   }
-
-  // FORMAT D: Inline zip list
-  const inlineZips = text.match(/\b\d{5}\b/g);
-  if (inlineZips && inlineZips.length > 1 && lines.length <= 3) {
-    inlineZips.forEach(zip => { const fz=expandZip(zip); out.push(mkEval(zipCity[fz]||'Tulsa',fz,disc(),'','','',wd)); });
+  const inlineZips=text.match(/\b\d{5}\b/g);
+  const allZips=lines.every(l=>/^\d{3,5}$/.test(l.trim()));
+  if(inlineZips&&inlineZips.length>1&&lines.length<=3&&allZips){
+    inlineZips.forEach(zip=>{const fz=expandZip(zip);out.push(mkE(zipCity[fz]||'Tulsa',fz,disc(),'','','',wd));});
     return out;
   }
-
-  // FORMAT E: One item per line
-  lines.forEach(line => {
-    const l = line.trim();
-    if (!l) return;
-    const isZip = /^\d{3,5}$/.test(l);
-    const isAbbr = /^[A-Za-z]{2,3}(\s+\d{1,3})?$/.test(l) && !/^(PT|OT|SLP|PTA|COTA)$/i.test(l);
-    if (isZip) {
-      const fz = expandZip(l);
-      out.push(mkEval(zipCity[fz]||'Tulsa', fz, disc(), '', '', '', wd));
-    } else if (isAbbr) {
-      const parts = l.match(/^([A-Za-z]+)\s*(\d*)$/);
-      const loc = abbrMap[(parts[1]||'').toUpperCase()] || parts[1];
-      const zip = parts[2] ? expandZip(parts[2]) : '';
-      out.push(mkEval(loc, zip, disc(), '', '', '', wd));
-    } else {
-      const normalized = l.replace(/\s+/g,' ').trim();
-      const noSpace = l.replace(/\s+/g,'').toLowerCase();
-      let loc = abbrMap[normalized.toUpperCase()] || cityNames.find(c=>c.toLowerCase()===normalized.toLowerCase());
-      if (!loc) loc = cityNames.find(c=>c.replace(/\s+/g,'').toLowerCase()===noSpace);
-      if (!loc) loc = cityNames.find(c=>c.replace(/\s+/g,'').toLowerCase().includes(noSpace)||noSpace.includes(c.replace(/\s+/g,'').toLowerCase()));
-      if (!loc && noSpace.length>=4) loc = cityNames.find(c=>c.replace(/\s+/g,'').toLowerCase().startsWith(noSpace.substring(0,4)));
-      if (!loc) loc = normalized;
-      out.push(mkEval(loc, '', disc(), '', '', '', wd));
+  lines.forEach(line=>{
+    const l=line.trim();if(!l)return;
+    const isZip=/^\d{3,5}$/.test(l);
+    const isAbbr=/^[A-Za-z]{2,3}(\s+\d{1,3})?$/.test(l)&&!/^(PT|OT|SLP|PTA|COTA)$/i.test(l);
+    if(isZip){const fz=expandZip(l);out.push(mkE(zipCity[fz]||'Tulsa',fz,disc(),'','','',wd));}
+    else if(isAbbr){const parts=l.match(/^([A-Za-z]+)\s*(\d*)$/);const loc=abbrMap[(parts[1]||'').toUpperCase()]||parts[1];const zip=parts[2]?expandZip(parts[2]):'';out.push(mkE(loc,zip,disc(),'','','',wd));}
+    else{
+      const normalized=l.replace(/\s+/g,' ').trim();const noSpace=l.replace(/\s+/g,'').toLowerCase();
+      let loc=abbrMap[normalized.toUpperCase()]||cityNames.find(c=>c.toLowerCase()===normalized.toLowerCase());
+      if(!loc)loc=cityNames.find(c=>c.replace(/\s+/g,'').toLowerCase()===noSpace);
+      if(!loc)loc=cityNames.find(c=>c.replace(/\s+/g,'').toLowerCase().includes(noSpace)||noSpace.includes(c.replace(/\s+/g,'').toLowerCase()));
+      if(!loc&&noSpace.length>=4)loc=cityNames.find(c=>c.replace(/\s+/g,'').toLowerCase().startsWith(noSpace.substring(0,4)));
+      if(!loc)loc=normalized;
+      out.push(mkE(loc,'',disc(),'','','',wd));
     }
   });
   return out;
 }
 
-function parseAdd() {
-  const text = document.getElementById('rt').value.trim();
-  if (!text) { flash('⚠️ Nothing to parse'); return; }
-  const ag = document.getElementById('ag').value;
-  const wd = document.getElementById('wd').value;
-  const items = parseText(text, ag, wd, pri);
-  if (!items.length) { flash('⚠️ Could not parse — try single-add below'); return; }
-  evals = [...evals, ...items];
-  save('mmhc_e', evals);
-  render();
-  document.getElementById('rt').value = '';
-  flash(`✓ Added ${items.length} eval${items.length>1?'s':''} to board`);
+async function parseAdd(){
+  const text=document.getElementById('rt').value.trim();if(!text){flash('⚠️ Nothing to parse');return;}
+  const ag=document.getElementById('ag').value,wd=document.getElementById('wd').value;
+  const items=parseText(text,ag,wd,pri);if(!items.length){flash('⚠️ Could not parse');return;}
+  document.getElementById('parseBtn').disabled=true;
+  evals=[...items,...evals];render();document.getElementById('rt').value='';
+  setSyncStatus('syncing',`Saving ${items.length} evals...`);
+  let saved=0;
+  for(const ev of items){
+    const {error}=await sb.from('evals').insert(evalToDB(ev));
+    if(!error){saved++;}else{console.error('insert error:',error);}
+    setSyncStatus('syncing',`Saving ${saved}/${items.length}...`);
+  }
+  document.getElementById('parseBtn').disabled=false;
+  setSyncStatus('live',`Live · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
+  flash(`✓ Added ${saved} eval${saved>1?'s':''} to shared board`);
 }
 
-function addOne() {
-  const loc = document.getElementById('sl').value.trim();
-  if (!loc) return;
-  const wd = document.getElementById('wd').value;
-  evals.push({id:Date.now()+Math.random(), location:loc, zip:document.getElementById('sz').value.trim(),
-    discipline:document.getElementById('sd').value, agency:document.getElementById('ag').value,
-    priority:pri, note:document.getElementById('sn').value.trim(),
-    patient:document.getElementById('spt').value.trim(),
-    status:'pending', clinician:'', dateAdded:wd, weekDate:wd, qa:{}});
-  save('mmhc_e', evals);
-  render();
-  ['sl','sz','sn','spt'].forEach(id=>document.getElementById(id).value='');
-  flash('✓ Eval added');
+async function addOne(){
+  const loc=document.getElementById('sl').value.trim();if(!loc)return;
+  const wd=document.getElementById('wd').value;
+  const ev={id:String(Date.now()+Math.random()),location:loc,zip:document.getElementById('sz').value.trim(),discipline:document.getElementById('sd').value,agency:document.getElementById('ag').value,priority:pri,note:document.getElementById('sn').value.trim(),patient:document.getElementById('spt').value.trim(),status:'pending',clinician:'',addedBy:userName||'',assignedBy:'',dateAdded:wd,weekDate:wd,qa:{}};
+  evals=[ev,...evals];render();['sl','sz','sn','spt'].forEach(id=>document.getElementById(id).value='');
+  await sb.from('evals').insert(evalToDB(ev));
+  flash('✓ Eval added to shared board');
 }
 
 // ── BOARD ──
-function sf(f, el) {
-  fil = f;
-  document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));
-  el.classList.add('on');
-  render();
-}
+function sf(f,el){fil=f;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));el.classList.add('on');render();}
+function age(d){if(!d)return 0;const str=String(d).trim();const parsed=str.includes('T')?new Date(str):new Date(str+'T12:00:00');if(isNaN(parsed.getTime()))return 0;return Math.max(0,Math.floor((Date.now()-parsed.getTime())/86400000));}
 
-function age(d) {
-  if (!d) return 0;
-  const str = String(d).trim();
-  const parsed = str.includes('T') ? new Date(str) : new Date(str + 'T12:00:00');
-  if (isNaN(parsed.getTime())) return 0;
-  return Math.max(0, Math.floor((Date.now() - parsed.getTime()) / 86400000));
-}
+function render(){
+  const monthSel=document.getElementById('monthFilter');
+  const selectedMonth=monthSel?monthSel.value:'';
+  const months=[...new Set(evals.map(e=>String(e.dateAdded||'').substring(0,7)).filter(d=>d&&d.length>=7))].sort().reverse();
+  if(monthSel){const cur=monthSel.value;monthSel.innerHTML='<option value="">All Months</option>'+months.map(m=>{const[y,mo]=m.split('-');const label=new Date(y,mo-1).toLocaleDateString('en-US',{month:'long',year:'numeric'});return`<option value="${m}"${m===cur?' selected':''}>${label}</option>`;}).join('');}
 
-function render() {
-  let list = evals.slice();
-  if (fil==='pending') list=list.filter(e=>e.status==='pending');
-  else if (fil==='assigned') list=list.filter(e=>e.status==='assigned');
-  else if (fil==='complete') list=list.filter(e=>e.status==='complete');
-  else if (fil==='urgent') list=list.filter(e=>e.priority==='urgent'||e.priority==='asap');
-  const so={pending:0,assigned:1,complete:2}, po={urgent:0,asap:1,normal:2};
+  let list=evals.slice();
+  if(fil==='pending')list=list.filter(e=>e.status==='pending');
+  else if(fil==='assigned')list=list.filter(e=>e.status==='assigned');
+  else if(fil==='complete')list=list.filter(e=>e.status==='complete');
+  else if(fil==='urgent')list=list.filter(e=>e.priority==='urgent'||e.priority==='asap');
+  if(selectedMonth)list=list.filter(e=>String(e.dateAdded||'').startsWith(selectedMonth));
+  const so={pending:0,assigned:1,complete:2},po={urgent:0,asap:1,normal:2};
   list.sort((a,b)=>so[a.status]!==so[b.status]?so[a.status]-so[b.status]:(po[a.priority]||2)-(po[b.priority]||2));
   document.getElementById('sP').textContent=evals.filter(e=>e.status==='pending').length;
   document.getElementById('sA').textContent=evals.filter(e=>e.status==='assigned').length;
   document.getElementById('sC').textContent=evals.filter(e=>e.status==='complete').length;
-  const g = document.getElementById('grid');
-  if (!list.length) {
-    g.innerHTML='<div class="empty"><div class="ei">📋</div><div class="et">No evals on the board</div><div style="font-size:13px;line-height:1.5">Paste a referral list using the panel on the left.</div></div>';
-    return;
-  }
-  g.innerHTML = list.map(e => {
-    const a=age(e.dateAdded), ac=a<=1?'af':a<=3?'aa':'ao', al=a===0?'Today':a===1?'1 day ago':`${a} days ago`;
-    const opts = clins.map(c=>`<option value="${c.name}"${e.clinician===c.name?' selected':''}>${c.name} (${c.role})</option>`).join('');
-    return `<div class="card s${e.status[0]} p${e.priority[0]}">
+  const g=document.getElementById('grid');
+  if(!list.length){g.innerHTML='<div class="empty"><div class="ei">📋</div><div class="et">No evals on the board</div><div style="font-size:13px;line-height:1.5">Paste a referral list using the panel on the left.</div></div>';return;}
+  g.innerHTML=list.map(e=>{
+    const a=age(e.dateAdded),ac=a<=1?'af':a<=3?'aa':'ao',al=a===0?'Today':a===1?'1 day ago':`${a} days ago`;
+    const opts=clins.map(c=>`<option value="${c.name}"${e.clinician===c.name?' selected':''}>${c.name} (${c.role})</option>`).join('');
+    return`<div class="card s${e.status[0]} p${e.priority[0]}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
         <div class="cloc">${e.location}${e.zip?`<span class="czip">${e.zip}</span>`:''}</div>
-        <div class="br"><span class="badge d${e.discipline}">${e.discipline}</span><span class="badge bag">${e.agency}</span></div>
+        <div class="br"><span class="badge d${e.discipline}">${e.discipline}</span><span class="badge bag">${e.agency||''}</span></div>
       </div>
       <div class="br">
         ${e.priority==='urgent'?'<span class="badge burg">🚨 Urgent</span>':''}
@@ -499,7 +480,11 @@ function render() {
       </div>
       ${e.patient?`<div class="cpat">👤 ${e.patient}</div>`:''}
       ${e.note?`<div class="cnote">${e.note}</div>`:''}
-      <div class="cmeta"><span class="cdate">${e.dateAdded}</span><span class="agebadge ${ac}">${al}</span></div>
+      <div class="cmeta">
+        <span class="cdate">${e.dateAdded}${e.addedBy?' · '+e.addedBy:''}</span>
+        <span class="agebadge ${ac}">${al}</span>
+      </div>
+      ${e.assignedBy?`<div style="font-size:10px;color:var(--muted)">Assigned by ${e.assignedBy}</div>`:''}
       <div style="margin-bottom:4px"><input class="csel" style="font-size:11px;padding:5px 7px;" placeholder="Patient name..." value="${e.patient||''}" onchange="updPat('${e.id}',this.value)"></div>
       <div class="cact">
         <select class="csel" onchange="asgn('${e.id}',this.value)">
@@ -513,102 +498,72 @@ function render() {
   }).join('');
 }
 
-function updPat(id, val) { const e=evals.find(e=>String(e.id)===String(id)); if(e){e.patient=val;save('mmhc_e',evals);} }
-function asgn(id, name) { const e=evals.find(e=>String(e.id)===String(id)); if(e){e.clinician=name;e.status=name?'assigned':'pending';save('mmhc_e',evals);render();renderQA();} }
-function mkDone(id) { const e=evals.find(e=>String(e.id)===String(id)); if(e){e.status='complete';save('mmhc_e',evals);render();renderQA();} }
-function rmEval(id) { evals=evals.filter(e=>String(e.id)!==String(id));save('mmhc_e',evals);render(); }
-function clrDone() { if(confirm('Remove all completed evals?')){evals=evals.filter(e=>e.status!=='complete');save('mmhc_e',evals);render();} }
-function clrAll() { if(confirm('Clear ALL evals?')){evals=[];save('mmhc_e',evals);render();} }
+async function updPat(id,val){const e=evals.find(e=>e.id===id);if(!e)return;e.patient=val;await sb.from('evals').update({patient:val}).eq('id',id);}
+async function asgn(id,name){const e=evals.find(e=>e.id===id);if(!e)return;e.clinician=name;e.status=name?'assigned':'pending';e.assignedBy=name?userName:'';render();renderQA();await sb.from('evals').update({clinician:name,status:e.status,assigned_by:e.assignedBy}).eq('id',id);}
+async function mkDone(id){const e=evals.find(e=>e.id===id);if(!e)return;e.status='complete';render();renderQA();await sb.from('evals').update({status:'complete'}).eq('id',id);}
+async function rmEval(id){evals=evals.filter(e=>e.id!==id);render();await sb.from('evals').delete().eq('id',id);}
+async function clrDone(){if(!confirm('Remove all completed evals?'))return;const ids=evals.filter(e=>e.status==='complete').map(e=>e.id);evals=evals.filter(e=>e.status!=='complete');render();if(ids.length)await sb.from('evals').delete().in('id',ids);}
+async function clrAll(){if(!confirm('Clear ALL evals?'))return;evals=[];render();await sb.from('evals').delete().neq('id','');}
 
 // ── QA ──
-function renderQA() {
-  const list = document.getElementById('qaList');
-  if (!list) return;
-  const qaEvals = evals.filter(e=>e.status==='assigned'||e.status==='complete');
-  if (!qaEvals.length) { list.innerHTML='<div class="qa-empty">No assigned evals yet.<br>Assign clinicians on the board first.</div>'; return; }
-  list.innerHTML = qaEvals.map(e => {
-    const qa = e.qa || {};
-    const allDone = qa.seen && qa.scheduled;
-    return `<div class="qa-card${allDone?' qa-done':''}">
+function renderQA(){
+  const list=document.getElementById('qaList');if(!list)return;
+  const qaEvals=evals.filter(e=>e.status==='assigned'||e.status==='complete');
+  if(!qaEvals.length){list.innerHTML='<div class="qa-empty">No assigned evals yet.</div>';return;}
+  list.innerHTML=qaEvals.map(e=>{
+    const qa=e.qa||{};const allDone=qa.seen&&qa.scheduled;
+    return`<div class="qa-card${allDone?' qa-done':''}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div>
-          <div class="qa-loc">${e.location}${e.zip?` <span style="font-family:monospace;font-size:11px;color:var(--muted)">${e.zip}</span>`:''}</div>
-          <div class="qa-clin">👤 ${e.clinician||'Unassigned'} · ${e.agency} · ${e.discipline}</div>
-          ${e.patient?`<div style="font-size:11px;color:#93c5fd">${e.patient}</div>`:''}
-        </div>
+        <div><div class="qa-loc">${e.location}${e.zip?` <span style="font-family:monospace;font-size:11px;color:var(--muted)">${e.zip}</span>`:''}</div>
+        <div class="qa-clin">👤 ${e.clinician||'Unassigned'} · ${e.agency||''} · ${e.discipline}</div>
+        ${e.patient?`<div style="font-size:11px;color:#93c5fd">${e.patient}</div>`:''}</div>
         <span class="badge b${e.status==='complete'?'com':'ass'}">${e.status}</span>
       </div>
       <div class="qa-checks">
-        <div class="qa-check${qa.seen?' done':''}">
-          <input type="checkbox" ${qa.seen?'checked':''} onchange="toggleQA('${e.id}','seen',this.checked)">
-          <span>Patient seen</span>
-          <input type="date" class="qa-date" value="${qa.seenDate||''}" onchange="toggleQA('${e.id}','seenDate',this.value)">
-        </div>
-        <div class="qa-check${qa.orders?' done':''}">
-          <input type="checkbox" ${qa.orders?'checked':''} onchange="toggleQA('${e.id}','orders',this.checked)">
-          <span>Orders added</span>
-        </div>
-        <div class="qa-check${qa.pta?' done':''}">
-          <input type="checkbox" ${qa.pta?'checked':''} onchange="toggleQA('${e.id}','pta',this.checked)">
-          <span>PTA assigned</span>
-        </div>
-        <div class="qa-check${qa.scheduled?' done':''}">
-          <input type="checkbox" ${qa.scheduled?'checked':''} onchange="toggleQA('${e.id}','scheduled',this.checked)">
-          <span>Follow-up scheduled</span>
-        </div>
+        <div class="qa-check${qa.seen?' done':''}"><input type="checkbox" ${qa.seen?'checked':''} onchange="toggleQA('${e.id}','seen',this.checked)"><span>Patient seen</span><input type="date" class="qa-date" value="${qa.seenDate||''}" onchange="toggleQA('${e.id}','seenDate',this.value)"></div>
+        <div class="qa-check${qa.orders?' done':''}"><input type="checkbox" ${qa.orders?'checked':''} onchange="toggleQA('${e.id}','orders',this.checked)"><span>Orders added</span></div>
+        <div class="qa-check${qa.pta?' done':''}"><input type="checkbox" ${qa.pta?'checked':''} onchange="toggleQA('${e.id}','pta',this.checked)"><span>PTA assigned</span></div>
+        <div class="qa-check${qa.scheduled?' done':''}"><input type="checkbox" ${qa.scheduled?'checked':''} onchange="toggleQA('${e.id}','scheduled',this.checked)"><span>Follow-up scheduled</span></div>
       </div>
-      <textarea class="qa-note" placeholder="QA notes (Stephen / Evan / Kym)..." onchange="toggleQA('${e.id}','notes',this.value)">${qa.notes||''}</textarea>
+      <textarea class="qa-note" placeholder="QA notes..." onchange="toggleQA('${e.id}','notes',this.value)">${qa.notes||''}</textarea>
     </div>`;
   }).join('');
 }
 
-function toggleQA(id, field, val) {
-  const e = evals.find(e=>String(e.id)===String(id));
-  if (!e) return;
-  if (!e.qa) e.qa = {};
-  e.qa[field] = val;
-  if (e.qa.seen && e.qa.scheduled) { e.status='complete'; render(); }
-  save('mmhc_e', evals);
+async function toggleQA(id,field,val){
+  const e=evals.find(e=>e.id===id);if(!e)return;
+  if(!e.qa)e.qa={};e.qa[field]=val;
+  if(e.qa.seen&&e.qa.scheduled){e.status='complete';await sb.from('evals').update({status:'complete'}).eq('id',id);render();}
   renderQA();
+  await sb.from('evals').update({qa:e.qa}).eq('id',id);
 }
 
 // ── CLINICIANS ──
-function renderClins() {
-  document.getElementById('clinList').innerHTML = clins.map((c,i)=>`
-    <div class="cr">
-      <div style="display:flex;align-items:center">
-        <div class="av">${c.name.split(' ').map(w=>w[0]).join('').substring(0,2)}</div>
-        <div><div style="font-size:12px;font-weight:600">${c.name}</div><div style="font-size:10px;color:var(--muted)">${c.role}</div></div>
-      </div>
-      <button class="xbtn" onclick="rmClin(${i})">×</button>
-    </div>`).join('');
+function renderClins(){
+  document.getElementById('clinList').innerHTML=clins.map(c=>`
+    <div class="cr"><div style="display:flex;align-items:center"><div class="av">${c.name.split(' ').map(w=>w[0]).join('').substring(0,2)}</div>
+    <div><div style="font-size:12px;font-weight:600">${c.name}</div><div style="font-size:10px;color:var(--muted)">${c.role}</div></div></div>
+    <button class="xbtn" onclick="rmClin('${c.name}')">×</button></div>`).join('');
 }
-function addClin() { const n=document.getElementById('nn').value.trim(); if(!n)return; clins.push({name:n,role:document.getElementById('nr').value}); save('mmhc_c',clins); document.getElementById('nn').value=''; renderClins(); render(); flash('✓ Clinician added'); }
-function rmClin(i) { clins.splice(i,1); save('mmhc_c',clins); renderClins(); render(); }
+async function addClin(){const n=document.getElementById('nn').value.trim();if(!n)return;const c={name:n,role:document.getElementById('nr').value};clins.push(c);renderClins();render();document.getElementById('nn').value='';await sb.from('clinicians').insert({name:c.name,role:c.role});flash('✓ Clinician added');}
+async function rmClin(name){clins=clins.filter(c=>c.name!==name);renderClins();render();await sb.from('clinicians').delete().eq('name',name);}
 
 // ── AGENCIES ──
-function renderAgencies() {
-  const sel = document.getElementById('ag');
-  const cur = sel.value;
-  sel.innerHTML = agencies.map(a=>`<option value="${a}"${a===cur?' selected':''}>${a}</option>`).join('');
-  document.getElementById('agencyList').innerHTML = agencies.map((a,i)=>`
-    <div class="cr">
-      <div style="display:flex;align-items:center">
-        <div class="av" style="background:#1e3a2a">${a.substring(0,2).toUpperCase()}</div>
-        <div style="font-size:12px;font-weight:600">${a}</div>
-      </div>
-      <button class="xbtn" onclick="rmAgency(${i})">×</button>
-    </div>`).join('');
+function renderAgencies(){
+  const sel=document.getElementById('ag');const cur=sel.value;
+  sel.innerHTML=agencies.map(a=>`<option value="${a}"${a===cur?' selected':''}>${a}</option>`).join('');
+  document.getElementById('agencyList').innerHTML=agencies.map(a=>`
+    <div class="cr"><div style="display:flex;align-items:center"><div class="av" style="background:#1e3a2a">${a.substring(0,2).toUpperCase()}</div>
+    <div style="font-size:12px;font-weight:600">${a}</div></div>
+    <button class="xbtn" onclick="rmAgency('${a}')">×</button></div>`).join('');
 }
-function addAgency() { const n=document.getElementById('na').value.trim(); if(!n||agencies.includes(n))return; agencies.push(n); save('mmhc_ag',agencies); document.getElementById('na').value=''; renderAgencies(); flash('✓ Agency added'); }
-function rmAgency(i) { agencies.splice(i,1); save('mmhc_ag',agencies); renderAgencies(); }
+async function addAgency(){const n=document.getElementById('na').value.trim();if(!n||agencies.includes(n))return;agencies.push(n);renderAgencies();document.getElementById('na').value='';await sb.from('agencies').insert({name:n});flash('✓ Agency added');}
+async function rmAgency(name){agencies=agencies.filter(a=>a!==name);renderAgencies();await sb.from('agencies').delete().eq('name',name);}
 
 // ── TEMPLATES ──
-function ct(el) { navigator.clipboard.writeText(el.querySelector('.tpl-b').textContent); flash('Copied ✓'); }
-function cc() { navigator.clipboard.writeText(document.getElementById('cu').value); flash('Copied ✓'); }
-
-// ── FLASH ──
-function flash(msg) { const el=document.getElementById('fl'); el.textContent=msg; el.classList.add('on'); setTimeout(()=>el.classList.remove('on'),2200); }
+function ct(el){navigator.clipboard.writeText(el.querySelector('.tpl-b').textContent);flash('Copied ✓');}
+function cc(){navigator.clipboard.writeText(document.getElementById('cu').value);flash('Copied ✓');}
+function flash(msg){const el=document.getElementById('fl');el.textContent=msg;el.classList.add('on');setTimeout(()=>el.classList.remove('on'),2200);}
 </script>
 </body>
 </html>
