@@ -408,18 +408,39 @@ async function addCapClin() {
 }
 
 function getSuggestedClinician(location, zip) {
-  // Find available PTAs/COTAs whose region matches the location
-  const available = capacity.filter(c=>c.available);
+  const available = capacity.filter(c=>c.available && c.region);
   if (!available.length) return null;
-  // Try to match region text to location
-  const match = available.find(c => {
-    if (!c.region) return false;
+
+  const locLower = location.toLowerCase().trim();
+  const zipClean = (zip||'').trim();
+
+  // Score each available clinician by match quality
+  let best = null, bestScore = 0;
+
+  for (const c of available) {
+    let score = 0;
     const regions = c.region.toLowerCase();
-    return regions.includes(location.toLowerCase()) ||
-      (zip && regions.includes(zip)) ||
-      location.toLowerCase().split(' ').some(w => w.length > 3 && regions.includes(w));
-  });
-  return match || available[0]; // fall back to first available
+    // Split region into individual entries (comma or slash separated)
+    const regionParts = regions.split(/[,\/]/).map(r=>r.trim()).filter(Boolean);
+
+    for (const part of regionParts) {
+      // Exact zip match — strongest signal
+      if (zipClean && part === zipClean) { score = 100; break; }
+      // Exact city match
+      if (part === locLower) { score = 90; break; }
+      // City name contained in region part
+      if (locLower.length > 3 && part.includes(locLower)) { score = Math.max(score, 70); }
+      // Zip prefix match (first 3 digits) — only if zip provided
+      if (zipClean.length === 5 && part.length >= 3 && zipClean.startsWith(part.substring(0,3)) && /^\d/.test(part)) {
+        score = Math.max(score, 50);
+      }
+    }
+
+    if (score > bestScore) { bestScore = score; best = c; }
+  }
+
+  // Only suggest if there's a real match (score > 0) — no fallback to random
+  return bestScore > 0 ? best : null;
 }
 
 window.onload = async () => {
