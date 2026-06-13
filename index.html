@@ -6,39 +6,39 @@
 <title>MMHC · Eval Workflow</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{--bg:#0d0d0d;--surface:#141414;--border:#2a2a2a;--accent:#18a558;--red:#f87171;--blue:#60a5fa;--text:#e8e8e8;--muted:#5a5a5a;--pending:#fbbf24;}
+:root{--bg:#0a1628;--surface:#0f1f3d;--border:#1e3a6e;--accent:#f0c040;--red:#f87171;--blue:#60a5fa;--text:#e8eef8;--muted:#7a9abf;--pending:#fbbf24;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;min-height:100vh;}
 header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;flex-wrap:wrap;gap:8px;}
 .logo{display:flex;align-items:center;gap:10px;}
-.mark{width:32px;height:32px;background:#18a558;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#0d0d0d;flex-shrink:0;}
+.mark{width:32px;height:32px;background:#f0c040;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#0a1628;flex-shrink:0;}
 .logo-text{font-weight:700;font-size:15px;}
 .logo-sub{font-size:11px;color:var(--muted);}
-.week-pill{font-family:monospace;font-size:11px;color:#18a558;background:rgba(24,165,88,0.08);border:1px solid rgba(24,165,88,0.2);padding:5px 12px;border-radius:20px;}
+.week-pill{font-family:monospace;font-size:11px;color:#f0c040;background:rgba(240,192,64,0.08);border:1px solid rgba(240,192,64,0.2);padding:5px 12px;border-radius:20px;}
 .stats{display:flex;gap:18px;}
 .stat{text-align:center;}
 .stat-n{font-size:20px;font-weight:700;font-family:monospace;}
 .stat-l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
 .sync-status{font-size:11px;display:flex;align-items:center;gap:5px;color:var(--muted);}
 .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;}
-.sync-dot.live{background:#18a558;box-shadow:0 0 6px rgba(24,165,88,0.5);}
+.sync-dot.live{background:#f0c040;box-shadow:0 0 6px rgba(240,192,64,0.5);}
 .sync-dot.syncing{background:var(--pending);}
 .sync-dot.err{background:var(--red);}
 .layout{display:grid;grid-template-columns:290px 1fr;height:calc(100vh - 57px);}
 .sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
 .tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
 .tab{flex:1;padding:10px 4px;text-align:center;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--muted);cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;font-family:inherit;}
-.tab.on{color:#18a558;border-bottom-color:#18a558;}
+.tab.on{color:#f0c040;border-bottom-color:#f0c040;}
 .panel{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;}
 .hidden{display:none!important;}
 .lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:3px;}
 input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:12px;padding:7px 10px;outline:none;box-sizing:border-box;}
 textarea{resize:none;height:140px;line-height:1.7;font-family:monospace;}
-input:focus,select:focus,textarea:focus{border-color:#18a558;}
+input:focus,select:focus,textarea:focus{border-color:#f0c040;}
 .btn{padding:8px 14px;border-radius:6px;border:none;cursor:pointer;font-family:inherit;font-weight:600;font-size:12px;display:flex;align-items:center;gap:6px;justify-content:center;width:100%;}
-.btn-g{background:#18a558;color:#0d0d0d;}
-.btn-g:hover{background:#15904c;}
-.btn-g:disabled{background:#1a2a1a;color:#3a5a3a;cursor:not-allowed;}
+.btn-g{background:#f0c040;color:#0a1628;}
+.btn-g:hover{background:#d4a830;}
+.btn-g:disabled{background:#1e2a10;color:#4a5a20;cursor:not-allowed;}
 .btn-o{background:transparent;color:var(--muted);border:1px solid var(--border);}
 .btn-o:hover{color:var(--text);border-color:var(--text);}
 .btn-r{background:rgba(239,68,68,0.1);color:var(--red);border:1px solid transparent;}
@@ -63,10 +63,10 @@ input:focus,select:focus,textarea:focus{border-color:#18a558;}
 .fb{padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
 .fb.on{background:var(--accent);color:#0a1628;border-color:var(--accent);}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:10px;}
-.card{background:#1e1e1e;border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;}
+.card{background:#162a50;border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;}
 .card.sp{border-left:3px solid var(--pending);}
 .card.sa{border-left:3px solid var(--blue);}
-.card.sc{border-left:3px solid #18a558;opacity:.4;filter:saturate(0.5);}
+.card.sc{border-left:3px solid #f0c040;opacity:.4;filter:saturate(0.5);}
 .card.pu{border-top:2px solid var(--red);}
 .card.pp{border-top:2px solid var(--pending);}
 .cloc{font-weight:700;font-size:15px;letter-spacing:0.2px;}
@@ -78,12 +78,12 @@ input:focus,select:focus,textarea:focus{border-color:#18a558;}
 .dSLP{background:rgba(236,72,153,.15);color:#f472b6;}
 .dPTA{background:rgba(59,130,246,.1);color:#93c5fd;}
 .dCOTA{background:rgba(168,85,247,.1);color:#d8b4fe;}
-.bag{background:rgba(24,165,88,.15);color:#18a558;font-weight:800;}
+.bag{background:rgba(240,192,64,.15);color:#f0c040;font-weight:800;}
 .burg{background:rgba(239,68,68,.15);color:#f87171;}
 .basp{background:rgba(245,158,11,.15);color:var(--pending);}
 .bpend{background:rgba(245,158,11,.1);color:var(--pending);}
 .bass{background:rgba(59,130,246,.1);color:#60a5fa;}
-.bcom{background:rgba(24,165,88,.1);color:#18a558;}
+.bcom{background:rgba(240,192,64,.1);color:#f0c040;}
 .bcl{background:rgba(59,130,246,.08);color:#93c5fd;font-size:10px;}
 .cnote{font-size:11px;color:var(--muted);font-style:italic;line-height:1.4;}
 .cpat{font-size:12px;font-weight:600;color:#93c5fd;}
@@ -96,7 +96,7 @@ input:focus,select:focus,textarea:focus{border-color:#18a558;}
 .cact{display:flex;gap:6px;}
 .csel{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:11px;padding:5px 7px;outline:none;cursor:pointer;}
 .cbtn{padding:5px 10px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;}
-.cbtn.done{color:#18a558;border-color:#18a558;}
+.cbtn.done{color:#f0c040;border-color:#f0c040;}
 .cbtn.del{color:var(--red);border-color:rgba(248,113,113,0.3);}
 .cbtn.del:hover{background:rgba(248,113,113,0.1);}
 .empty{text-align:center;padding:60px 20px;color:var(--muted);grid-column:1/-1;}
@@ -108,7 +108,7 @@ input:focus,select:focus,textarea:focus{border-color:#18a558;}
 .qa-clin{font-size:11px;color:var(--muted);}
 .qa-checks{display:flex;flex-direction:column;gap:6px;}
 .qa-check{display:flex;align-items:center;gap:8px;font-size:12px;}
-.qa-check input[type=checkbox]{width:15px;height:15px;accent-color:#18a558;cursor:pointer;flex-shrink:0;}
+.qa-check input[type=checkbox]{width:15px;height:15px;accent-color:#f0c040;cursor:pointer;flex-shrink:0;}
 .qa-check.done{color:var(--muted);text-decoration:line-through;}
 .qa-date{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-family:inherit;outline:none;width:130px;}
 .qa-note{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 7px;font-family:inherit;outline:none;width:100%;resize:none;height:40px;}
@@ -229,12 +229,12 @@ input:focus,select:focus,textarea:focus{border-color:#18a558;}
 
     <div class="panel hidden" id="tp-set">
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-        <div style="font-size:12px;font-weight:600;color:#18a558;margin-bottom:4px;">👤 Your Name</div>
+        <div style="font-size:12px;font-weight:600;color:#f0c040;margin-bottom:4px;">👤 Your Name</div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">Set your name so others can see who added or assigned evals.</div>
         <input id="userName" placeholder="e.g. Stephen, Evan, Kym..." style="margin-bottom:6px;" onchange="saveUserName()">
       </div>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-        <div style="font-size:12px;font-weight:600;color:#18a558;margin-bottom:4px;">📊 Live Shared Board</div>
+        <div style="font-size:12px;font-weight:600;color:#f0c040;margin-bottom:4px;">📊 Live Shared Board</div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">Real-time sync via Supabase. All devices see the same board instantly.</div>
         <button class="btn btn-o" onclick="loadAll()">🔄 Force Refresh</button>
       </div>
@@ -337,16 +337,16 @@ function renderCapacity() {
   list.innerHTML = allNames.map(name => {
     const clinRole = clins.find(c=>c.name===name)?.role || 'PTA';
     const cap = capacity.find(c=>c.name===name) || {name, available:false, region:'', role:clinRole};
-    return `<div style="background:var(--bg);border:1px solid ${cap.available?'#18a558':'var(--border)'};border-radius:8px;padding:10px;margin-bottom:8px;transition:border-color 0.2s;">
+    return `<div style="background:var(--bg);border:1px solid ${cap.available?'#f0c040':'var(--border)'};border-radius:8px;padding:10px;margin-bottom:8px;transition:border-color 0.2s;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
         <div style="display:flex;align-items:center;gap:8px;">
-          <div style="width:10px;height:10px;border-radius:50%;background:${cap.available?'#18a558':'var(--muted)'};flex-shrink:0;"></div>
+          <div style="width:10px;height:10px;border-radius:50%;background:${cap.available?'#f0c040':'var(--muted)'};flex-shrink:0;"></div>
           <div>
             <div style="font-weight:700;font-size:13px;">${name}</div>
             <div style="font-size:10px;color:var(--muted);">${clinRole}</div>
           </div>
         </div>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:${cap.available?'#18a558':'var(--muted)'};">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:${cap.available?'#f0c040':'var(--muted)'};">
           <input type="checkbox" ${cap.available?'checked':''} onchange="toggleCapAvail('${name}',this.checked)" style="accent-color:var(--accent);width:15px;height:15px;">
           ${cap.available?'Available':'Unavailable'}
         </label>
@@ -529,7 +529,7 @@ function renderHistory(){
   list.innerHTML=completed.map(e=>{
     const qa=e.qa||{};
     const checks=[qa.seen?'✓ Seen':'',qa.orders?'✓ Orders':'',qa.pta?'✓ PTA':'',qa.scheduled?'✓ Scheduled':''].filter(Boolean).join(' · ');
-    return`<div style="background:rgba(24,165,88,0.04);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px;">
+    return`<div style="background:rgba(240,192,64,0.04);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
         <div>
           <div style="font-weight:700;font-size:13px;color:var(--text)">${e.location}${e.zip?' '+e.zip:''}</div>
@@ -538,7 +538,7 @@ function renderHistory(){
         </div>
         <button onclick="rmEval('${e.id}')" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ Remove</button>
       </div>
-      ${checks?`<div style="font-size:11px;color:#18a558;margin-top:6px;">${checks}</div>`:''}
+      ${checks?`<div style="font-size:11px;color:#f0c040;margin-top:6px;">${checks}</div>`:''}
       ${qa.seenDate?`<div style="font-size:10px;color:var(--muted);margin-top:2px;">Seen: ${qa.seenDate}</div>`:''}
       ${qa.notes?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:4px;">${qa.notes}</div>`:''}
       <div style="font-size:10px;color:var(--muted);margin-top:4px;">${e.dateAdded}${e.addedBy?' · Added by '+e.addedBy:''}${e.assignedBy?' · Assigned by '+e.assignedBy:''}</div>
@@ -754,7 +754,7 @@ function render(){
       </div>
       ${e.assignedBy?`<div style="font-size:10px;color:var(--muted)">Assigned by ${e.assignedBy}</div>`:''}
       <div style="margin-bottom:4px"><input class="csel" style="font-size:11px;padding:5px 7px;" placeholder="Patient name..." value="${e.patient||''}" onchange="updPat('${e.id}',this.value)"></div>
-      ${(()=>{const s=getSuggestedClinician(e.location,e.zip);return s?`<div style="font-size:10px;color:#18a558;margin-bottom:4px;">💡 ${s.name} available${s.region?' · '+s.region:''}</div>`:''})()}
+      ${(()=>{const s=getSuggestedClinician(e.location,e.zip);return s?`<div style="font-size:10px;color:#f0c040;margin-bottom:4px;">💡 ${s.name} available${s.region?' · '+s.region:''}</div>`:''})()}
       <div class="cact">
         <select class="csel" onchange="asgn('${e.id}',this.value)">
           <option value="">— Assign Clinician —</option>${opts}
@@ -851,8 +851,8 @@ function renderClins(){
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;padding-left:35px;" id="clin-info-${c.name.replace(/\s+/g,'-')}">
-        ${c.phone?`<a href="tel:${c.phone}" style="font-size:11px;color:#18a558;text-decoration:none;">📞 ${c.phone}</a>`:''}
-        ${c.email?`<a href="mailto:${c.email}" style="font-size:11px;color:#18a558;text-decoration:none;">✉️ ${c.email}</a>`:''}
+        ${c.phone?`<a href="tel:${c.phone}" style="font-size:11px;color:#f0c040;text-decoration:none;">📞 ${c.phone}</a>`:''}
+        ${c.email?`<a href="mailto:${c.email}" style="font-size:11px;color:#f0c040;text-decoration:none;">✉️ ${c.email}</a>`:''}
         ${!c.phone&&!c.email?`<span style="font-size:10px;color:var(--muted);font-style:italic;">No contact info — tap Edit to add</span>`:''}
       </div>
       <div id="clin-edit-${c.name.replace(/\s+/g,'-')}" style="display:none;padding-left:35px;">
