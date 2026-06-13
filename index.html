@@ -142,6 +142,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
       <button class="tab on" onclick="sw('paste',this)">📋 Paste</button>
       <button class="tab" onclick="sw('tpl',this)">💬 Templates</button>
       <button class="tab" onclick="sw('qa',this)">✅ QA</button>
+      <button class="tab" onclick="sw('hist',this)">📁 History</button>
       <button class="tab" onclick="sw('set',this)">⚙️ Settings</button>
     </div>
 
@@ -195,13 +196,16 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
       <div class="lbl">QA Tracker</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.5">Track evals after assignment.</div>
       <div id="qaList"></div>
-      <div id="qaCompletedSection" class="hidden">
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;margin-bottom:6px;">
-          <div class="lbl" style="margin-bottom:0">Completed QA History</div>
-          <button onclick="clrQAHistory()" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:3px 8px;cursor:pointer;font-family:inherit;">Clear History</button>
-        </div>
-        <div id="qaCompletedList"></div>
+
+    </div>
+
+    <div class="panel hidden" id="tp-hist">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div class="lbl" style="margin-bottom:0">Completed Evals</div>
+        <button onclick="clrHistory()" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:3px 8px;cursor:pointer;font-family:inherit;">Clear All</button>
       </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">All completed evals with QA status. Clear when ready to archive.</div>
+      <div id="histList"><div class="qa-empty">No completed evals yet.</div></div>
     </div>
 
     <div class="panel hidden" id="tp-set">
@@ -245,7 +249,6 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
         <button class="fb on" onclick="sf('all',this)">All</button>
         <button class="fb" onclick="sf('pending',this)">Pending</button>
         <button class="fb" onclick="sf('assigned',this)">Assigned</button>
-        <button class="fb" onclick="sf('complete',this)">Complete</button>
         <button class="fb" onclick="sf('urgent',this)">🚨 Urgent</button>
         <select id="monthFilter" onchange="render()" style="background:var(--bg);border:1px solid var(--border);border-radius:20px;color:var(--muted);font-family:inherit;font-size:11px;padding:4px 10px;outline:none;cursor:pointer;">
           <option value="">All Months</option>
@@ -346,7 +349,40 @@ function evalToDB(e) {
 }
 
 // ── UI ──
-function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='qa')renderQA();}
+function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='qa')renderQA();if(name==='hist')renderHistory();}
+
+function renderHistory(){
+  const list=document.getElementById('histList');if(!list)return;
+  const completed=evals.filter(e=>e.status==='complete').sort((a,b)=>new Date(b.dateAdded)-new Date(a.dateAdded));
+  if(!completed.length){list.innerHTML='<div class="qa-empty">No completed evals yet.</div>';return;}
+  list.innerHTML=completed.map(e=>{
+    const qa=e.qa||{};
+    const checks=[qa.seen?'✓ Seen':'',qa.orders?'✓ Orders':'',qa.pta?'✓ PTA':'',qa.scheduled?'✓ Scheduled':''].filter(Boolean).join(' · ');
+    return`<div style="background:rgba(0,212,170,0.04);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px;">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
+        <div>
+          <div style="font-weight:700;font-size:13px;color:var(--text)">${e.location}${e.zip?' '+e.zip:''}</div>
+          <div style="font-size:11px;color:var(--muted)">👤 ${e.clinician||'—'} · ${e.agency||''} · ${e.discipline}</div>
+          ${e.patient?`<div style="font-size:11px;color:#93c5fd">${e.patient}</div>`:''}
+        </div>
+        <button onclick="rmEval('${e.id}')" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ Remove</button>
+      </div>
+      ${checks?`<div style="font-size:11px;color:var(--accent);margin-top:6px;">${checks}</div>`:''}
+      ${qa.seenDate?`<div style="font-size:10px;color:var(--muted);margin-top:2px;">Seen: ${qa.seenDate}</div>`:''}
+      ${qa.notes?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:4px;">${qa.notes}</div>`:''}
+      <div style="font-size:10px;color:var(--muted);margin-top:4px;">${e.dateAdded}${e.addedBy?' · Added by '+e.addedBy:''}${e.assignedBy?' · Assigned by '+e.assignedBy:''}</div>
+    </div>`;
+  }).join('');
+}
+
+async function clrHistory(){
+  if(!confirm('Delete all completed evals? This cannot be undone.'))return;
+  const ids=evals.filter(e=>e.status==='complete').map(e=>e.id);
+  evals=evals.filter(e=>e.status!=='complete');
+  renderHistory();render();
+  if(ids.length)await sb.from('evals').delete().in('id',ids);
+  flash('✓ History cleared');
+}
 function sp(p){pri=p;document.getElementById('pbN').className='pb'+(p==='normal'?' pn':'');document.getElementById('pbA').className='pb'+(p==='asap'?' pa':'');document.getElementById('pbU').className='pb'+(p==='urgent'?' pu':'');}
 function setThisWeek(){document.getElementById('wd').value=new Date().toISOString().split('T')[0];updateWk();}
 function updateWk(){const d=new Date(document.getElementById('wd').value+'T12:00:00');const s=new Date(d);s.setDate(d.getDate()-d.getDay());const e=new Date(s);e.setDate(s.getDate()+6);const f=x=>x.toLocaleDateString('en-US',{month:'short',day:'numeric'});document.getElementById('wk').textContent=`Week of ${f(s)} – ${f(e)}`;}
@@ -512,9 +548,10 @@ function render(){
   if(monthSel){const cur=monthSel.value;monthSel.innerHTML='<option value="">All Months</option>'+months.map(m=>{const[y,mo]=m.split('-');const label=new Date(y,mo-1).toLocaleDateString('en-US',{month:'long',year:'numeric'});return`<option value="${m}"${m===cur?' selected':''}>${label}</option>`;}).join('');}
 
   let list=evals.slice();
+  // Main board never shows complete — they go to History tab
+  list=list.filter(e=>e.status!=='complete');
   if(fil==='pending')list=list.filter(e=>e.status==='pending');
   else if(fil==='assigned')list=list.filter(e=>e.status==='assigned');
-  else if(fil==='complete')list=list.filter(e=>e.status==='complete');
   else if(fil==='urgent')list=list.filter(e=>e.priority==='urgent'||e.priority==='asap');
   if(selectedMonth)list=list.filter(e=>String(e.dateAdded||'').startsWith(selectedMonth));
   const so={pending:0,assigned:1,complete:2},po={urgent:0,asap:1,normal:2};
@@ -561,7 +598,7 @@ function render(){
 
 async function updPat(id,val){const e=evals.find(e=>e.id===id);if(!e)return;e.patient=val;await sb.from('evals').update({patient:val}).eq('id',id);}
 async function asgn(id,name){const e=evals.find(e=>e.id===id);if(!e)return;e.clinician=name;e.status=name?'assigned':'pending';e.assignedBy=name?userName:'';render();renderQA();await sb.from('evals').update({clinician:name,status:e.status,assigned_by:e.assignedBy}).eq('id',id);}
-async function mkDone(id){const e=evals.find(e=>e.id===id);if(!e)return;e.status='complete';render();renderQA();await sb.from('evals').update({status:'complete'}).eq('id',id);}
+async function mkDone(id){const e=evals.find(e=>e.id===id);if(!e)return;e.status='complete';render();renderQA();renderHistory();await sb.from('evals').update({status:'complete'}).eq('id',id);}
 async function rmEval(id){evals=evals.filter(e=>e.id!==id);render();await sb.from('evals').delete().eq('id',id);}
 async function clrDone(){if(!confirm('Remove all completed evals?'))return;const ids=evals.filter(e=>e.status==='complete').map(e=>e.id);evals=evals.filter(e=>e.status!=='complete');render();if(ids.length)await sb.from('evals').delete().in('id',ids);}
 async function clrAll(){if(!confirm('Clear ALL evals?'))return;evals=[];render();await sb.from('evals').delete().neq('id','');}
