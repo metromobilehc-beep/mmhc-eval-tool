@@ -473,7 +473,8 @@ function dbToEval(r) {
     id: r.id, location: r.location, zip: r.zip||'',
     discipline: r.discipline, agency: r.agency, priority: r.priority,
     note: r.note||'', patient: r.patient||'', status: r.status,
-    clinician: r.clinician||'', addedBy: r.added_by||'',
+    clinician: r.clinician||'', ptaClinician: r.pta_clinician||'',
+    addedBy: r.added_by||'',
     assignedBy: r.assigned_by||'', dateAdded: r.date_added||'',
     weekDate: r.week_date||'', qa: r.qa||{}
   };
@@ -484,7 +485,8 @@ function evalToDB(e) {
     id: String(e.id), location: e.location, zip: e.zip||'',
     discipline: e.discipline, agency: e.agency, priority: e.priority,
     note: e.note||'', patient: e.patient||'', status: e.status,
-    clinician: e.clinician||'', added_by: e.addedBy||userName||'',
+    clinician: e.clinician||'', pta_clinician: e.ptaClinician||'',
+    added_by: e.addedBy||userName||'',
     assigned_by: e.assignedBy||'', date_added: e.dateAdded||null,
     week_date: e.weekDate||null, qa: e.qa||{}
   };
@@ -543,7 +545,7 @@ function parseText(text,ag,wd,p){
   const zipCity={'74101':'Tulsa','74102':'Tulsa','74103':'Tulsa','74104':'Tulsa','74105':'Tulsa','74106':'Tulsa','74107':'Tulsa','74108':'Tulsa','74110':'Tulsa','74112':'Tulsa','74114':'Tulsa','74115':'Tulsa','74116':'Tulsa','74117':'Tulsa','74119':'Tulsa','74120':'Tulsa','74126':'Tulsa','74127':'Tulsa','74128':'Tulsa','74129':'Tulsa','74130':'Tulsa','74131':'Tulsa','74132':'Tulsa','74133':'Tulsa','74134':'Tulsa','74135':'Tulsa','74136':'Tulsa','74137':'Tulsa','74141':'Tulsa','74145':'Tulsa','74146':'Tulsa','74011':'Broken Arrow','74012':'Broken Arrow','74013':'Broken Arrow','74014':'Broken Arrow','74055':'Owasso','74037':'Jenks','74008':'Bixby','74063':'Sand Springs','74066':'Sapulpa','74017':'Claremore','74018':'Claremore','74015':'Catoosa','74070':'Skiatook','74021':'Collinsville','74044':'Mannford','74053':'Oologah','74401':'Muskogee','74403':'Muskogee','74447':'Okmulgee','74437':'Henryetta','74010':'Bristow','74028':'Depew','74467':'Wagoner','74429':'Coweta','74033':'Glenpool','74003':'Bartlesville','74006':'Bartlesville','74056':'Pawhuska','74301':'Vinita','74023':'Cushing','74030':'Drumright','74361':'Pryor','74464':'Tahlequah','74421':'Beggs','74035':'Hominy'};
 
   function expandZip(z){if(!z)return'';z=String(z).trim().split('-')[0];if(z.length===5)return z;return'74'+z.padStart(3,'0');}
-  function mkE(loc,zip,d,note,patient,clin,date){return{id:String(Date.now()+Math.random()),location:loc,zip,discipline:d,agency:ag,priority:urg?'urgent':p,note:note||'',patient:patient||'',status:'pending',clinician:clin||'',addedBy:userName||'',assignedBy:'',dateAdded:date||wd,weekDate:date||wd,qa:{}};}
+  function mkE(loc,zip,d,note,patient,clin,date){return{id:String(Date.now()+Math.random()),location:loc,zip,discipline:d,agency:ag,priority:urg?'urgent':p,note:note||'',patient:patient||'',status:'pending',clinician:clin||'',ptaClinician:'',addedBy:userName||'',assignedBy:'',dateAdded:date||wd,weekDate:date||wd,qa:{}};}
   function cleanName(n){const m=n.match(/^([A-Z]+)\s*\(METRO\),\s*([A-Z]+)/i);if(m)return m[2][0].toUpperCase()+m[2].slice(1).toLowerCase()+' '+m[1][0].toUpperCase()+m[1].slice(1).toLowerCase();return n.trim();}
   function cleanPat(n){const m=n.match(/^([A-Z\-]+),\s*([A-Z]+)/i);if(m)return m[2][0].toUpperCase()+m[2].slice(1).toLowerCase()+' '+m[1][0].toUpperCase()+m[1].slice(1).toLowerCase();return n.trim();}
   function resolveCity(raw){const u=raw.trim().toUpperCase();return abbrMap[u]||cityNames.find(c=>c.toLowerCase()===raw.trim().toLowerCase())||raw.trim();}
@@ -735,11 +737,26 @@ function render(){
           :`<button class="cbtn done" onclick="mkDone('${e.id}')">✓ Done</button>
             <button class="cbtn del" onclick="rmEval('${e.id}')">✕ Cancel</button>`}
       </div>
+      <div style="margin-top:2px;">
+        <select class="csel" style="font-size:10px;color:var(--muted);" onchange="asgnPTA('${e.id}',this.value)">
+          <option value="">+ Assign PTA/COTA (optional)</option>
+          ${clins.filter(c=>c.role==='PTA'||c.role==='COTA').map(c=>`<option value="${c.name}"${e.ptaClinician===c.name?' selected':''}>${c.name} (${c.role})</option>`).join('')}
+        </select>
+        ${e.ptaClinician?`<div style="font-size:10px;color:#93c5fd;margin-top:2px;">🤝 PTA: ${e.ptaClinician}</div>`:''}
+      </div>
     </div>`;
   }).join('');
 }
 
 async function updPat(id,val){const e=evals.find(e=>e.id===id);if(!e)return;e.patient=val;await sb.from('evals').update({patient:val}).eq('id',id);}
+async function asgnPTA(id,name){
+  const e=evals.find(e=>e.id===id);if(!e)return;
+  e.ptaClinician=name;
+  render();
+  await sb.from('evals').update({pta_clinician:name}).eq('id',id);
+  if(name) flash(`✓ PTA assigned: ${name}`);
+}
+
 async function asgn(id,name){const e=evals.find(e=>e.id===id);if(!e)return;e.clinician=name;e.status=name?'assigned':'pending';e.assignedBy=name?userName:'';render();renderQA();await sb.from('evals').update({clinician:name,status:e.status,assigned_by:e.assignedBy}).eq('id',id);}
 async function mkDone(id){const e=evals.find(e=>e.id===id);if(!e)return;e.status='complete';render();renderQA();renderHistory();await sb.from('evals').update({status:'complete'}).eq('id',id);}
 async function rmEval(id){evals=evals.filter(e=>e.id!==id);render();await sb.from('evals').delete().eq('id',id);}
