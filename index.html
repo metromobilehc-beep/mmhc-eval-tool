@@ -1,932 +1,1310 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>MMHC · Eval Workflow</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Metro Mobile Health Care — Compliance Training</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{--bg:#18453b;--surface:#1f5446;--border:#2d6e5a;--accent:#fbbf24;--red:#fca5a5;--blue:#93c5fd;--text:#ffffff;--muted:#7ab8aa;--pending:#fbbf24;}
-*{box-sizing:border-box;margin:0;padding:0;}
-body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;min-height:100vh;}
-header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;flex-wrap:wrap;gap:8px;}
-.logo{display:flex;align-items:center;gap:10px;}
-.mark{width:32px;height:32px;background:#ffffff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#18453b;flex-shrink:0;}
-.logo-text{font-weight:700;font-size:15px;}
-.logo-sub{font-size:11px;color:var(--muted);}
-.week-pill{font-family:monospace;font-size:11px;color:#fbbf24;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);padding:5px 12px;border-radius:20px;}
-.stats{display:flex;gap:18px;}
-.stat{text-align:center;}
-.stat-n{font-size:20px;font-weight:700;font-family:monospace;}
-.stat-l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
-.sync-status{font-size:11px;display:flex;align-items:center;gap:5px;color:var(--muted);}
-.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;}
-.sync-dot.live{background:#fbbf24;box-shadow:0 0 6px rgba(251,191,36,0.5);}
-.sync-dot.syncing{background:var(--pending);}
-.sync-dot.err{background:var(--red);}
-.layout{display:grid;grid-template-columns:290px 1fr;height:calc(100vh - 57px);}
-.sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
-.tabs{display:flex;border-bottom:1px solid var(--border);flex-shrink:0;}
-.tab{flex:1;padding:10px 4px;text-align:center;font-size:11px;font-weight:600;text-transform:uppercase;color:var(--muted);cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;font-family:inherit;}
-.tab.on{color:#fbbf24;border-bottom-color:#fbbf24;}
-.panel{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;}
-.hidden{display:none!important;}
-.lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:3px;}
-input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:12px;padding:7px 10px;outline:none;box-sizing:border-box;}
-textarea{resize:none;height:140px;line-height:1.7;font-family:monospace;}
-input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
-.btn{padding:8px 14px;border-radius:6px;border:none;cursor:pointer;font-family:inherit;font-weight:600;font-size:12px;display:flex;align-items:center;gap:6px;justify-content:center;width:100%;}
-.btn-g{background:#fbbf24;color:#18453b;}
-.btn-g:hover{background:#f59e0b;}
-.btn-g:disabled{background:#2a5a4a;color:#5a8a7a;cursor:not-allowed;}
-.btn-o{background:transparent;color:var(--muted);border:1px solid var(--border);}
-.btn-o:hover{color:var(--text);border-color:var(--text);}
-.btn-r{background:rgba(239,68,68,0.1);color:var(--red);border:1px solid transparent;}
-.pri-row{display:flex;gap:6px;}
-.pb{flex:1;padding:6px 4px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
-.pb.pn{border-color:var(--accent);color:var(--accent);background:rgba(0,212,170,.08);}
-.pb.pa{border-color:var(--pending);color:var(--pending);background:rgba(245,158,11,.08);}
-.pb.pu{border-color:var(--red);color:var(--red);background:rgba(239,68,68,.08);}
-.hr{height:1px;background:var(--border);margin:2px 0;}
-.tpl{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;cursor:pointer;transition:border-color .2s;}
-.tpl:hover{border-color:var(--accent);}
-.tpl-t{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--accent);margin-bottom:5px;}
-.tpl-b{font-size:11px;color:var(--muted);line-height:1.6;font-family:monospace;}
-.cr{display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-bottom:5px;}
-.av{width:27px;height:27px;border-radius:50%;background:#1e2530;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--accent);margin-right:8px;flex-shrink:0;}
-.xbtn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;}
-.xbtn:hover{color:var(--red);}
-.board{overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;}
-.bh{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;}
-.bt{font-weight:700;font-size:16px;}
-.fr{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
-.fb{padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
-.fb.on{background:var(--accent);color:#0a1628;border-color:var(--accent);}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:10px;}
-.card{background:#265e50;border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;}
-.card.sp{border-left:3px solid var(--pending);}
-.card.sa{border-left:3px solid var(--blue);}
-.card.sc{border-left:3px solid #fbbf24;opacity:.4;filter:saturate(0.5);}
-.card.pu{border-top:2px solid var(--red);}
-.card.pp{border-top:2px solid var(--pending);}
-.cloc{font-weight:700;font-size:15px;letter-spacing:0.2px;}
-.czip{font-size:11px;color:var(--muted);font-family:monospace;margin-left:4px;}
-.br{display:flex;gap:4px;flex-wrap:wrap;}
-.badge{padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
-.dPT{background:rgba(59,130,246,.15);color:#60a5fa;}
-.dOT{background:rgba(168,85,247,.15);color:#c084fc;}
-.dSLP{background:rgba(236,72,153,.15);color:#f472b6;}
-.dPTA{background:rgba(59,130,246,.1);color:#93c5fd;}
-.dCOTA{background:rgba(168,85,247,.1);color:#d8b4fe;}
-.bag{background:rgba(255,255,255,.15);color:#ffffff;font-weight:800;}
-.burg{background:rgba(239,68,68,.15);color:#f87171;}
-.basp{background:rgba(245,158,11,.15);color:var(--pending);}
-.bpend{background:rgba(245,158,11,.1);color:var(--pending);}
-.bass{background:rgba(59,130,246,.1);color:#60a5fa;}
-.bcom{background:rgba(251,191,36,.15);color:#fbbf24;}
-.bcl{background:rgba(59,130,246,.08);color:#93c5fd;font-size:10px;}
-.cnote{font-size:11px;color:var(--muted);font-style:italic;line-height:1.4;}
-.cpat{font-size:12px;font-weight:600;color:#93c5fd;}
-.cmeta{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;}
-.cdate{font-size:10px;color:var(--muted);font-family:monospace;}
-.agebadge{font-size:10px;font-family:monospace;padding:2px 7px;border-radius:4px;}
-.af{background:rgba(0,212,170,.1);color:var(--accent);}
-.aa{background:rgba(245,158,11,.15);color:var(--pending);}
-.ao{background:rgba(239,68,68,.15);color:#f87171;}
-.cact{display:flex;gap:6px;}
-.csel{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:11px;padding:5px 7px;outline:none;cursor:pointer;}
-.cbtn{padding:5px 10px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;}
-.cbtn.done{color:#fbbf24;border-color:#fbbf24;}
-.cbtn.del{color:var(--red);border-color:rgba(248,113,113,0.3);}
-.cbtn.del:hover{background:rgba(248,113,113,0.1);}
-.empty{text-align:center;padding:60px 20px;color:var(--muted);grid-column:1/-1;}
-.ei{font-size:40px;margin-bottom:12px;}
-.et{font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px;}
-.qa-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;display:flex;flex-direction:column;gap:8px;}
-.qa-card.qa-done{opacity:0.5;}
-.qa-loc{font-weight:700;font-size:13px;}
-.qa-clin{font-size:11px;color:var(--muted);}
-.qa-checks{display:flex;flex-direction:column;gap:6px;}
-.qa-check{display:flex;align-items:center;gap:8px;font-size:12px;}
-.qa-check input[type=checkbox]{width:15px;height:15px;accent-color:#fbbf24;cursor:pointer;flex-shrink:0;}
-.qa-check.done{color:var(--muted);text-decoration:line-through;}
-.qa-date{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-family:inherit;outline:none;width:130px;}
-.qa-note{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 7px;font-family:inherit;outline:none;width:100%;resize:none;height:40px;}
-.qa-empty{text-align:center;padding:30px;color:var(--muted);font-size:13px;}
-.flash{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--accent);color:#0a1628;font-weight:700;font-size:13px;padding:9px 22px;border-radius:24px;z-index:999;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap;}
-.flash.on{opacity:1;}
-@media(max-width:680px){.layout{grid-template-columns:1fr;height:auto;}.sidebar{max-height:56vh;}.stats{display:none;}}
+  :root {
+    --navy: #1a2e4a;
+    --navy-deep: #0f1e30;
+    --teal: #2a8fa0;
+    --teal-light: #3db8ce;
+    --gold: #c9a84c;
+    --gold-light: #e8c96a;
+    --white: #ffffff;
+    --offwhite: #f4f7fa;
+    --gray-100: #eef1f5;
+    --gray-200: #dde2ea;
+    --gray-400: #8a96a8;
+    --gray-600: #4a5568;
+    --success: #2d9e6b;
+    --danger: #c0392b;
+    --warn: #e07b39;
+    --font-main: 'Segoe UI', system-ui, sans-serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: var(--font-main);
+    background: var(--offwhite);
+    color: var(--navy);
+    min-height: 100vh;
+  }
+
+  /* ── TOP BAR ── */
+  header {
+    background: var(--navy);
+    padding: 0 24px;
+    height: 60px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 100;
+    box-shadow: 0 2px 8px rgba(0,0,0,.25);
+  }
+  .logo { display: flex; align-items: center; gap: 12px; }
+  .logo-mark {
+    width: 36px; height: 36px; border-radius: 8px;
+    background: linear-gradient(135deg, var(--teal), var(--teal-light));
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 900; font-size: 16px; color: #fff;
+  }
+  .logo-text { color: #fff; font-size: 15px; font-weight: 700; line-height: 1.2; }
+  .logo-sub { color: var(--teal-light); font-size: 11px; font-weight: 400; letter-spacing: .5px; }
+  #headerRight { display: flex; align-items: center; gap: 12px; }
+  #userBadge {
+    background: rgba(255,255,255,.1);
+    border: 1px solid rgba(255,255,255,.18);
+    color: #fff;
+    padding: 5px 12px;
+    border-radius: 20px;
+    font-size: 13px;
+    display: none;
+  }
+  #logoutBtn {
+    background: transparent; border: 1px solid var(--gold);
+    color: var(--gold); padding: 5px 14px; border-radius: 20px;
+    font-size: 12px; cursor: pointer; display: none;
+    transition: all .2s;
+  }
+  #logoutBtn:hover { background: var(--gold); color: var(--navy); }
+
+  /* ── SCREENS ── */
+  .screen { display: none; }
+  .screen.active { display: block; }
+
+  /* ── LOGIN ── */
+  #loginScreen {
+    min-height: calc(100vh - 60px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    padding: 32px 16px;
+  }
+  #loginScreen.active { display: flex; }
+
+  .login-card {
+    background: #fff;
+    border-radius: 16px;
+    box-shadow: 0 4px 32px rgba(26,46,74,.12);
+    padding: 40px 36px;
+    width: 100%;
+    max-width: 400px;
+  }
+  .login-card h2 { color: var(--navy); font-size: 22px; margin-bottom: 6px; }
+  .login-card p { color: var(--gray-600); font-size: 14px; margin-bottom: 28px; }
+
+  .form-group { margin-bottom: 18px; }
+  label { display: block; font-size: 13px; font-weight: 600; color: var(--navy); margin-bottom: 6px; }
+  input[type=text], input[type=password], select {
+    width: 100%;
+    padding: 10px 14px;
+    border: 1.5px solid var(--gray-200);
+    border-radius: 8px;
+    font-size: 14px;
+    color: var(--navy);
+    background: #fff;
+    transition: border-color .2s;
+    outline: none;
+    appearance: none;
+  }
+  input:focus, select:focus { border-color: var(--teal); }
+
+  .btn-primary {
+    width: 100%;
+    padding: 12px;
+    background: linear-gradient(135deg, var(--navy), #243d5c);
+    color: #fff;
+    border: none;
+    border-radius: 8px;
+    font-size: 15px;
+    font-weight: 700;
+    cursor: pointer;
+    transition: opacity .2s;
+    letter-spacing: .3px;
+  }
+  .btn-primary:hover { opacity: .88; }
+
+  .error-msg {
+    background: #fdf0ee;
+    border: 1px solid #f5b8b0;
+    color: var(--danger);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    margin-bottom: 16px;
+    display: none;
+  }
+
+  /* ── DASHBOARD ── */
+  #dashScreen { padding: 28px 24px; max-width: 1100px; margin: 0 auto; }
+
+  .dash-header { margin-bottom: 28px; }
+  .dash-header h1 { font-size: 26px; color: var(--navy); }
+  .dash-header p { color: var(--gray-600); font-size: 14px; margin-top: 4px; }
+
+  .track-toggle {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 28px;
+    flex-wrap: wrap;
+  }
+  .track-btn {
+    padding: 8px 20px;
+    border-radius: 20px;
+    border: 2px solid var(--gray-200);
+    background: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    color: var(--gray-600);
+    transition: all .2s;
+  }
+  .track-btn.active {
+    border-color: var(--teal);
+    background: var(--teal);
+    color: #fff;
+  }
+
+  .modules-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+    gap: 18px;
+    margin-bottom: 36px;
+  }
+
+  .module-card {
+    background: #fff;
+    border-radius: 14px;
+    border: 1.5px solid var(--gray-200);
+    padding: 22px;
+    cursor: pointer;
+    transition: box-shadow .2s, border-color .2s, transform .15s;
+    position: relative;
+    overflow: hidden;
+  }
+  .module-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--gray-200);
+    transition: background .2s;
+  }
+  .module-card.completed::before { background: var(--success); }
+  .module-card.in-progress::before { background: var(--gold); }
+  .module-card:hover { box-shadow: 0 4px 20px rgba(26,46,74,.1); border-color: var(--teal); transform: translateY(-2px); }
+
+  .module-icon { font-size: 28px; margin-bottom: 10px; }
+  .module-title { font-size: 15px; font-weight: 700; color: var(--navy); margin-bottom: 6px; }
+  .module-meta { font-size: 12px; color: var(--gray-400); margin-bottom: 12px; }
+
+  .status-badge {
+    display: inline-flex; align-items: center; gap: 5px;
+    padding: 3px 10px; border-radius: 12px;
+    font-size: 11px; font-weight: 700; letter-spacing: .3px; text-transform: uppercase;
+  }
+  .badge-todo { background: var(--gray-100); color: var(--gray-600); }
+  .badge-progress { background: #fef3e2; color: var(--warn); }
+  .badge-done { background: #e8f8f1; color: var(--success); }
+
+  .progress-bar-wrap {
+    height: 4px; background: var(--gray-100); border-radius: 4px; margin-top: 14px; overflow: hidden;
+  }
+  .progress-bar-fill { height: 100%; border-radius: 4px; background: var(--teal); transition: width .4s; }
+
+  /* ── ADMIN PANEL ── */
+  .admin-panel {
+    background: var(--navy-deep);
+    border-radius: 14px;
+    padding: 24px;
+    margin-top: 10px;
+    color: #fff;
+  }
+  .admin-panel h2 { font-size: 17px; margin-bottom: 18px; color: var(--gold); }
+  .admin-table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 12px; color: var(--teal-light); font-weight: 600; border-bottom: 1px solid rgba(255,255,255,.1); white-space: nowrap; }
+  td { padding: 9px 12px; border-bottom: 1px solid rgba(255,255,255,.06); color: #dde2ea; vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  .tag-done { color: #5de0a0; font-weight: 700; }
+  .tag-pend { color: #f0a060; }
+  .filter-row { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .admin-select {
+    padding: 7px 12px; border-radius: 8px; border: 1px solid rgba(255,255,255,.18);
+    background: rgba(255,255,255,.07); color: #fff; font-size: 13px; cursor: pointer;
+  }
+  .export-btn {
+    padding: 7px 16px; border-radius: 8px; border: 1px solid var(--gold);
+    background: transparent; color: var(--gold); font-size: 13px; cursor: pointer; font-weight: 600;
+    transition: all .2s;
+  }
+  .export-btn:hover { background: var(--gold); color: var(--navy); }
+
+  /* ── MODULE VIEWER ── */
+  #moduleScreen { display: none; padding: 24px; max-width: 860px; margin: 0 auto; }
+  #moduleScreen.active { display: block; }
+
+  .back-btn {
+    display: inline-flex; align-items: center; gap: 7px;
+    color: var(--teal); font-size: 14px; font-weight: 600;
+    cursor: pointer; margin-bottom: 22px; background: none; border: none;
+    padding: 0;
+  }
+  .back-btn:hover { color: var(--navy); }
+
+  .module-viewer-card {
+    background: #fff; border-radius: 16px;
+    box-shadow: 0 4px 24px rgba(26,46,74,.09);
+    overflow: hidden;
+  }
+
+  .module-viewer-header {
+    background: linear-gradient(135deg, var(--navy), var(--navy-deep));
+    padding: 28px 32px;
+    color: #fff;
+  }
+  .module-viewer-header .icon { font-size: 36px; margin-bottom: 10px; }
+  .module-viewer-header h2 { font-size: 22px; margin-bottom: 4px; }
+  .module-viewer-header p { color: rgba(255,255,255,.65); font-size: 14px; }
+
+  .slide-progress-bar {
+    height: 5px;
+    background: rgba(255,255,255,.15);
+    position: relative;
+  }
+  .slide-progress-fill {
+    height: 100%;
+    background: var(--teal-light);
+    transition: width .35s;
+  }
+
+  .module-body { padding: 32px; }
+
+  .slide { display: none; }
+  .slide.active { display: block; }
+
+  .slide h3 { font-size: 19px; color: var(--navy); margin-bottom: 14px; }
+  .slide p { font-size: 15px; color: var(--gray-600); line-height: 1.7; margin-bottom: 14px; }
+  .slide ul, .slide ol { padding-left: 22px; color: var(--gray-600); font-size: 15px; line-height: 2; margin-bottom: 14px; }
+
+  .callout {
+    border-left: 4px solid var(--teal);
+    background: #f0fafc;
+    padding: 14px 18px;
+    border-radius: 0 8px 8px 0;
+    margin: 16px 0;
+    font-size: 14px;
+    color: var(--navy);
+  }
+  .callout.warn { border-color: var(--warn); background: #fef8f2; }
+  .callout.danger { border-color: var(--danger); background: #fdf2f1; }
+
+  .slide-nav {
+    display: flex; justify-content: space-between; align-items: center;
+    margin-top: 28px; padding-top: 20px;
+    border-top: 1px solid var(--gray-100);
+  }
+  .slide-counter { font-size: 13px; color: var(--gray-400); }
+  .nav-btn {
+    padding: 10px 22px; border-radius: 8px; font-size: 14px; font-weight: 600;
+    cursor: pointer; border: none; transition: all .2s;
+  }
+  .nav-btn.prev { background: var(--gray-100); color: var(--gray-600); }
+  .nav-btn.prev:hover { background: var(--gray-200); }
+  .nav-btn.next { background: var(--teal); color: #fff; }
+  .nav-btn.next:hover { background: #237f8f; }
+
+  /* ── QUIZ ── */
+  .quiz-wrap { }
+  .quiz-q { margin-bottom: 28px; }
+  .quiz-q .q-text { font-size: 16px; font-weight: 600; color: var(--navy); margin-bottom: 14px; line-height: 1.5; }
+  .quiz-option {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 12px 16px; border-radius: 10px;
+    border: 1.5px solid var(--gray-200); margin-bottom: 9px;
+    cursor: pointer; transition: all .2s; font-size: 14px; color: var(--gray-600);
+  }
+  .quiz-option input { margin-top: 2px; accent-color: var(--teal); }
+  .quiz-option:hover { border-color: var(--teal); background: #f5fcfd; }
+  .quiz-option.correct { border-color: var(--success); background: #eef9f4; color: var(--success); }
+  .quiz-option.incorrect { border-color: var(--danger); background: #fdf2f1; color: var(--danger); }
+
+  .quiz-result {
+    text-align: center; padding: 24px 16px;
+    background: var(--gray-100); border-radius: 12px; margin-top: 16px;
+  }
+  .quiz-result .score { font-size: 42px; font-weight: 900; color: var(--navy); }
+  .quiz-result .score-label { font-size: 14px; color: var(--gray-400); margin-bottom: 10px; }
+  .quiz-result .pass-msg { font-weight: 700; font-size: 16px; }
+  .pass { color: var(--success); }
+  .fail { color: var(--danger); }
+
+  /* ── ATTESTATION ── */
+  .attestation-box {
+    border: 2px solid var(--navy);
+    border-radius: 12px;
+    padding: 24px;
+    margin-top: 24px;
+    background: #f9fbfd;
+  }
+  .attestation-box h4 { font-size: 16px; color: var(--navy); margin-bottom: 10px; }
+  .attestation-box p { font-size: 13px; color: var(--gray-600); line-height: 1.65; margin-bottom: 16px; }
+  .sig-row { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; }
+  .sig-row input {
+    flex: 1; min-width: 180px;
+    padding: 10px 14px; border: 1.5px solid var(--gray-200);
+    border-radius: 8px; font-size: 14px;
+  }
+  .attest-btn {
+    padding: 10px 24px; background: var(--navy); color: #fff;
+    border: none; border-radius: 8px; font-size: 14px; font-weight: 700;
+    cursor: pointer; transition: background .2s;
+    white-space: nowrap;
+  }
+  .attest-btn:hover { background: var(--navy-deep); }
+  .attest-btn:disabled { opacity: .5; cursor: not-allowed; }
+
+  .completion-banner {
+    text-align: center; padding: 32px;
+  }
+  .completion-banner .check { font-size: 52px; margin-bottom: 12px; }
+  .completion-banner h3 { font-size: 22px; color: var(--success); margin-bottom: 8px; }
+  .completion-banner p { color: var(--gray-600); font-size: 14px; margin-bottom: 20px; }
+  .gold-pill {
+    display: inline-block;
+    background: linear-gradient(135deg, var(--gold), var(--gold-light));
+    color: var(--navy); font-weight: 700; font-size: 13px;
+    padding: 6px 18px; border-radius: 20px; letter-spacing: .4px;
+  }
+
+  /* ── TOAST ── */
+  #toast {
+    position: fixed; bottom: 24px; right: 24px;
+    background: var(--navy); color: #fff;
+    padding: 12px 20px; border-radius: 10px;
+    font-size: 14px; box-shadow: 0 4px 16px rgba(0,0,0,.2);
+    z-index: 9999; opacity: 0; transform: translateY(10px);
+    transition: all .3s; pointer-events: none;
+  }
+  #toast.show { opacity: 1; transform: translateY(0); }
+
+  .spinner {
+    display: inline-block; width: 18px; height: 18px;
+    border: 2px solid rgba(255,255,255,.3);
+    border-top-color: #fff; border-radius: 50%;
+    animation: spin .7s linear infinite; vertical-align: middle; margin-right: 8px;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  @media (max-width: 600px) {
+    #dashScreen { padding: 16px; }
+    .module-body { padding: 20px; }
+    .module-viewer-header { padding: 20px; }
+    .login-card { padding: 28px 20px; }
+  }
 </style>
 </head>
 <body>
+
 <header>
   <div class="logo">
-    <div class="mark">M²</div>
-    <div><div class="logo-text">Metro Mobile Health Care</div><div class="logo-sub">Eval Workflow · Weekly Board</div></div>
+    <div class="logo-mark">M</div>
+    <div>
+      <div class="logo-text">Metro Mobile Health Care</div>
+      <div class="logo-sub">Compliance Training Portal</div>
+    </div>
   </div>
-  <div class="week-pill" id="wk"></div>
-  <div class="sync-status">
-    <div class="sync-dot" id="syncDot"></div>
-    <span id="syncMsg">Connecting...</span>
-  </div>
-  <div class="stats">
-    <div class="stat"><div class="stat-n" id="sP" style="color:var(--pending)">0</div><div class="stat-l">Pending</div></div>
-    <div class="stat"><div class="stat-n" id="sA" style="color:var(--blue)">0</div><div class="stat-l">Assigned</div></div>
-    <div class="stat"><div class="stat-n" id="sC" style="color:var(--accent)">0</div><div class="stat-l">Done</div></div>
+  <div id="headerRight">
+    <div id="userBadge"></div>
+    <button id="logoutBtn" onclick="logout()">Sign Out</button>
   </div>
 </header>
 
-<div class="layout">
-  <div class="sidebar">
-    <div class="tabs">
-      <button class="tab on" onclick="sw('paste',this)">📋 Paste</button>
-      <button class="tab" onclick="sw('tpl',this)">💬 Templates</button>
-      <button class="tab" onclick="sw('qa',this)">✅ QA</button>
-      <button class="tab" onclick="sw('cap',this)">👥 Capacity</button>
-      <button class="tab" onclick="sw('hist',this)">📁 History</button>
-      <button class="tab" onclick="sw('set',this)">⚙️ Settings</button>
+<!-- LOGIN -->
+<div id="loginScreen" class="screen active">
+  <div class="login-card">
+    <h2>Staff Sign In</h2>
+    <p>Enter your name and PIN to access your compliance training.</p>
+    <div id="loginError" class="error-msg"></div>
+    <div class="form-group">
+      <label>Select Your Name</label>
+      <select id="nameSelect">
+        <option value="">— Choose your name —</option>
+        <option>Evan Flanagan, PT</option>
+        <option>Kimberly Quigley, PTA</option>
+        <option>Lexie Henson, PTA</option>
+        <option>Tina Pierce, PTA</option>
+        <option>Johnathan Barber, PT</option>
+        <option>Cassidy Crouch, OT</option>
+        <option>Marquita Tarkington, OT</option>
+        <option>Kym Crane, OT</option>
+        <option>Kasey Rideout, SLP</option>
+        <option>Stephen Mace, DPT</option>
+        <option>Kym Quigley (Admin)</option>
+      </select>
     </div>
-
-    <div class="panel" id="tp-paste">
-      <div><div class="lbl">Agency</div><select id="ag"></select></div>
-      <div><div class="lbl">Paste Referral Text</div>
-        <textarea id="rt" placeholder="Paste any format:&#10;&#10;Henryetta&#10;74107, Bristow, Ba 011&#10;&#10;or: Catoosa-PT&#10;Tulsa 74105-PT&#10;&#10;or: BIOS block format"></textarea>
-      </div>
-      <div><div class="lbl">Default Discipline</div><select id="defDisc"><option>PT</option><option>OT</option><option>SLP</option><option>PTA</option><option>COTA</option></select></div>
-      <div><div class="lbl">Priority</div>
-        <div class="pri-row">
-          <button class="pb pn" id="pbN" onclick="sp('normal')">Normal</button>
-          <button class="pb" id="pbA" onclick="sp('asap')">ASAP</button>
-          <button class="pb" id="pbU" onclick="sp('urgent')">URGENT</button>
-        </div>
-      </div>
-      <div>
-        <div class="lbl">Week of</div>
-        <div style="display:flex;gap:6px;align-items:center">
-          <input type="date" id="wd" onchange="updateWk()" style="flex:1;padding:9px 10px;font-size:13px;">
-          <button onclick="setThisWeek()" style="padding:9px 10px;border-radius:6px;border:1px solid var(--border);background:transparent;color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;">This Week</button>
-        </div>
-      </div>
-      <button class="btn btn-g" id="parseBtn" onclick="parseAdd()">⚡ Parse &amp; Add to Board</button>
-      <div class="hr"></div>
-      <div><div class="lbl">Add Single Eval</div>
-        <input id="sl" placeholder="Location / City" style="margin-bottom:5px">
-        <input id="sz" placeholder="ZIP (optional)" style="margin-bottom:5px">
-        <input id="spt" placeholder="Patient name (optional)" style="margin-bottom:5px">
-        <input id="sn" placeholder="Notes" style="margin-bottom:5px">
-        <select id="sd" style="margin-bottom:8px"><option>PT</option><option>OT</option><option>SLP</option><option>PTA</option><option>COTA</option></select>
-        <button class="btn btn-o" onclick="addOne()">+ Add Eval</button>
-      </div>
+    <div class="form-group">
+      <label>PIN</label>
+      <input type="password" id="pinInput" placeholder="4-digit PIN" maxlength="6" />
     </div>
-
-    <div class="panel hidden" id="tp-tpl">
-      <div class="lbl">Tap to copy</div>
-      <div class="tpl" onclick="ct(this)"><div class="tpl-t">✅ Acknowledge Referral</div><div class="tpl-b">Thank you, we received your referral list. We will review availability and confirm assignments shortly.</div></div>
-      <div class="tpl" onclick="ct(this)"><div class="tpl-t">👤 Clinician Assigned</div><div class="tpl-b">Hi [CLINICIAN], you have been assigned an eval for [LOCATION]. Please confirm availability and contact the patient to schedule. Thank you!</div></div>
-      <div class="tpl" onclick="ct(this)"><div class="tpl-t">🔔 Follow-Up Unseen</div><div class="tpl-b">Hi [CLINICIAN], just following up — we have an eval still pending for [LOCATION]. Can you confirm when this will be seen? Please update ConnectTeam once scheduled.</div></div>
-      <div class="tpl" onclick="ct(this)"><div class="tpl-t">🚨 Urgent Eval Notice</div><div class="tpl-b">⚠️ URGENT: We have an eval in [LOCATION] that needs to be seen ASAP. This patient is PT only. Please respond with availability immediately.</div></div>
-      <div class="tpl" onclick="ct(this)"><div class="tpl-t">📋 SOC Reminder</div><div class="tpl-b">Hi [CLINICIAN], reminder you have a SOC scheduled tomorrow for [PATIENT] in [CITY]. Please ensure documentation is submitted within 24 hours.</div></div>
-      <div class="tpl" onclick="ct(this)"><div class="tpl-t">✔️ Eval Complete</div><div class="tpl-b">Hi [AGENCY], confirming the eval for [PATIENT] in [LOCATION] has been completed by [CLINICIAN]. Documentation submitted within 24 hours.</div></div>
-      <div><div class="lbl" style="margin-bottom:6px">Custom Message</div>
-        <textarea id="cu" style="height:80px" placeholder="Type a custom message..."></textarea>
-        <button class="btn btn-o" style="margin-top:6px" onclick="cc()">📋 Copy Custom</button>
-      </div>
-    </div>
-
-    <div class="panel hidden" id="tp-qa">
-      <div class="lbl">QA Tracker</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.5">Track evals after assignment.</div>
-      <div id="qaList"></div>
-
-    </div>
-
-    <div class="panel hidden" id="tp-cap">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-        <div class="lbl" style="margin-bottom:0">PTA / COTA Availability</div>
-        <div style="display:flex;gap:5px;">
-          <button onclick="markAllAvailable(true)" style="font-size:10px;color:var(--accent);background:none;border:1px solid rgba(0,212,170,0.3);border-radius:4px;padding:3px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">✓ All</button>
-          <button onclick="markAllAvailable(false)" style="font-size:10px;color:var(--muted);background:none;border:1px solid var(--border);border-radius:4px;padding:3px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ None</button>
-        </div>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">Mark who has room this week. Add their territory so the tool can suggest the right clinician.</div>
-      <div id="capList"></div>
-      <div class="hr" style="margin:10px 0"></div>
-      <div class="lbl" style="margin-bottom:6px">Add PTA / COTA</div>
-      <input id="capName" placeholder="Name" style="margin-bottom:5px">
-      <input id="capRegion" placeholder="Territory (e.g. Tulsa South, Broken Arrow)" style="margin-bottom:8px">
-      <select id="capRole" style="margin-bottom:8px"><option>PTA</option><option>COTA</option></select>
-      <button class="btn btn-o" onclick="addCapClin()">+ Add</button>
-    </div>
-
-    <div class="panel hidden" id="tp-hist">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <div class="lbl" style="margin-bottom:0">Completed Evals</div>
-        <button onclick="clrHistory()" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:3px 8px;cursor:pointer;font-family:inherit;">Clear All</button>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">All completed evals with QA status. Clear when ready to archive.</div>
-      <div id="histList"><div class="qa-empty">No completed evals yet.</div></div>
-    </div>
-
-    <div class="panel hidden" id="tp-set">
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-        <div style="font-size:12px;font-weight:600;color:#fbbf24;margin-bottom:4px;">👤 Your Name</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">Set your name so others can see who added or assigned evals.</div>
-        <input id="userName" placeholder="e.g. Stephen, Evan, Kym..." style="margin-bottom:6px;" onchange="saveUserName()">
-      </div>
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-        <div style="font-size:12px;font-weight:600;color:#fbbf24;margin-bottom:4px;">📊 Live Shared Board</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">Real-time sync via Supabase. All devices see the same board instantly.</div>
-        <button class="btn btn-o" onclick="loadAll()">🔄 Force Refresh</button>
-      </div>
-      <div><div class="lbl" style="margin-bottom:6px">Agencies</div>
-        <div id="agencyList"></div>
-        <input id="na" placeholder="New agency name" style="margin-top:6px;margin-bottom:6px">
-        <button class="btn btn-o" onclick="addAgency()">+ Add Agency</button>
-      </div>
-      <div class="hr"></div>
-      <div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <div class="lbl" style="margin-bottom:0">Clinician Roster</div>
-          <button onclick="exportClinicians()" style="font-size:10px;color:var(--accent);background:none;border:1px solid rgba(0,212,170,0.3);border-radius:4px;padding:3px 8px;cursor:pointer;font-family:inherit;white-space:nowrap;">📥 Export</button>
-        </div>
-        <div id="clinList"></div>
-        <div style="display:flex;gap:6px;margin-top:6px">
-          <input id="nn" placeholder="Name" style="flex:1">
-          <select id="nr" style="width:80px"><option>PT</option><option>PTA</option><option>OT</option><option>COTA</option><option>SLP</option></select>
-        </div>
-        <input id="nphone" placeholder="Phone (optional)" style="margin-top:5px">
-        <input id="nemail" placeholder="Email (optional)" style="margin-top:5px;margin-bottom:8px">
-        <button class="btn btn-o" onclick="addClin()">+ Add Clinician</button>
-      </div>
-      <div class="hr"></div>
-      <button class="btn btn-o" onclick="clrDone()">🗑 Clear Completed Evals</button>
-      <button class="btn btn-r" style="margin-top:4px" onclick="clrAll()">⚠️ Clear All Evals</button>
-    </div>
-  </div>
-
-  <div class="board">
-    <div class="bh">
-      <div style="display:flex;align-items:center;gap:10px;">
-        <div class="bt">Weekly Eval Board</div>
-        <button onclick="loadAll()" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🔄 Refresh</button>
-      </div>
-      <div class="fr">
-        <button class="fb on" onclick="sf('all',this)">All</button>
-        <button class="fb" onclick="sf('pending',this)">Pending</button>
-        <button class="fb" onclick="sf('assigned',this)">Assigned</button>
-        <button class="fb" onclick="sf('urgent',this)">🚨 Urgent</button>
-        <select id="monthFilter" onchange="render()" style="background:var(--bg);border:1px solid var(--border);border-radius:20px;color:var(--muted);font-family:inherit;font-size:11px;padding:4px 10px;outline:none;cursor:pointer;">
-          <option value="">All Months</option>
-        </select>
-      </div>
-    </div>
-    <div class="grid" id="grid"><div class="empty"><div class="ei">⏳</div><div class="et">Loading...</div></div></div>
+    <button class="btn-primary" onclick="doLogin()">Sign In →</button>
+    <p style="margin-top:16px;font-size:12px;color:var(--gray-400);text-align:center;">
+      Forgot your PIN? Contact Stephen or Evan.
+    </p>
   </div>
 </div>
-<div class="flash" id="fl"></div>
+
+<!-- DASHBOARD -->
+<div id="dashScreen" class="screen">
+
+  <div class="dash-header">
+    <h1 id="dashGreeting">My Training Dashboard</h1>
+    <p id="dashSub">Complete all required modules for your track. Annual training resets each January.</p>
+  </div>
+
+  <div class="track-toggle">
+    <button class="track-btn active" onclick="setTrack('newhire', this)">🆕 New Hire</button>
+    <button class="track-btn" onclick="setTrack('annual', this)">📅 Annual Compliance</button>
+  </div>
+
+  <div class="modules-grid" id="modulesGrid"></div>
+
+  <div id="adminSection" style="display:none;">
+    <div class="admin-panel">
+      <h2>⚙️ Admin — Compliance Records</h2>
+      <div class="filter-row">
+        <select class="admin-select" id="adminFilterEmployee" onchange="loadAdminTable()">
+          <option value="">All Employees</option>
+        </select>
+        <select class="admin-select" id="adminFilterTrack" onchange="loadAdminTable()">
+          <option value="">All Tracks</option>
+          <option value="newhire">New Hire</option>
+          <option value="annual">Annual</option>
+        </select>
+        <button class="export-btn" onclick="exportCSV()">⬇ Export CSV</button>
+      </div>
+      <div class="admin-table-wrap">
+        <table id="adminTable">
+          <thead><tr>
+            <th>Employee</th><th>Module</th><th>Track</th>
+            <th>Score</th><th>Signed</th><th>Completed</th>
+          </tr></thead>
+          <tbody id="adminTbody"></tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- MODULE VIEWER -->
+<div id="moduleScreen" class="screen">
+  <button class="back-btn" onclick="goBack()">← Back to Dashboard</button>
+  <div class="module-viewer-card">
+    <div class="module-viewer-header">
+      <div class="icon" id="mvIcon"></div>
+      <h2 id="mvTitle"></h2>
+      <p id="mvDesc"></p>
+    </div>
+    <div class="slide-progress-bar">
+      <div class="slide-progress-fill" id="slideProgressFill" style="width:0%"></div>
+    </div>
+    <div class="module-body" id="moduleBody"></div>
+  </div>
+</div>
+
+<div id="toast"></div>
 
 <script>
-// ── SUPABASE ──
-const SUPABASE_URL = 'https://zxserlkhwkfoqiepurdr.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp4c2VybGtod2tmb3FpZXB1cmRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NDM1NDIsImV4cCI6MjA5NjAxOTU0Mn0.cA9LJSn5t4sIbIemdQGQsdwtQFwb-6Q9xIZi48UYq34';
-const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// ══════════════════════════════════════════════════════════════
+// SUPABASE CONFIG — replace with your project values
+// ══════════════════════════════════════════════════════════════
+const SUPABASE_URL = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+const sb = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// ── STATE ──
-const DEF_AGENCIES = ['BIOS','Millennium','Faith Home Care','CareFicient','Rice Home Health','Caring Connection','Vital Muskogee','Mobile'];
-const DEF_CLINS = [
-  {name:'Evan Flanagan',role:'PT'},{name:'Kimberly Quigley',role:'PT'},
-  {name:'Lexie Henson',role:'PT'},{name:'Tina Pierce',role:'PT'},
-  {name:'Johnathan Barber',role:'PT'},{name:'Cassidy Crouch',role:'PT'},
-  {name:'Stephen Mace',role:'PT'},{name:'Marquita Tarkington',role:'PT'},
-  {name:'Kym Crane',role:'SLP'},{name:'Kasey Rideout',role:'SLP'}
+// Simple PIN map — in production, store hashed PINs in Supabase
+const PINS = {
+  'Evan Flanagan, PT': '1234',
+  'Kimberly Quigley, PTA': '1234',
+  'Lexie Henson, PTA': '1234',
+  'Tina Pierce, PTA': '1234',
+  'Johnathan Barber, PT': '1234',
+  'Cassidy Crouch, OT': '1234',
+  'Marquita Tarkington, OT': '1234',
+  'Kym Crane, OT': '1234',
+  'Kasey Rideout, SLP': '1234',
+  'Stephen Mace, DPT': 'admin',
+  'Kym Quigley (Admin)': 'admin',
+};
+const ADMINS = ['Stephen Mace, DPT', 'Kym Quigley (Admin)'];
+
+// ══════════════════════════════════════════════════════════════
+// MODULE LIBRARY
+// ══════════════════════════════════════════════════════════════
+const MODULES = [
+
+  // ── NEW HIRE ──────────────────────────────────────────────
+  {
+    id: 'nh_hipaa',
+    track: ['newhire'],
+    icon: '🔒',
+    title: 'HIPAA Fundamentals',
+    desc: 'Protected health information, patient rights, and breach protocols.',
+    slides: [
+      {
+        title: 'Why HIPAA Matters',
+        content: `<p>HIPAA — the Health Insurance Portability and Accountability Act — sets national standards for protecting patients' health information. As a home health clinician, you encounter PHI (Protected Health Information) in your daily work.</p>
+        <div class="callout">PHI includes any information that could identify a patient combined with health data: name, address, date of birth, phone number, medical record number, or clinical notes.</div>
+        <p>Violations can result in civil penalties up to <strong>$50,000 per violation</strong> and criminal prosecution for willful neglect. More importantly, breaches erode patient trust.</p>`
+      },
+      {
+        title: 'The Minimum Necessary Standard',
+        content: `<p>Only access, use, or share the minimum amount of PHI needed to do your job.</p>
+        <ul>
+          <li>Only open patient records for patients on your active caseload</li>
+          <li>Don't share clinical details in conversations where others can overhear</li>
+          <li>Do not discuss patient information in public spaces, waiting rooms, or social settings</li>
+          <li>Agency EMRs (CareFicient, BIOS, HelloNote, etc.) log all access — treat every login as auditable</li>
+        </ul>
+        <div class="callout warn">Never photograph a patient's face, identifying information, or clinical documentation on a personal device without explicit written authorization.</div>`
+      },
+      {
+        title: 'Mobile Device Rules',
+        content: `<p>Metro issues Samsung Galaxy Tabs for clinical documentation. Follow these rules on all devices used for work:</p>
+        <ul>
+          <li>Keep the tablet locked when not in use (auto-lock after 2 minutes)</li>
+          <li>Use the tablet only for work purposes — no personal apps or social media</li>
+          <li>Never save patient information to personal phones or email accounts</li>
+          <li>Report a lost or stolen tablet to Stephen or Evan <strong>immediately</strong></li>
+          <li>ConnectTeam messages containing PHI must be deleted after clinical use</li>
+        </ul>
+        <div class="callout danger">Do not text PHI through standard SMS. Use agency-approved communication channels only.</div>`
+      },
+      {
+        title: 'Breach Reporting',
+        content: `<p>A breach is any unauthorized acquisition, access, use, or disclosure of PHI. Examples:</p>
+        <ul>
+          <li>Sending a clinical note to the wrong patient's contact</li>
+          <li>Leaving printed records visible in your vehicle</li>
+          <li>Losing a device that contains unencrypted patient data</li>
+          <li>Discussing patient details with a non-treating family member without authorization</li>
+        </ul>
+        <p>Report any suspected breach to Stephen Mace or Evan Flanagan <strong>within 24 hours</strong>. Do not attempt to investigate or remediate on your own. Metro's breach response follows HIPAA's 60-day notification timeline.</p>`
+      }
+    ],
+    quiz: [
+      {
+        q: 'A patient\'s neighbor asks you how the patient is doing during your home visit. You should:',
+        options: ['Give a brief update since they clearly know the patient', 'Politely decline and explain you cannot discuss any patient information', 'Provide general information but not clinical details', 'Check the patient\'s chart for an authorization before answering'],
+        answer: 1,
+        explanation: 'You cannot disclose any PHI to third parties without a signed authorization, regardless of how well they know the patient.'
+      },
+      {
+        q: 'You accidentally left a printed evaluation in a patient\'s driveway during a home visit. What is the correct first step?',
+        options: ['Return to retrieve it and hope no one saw it', 'Shred it at home and note it in your records', 'Report it to Metro leadership within 24 hours as a potential breach', 'Document it in the patient\'s clinical note'],
+        answer: 2,
+        explanation: 'Any potential unauthorized disclosure of PHI must be reported promptly to Metro leadership so a proper breach assessment can be conducted.'
+      },
+      {
+        q: 'The minimum necessary standard means:',
+        options: ['Access only the patient information needed to do your job', 'Provide the minimum amount of documentation required by the agency', 'Only treat patients with the minimum required insurance coverage', 'Review only the most recent visit notes'],
+        answer: 0,
+        explanation: 'The minimum necessary standard restricts access to PHI to only what is required to complete your specific professional task.'
+      }
+    ]
+  },
+
+  {
+    id: 'nh_osha',
+    track: ['newhire', 'annual'],
+    icon: '🦺',
+    title: 'OSHA & Field Safety',
+    desc: 'Workplace hazards, infection control, and home environment safety.',
+    slides: [
+      {
+        title: 'Home Health Hazards are Unique',
+        content: `<p>Unlike a clinic, you have no control over the patient's environment. Common hazards in home health include:</p>
+        <ul>
+          <li><strong>Biohazards:</strong> blood, wound drainage, body fluids, sharps</li>
+          <li><strong>Environmental:</strong> cluttered spaces, poor lighting, unsafe flooring, pets, smoke</li>
+          <li><strong>Physical:</strong> lifting/transferring without equipment, stair navigation</li>
+          <li><strong>Personal safety:</strong> unfamiliar neighborhoods, aggressive animals or individuals</li>
+        </ul>
+        <div class="callout">You always have the right to leave a situation that feels unsafe. Contact Metro leadership if you feel threatened or unsafe at any patient home.</div>`
+      },
+      {
+        title: 'Standard Precautions',
+        content: `<p>Apply standard precautions with <strong>every patient, every visit</strong> — regardless of diagnosis.</p>
+        <ul>
+          <li>Perform hand hygiene before and after patient contact</li>
+          <li>Wear gloves when contact with blood, body fluids, or wound sites is possible</li>
+          <li>Use masks when respiratory precautions are indicated</li>
+          <li>Dispose of sharps in an approved sharps container — never recap needles</li>
+          <li>Transport supplies in a sealed clinical bag; keep bag off the floor</li>
+        </ul>
+        <p>Metro provides PPE upon request. If you need supplies, contact Kym or Stephen before your visit schedule is depleted.</p>`
+      },
+      {
+        title: 'Bloodborne Pathogen Exposure',
+        content: `<p>If you experience a needlestick, splash to mucous membranes, or skin exposure to blood or body fluids:</p>
+        <ol>
+          <li>Wash the site with soap and water for at least 60 seconds</li>
+          <li>For eye/mouth exposure, flush with clean water for 15+ minutes</li>
+          <li>Report to Metro leadership immediately — same day</li>
+          <li>Seek medical evaluation within 2 hours for possible post-exposure prophylaxis</li>
+          <li>Document the incident in writing with date, time, circumstances</li>
+        </ol>
+        <div class="callout danger">Do not delay reporting. Post-exposure prophylaxis is time-sensitive.</div>`
+      },
+      {
+        title: 'Vehicle and Travel Safety',
+        content: `<p>Significant portions of your workday are spent in transit. Follow these guidelines:</p>
+        <ul>
+          <li>Never use a phone for calls or texts while driving — pull over if needed</li>
+          <li>Keep clinical supplies secured in the trunk or a closed bag — nothing on seats that can become projectiles</li>
+          <li>If visiting an area that feels unsafe, you may park nearby and confirm with Metro before entering</li>
+          <li>Keep your vehicle maintained — you are responsible for safe operation</li>
+          <li>Log mileage accurately in ConnectTeam for each visit</li>
+        </ul>`
+      }
+    ],
+    quiz: [
+      {
+        q: 'Standard precautions apply:',
+        options: ['Only to patients with known infectious diseases', 'When the patient or family requests them', 'To every patient, every visit', 'Only during wound care or blood draws'],
+        answer: 2,
+        explanation: 'Standard precautions are applied universally — you cannot always know a patient\'s infectious status, so you protect yourself and your patients with every contact.'
+      },
+      {
+        q: 'You experience a needlestick during a visit. Your immediate first action is:',
+        options: ['Finish the visit and report when you return to the office', 'Wash the site with soap and water for at least 60 seconds', 'Apply a bandage and monitor for symptoms', 'Call your primary care physician to schedule an appointment'],
+        answer: 1,
+        explanation: 'Immediately wash the exposure site, then report to Metro leadership and seek medical evaluation within 2 hours for possible post-exposure prophylaxis.'
+      }
+    ]
+  },
+
+  {
+    id: 'nh_clinical',
+    track: ['newhire'],
+    icon: '🩺',
+    title: 'Clinical Standards & Field Practice',
+    desc: 'Metro\'s documentation requirements, scheduling expectations, and professional conduct.',
+    slides: [
+      {
+        title: 'Metro\'s Clinical Model',
+        content: `<p>Metro Mobile Health Care places clinicians with partner home health agencies. Your clinical decisions are yours — Metro does not direct clinical care. We do require adherence to the following standards across all placements:</p>
+        <ul>
+          <li>Complete documentation within the agency's required timeframe (typically same-day or within 24 hours)</li>
+          <li>Contact Metro and the agency scheduler for any visit that cannot be completed as scheduled</li>
+          <li>Notify Metro if a patient is hospitalized, declines services, or has a significant change in condition</li>
+          <li>Never schedule or cancel visits directly with patients without agency coordinator awareness</li>
+        </ul>`
+      },
+      {
+        title: 'Evaluation & SOC Documentation',
+        content: `<p>Evals and Start of Care visits are Metro's highest-value and highest-scrutiny service. Requirements:</p>
+        <ul>
+          <li>Complete the full OASIS or agency-required assessment at SOC</li>
+          <li>Document functional status, home environment, fall risk, and rehab potential</li>
+          <li>Establish measurable, patient-centered goals in every plan of care</li>
+          <li>Submit documentation before leaving the patient's home when possible</li>
+        </ul>
+        <div class="callout">Use the Metro documentation tool at tools.metromobilehc.com for SOC/eval voice-to-note drafting. Initials and date are required before submitting to the agency EMR.</div>`
+      },
+      {
+        title: 'Communication & Professionalism',
+        content: `<p>You represent Metro Mobile Health Care at every patient home and agency interaction.</p>
+        <ul>
+          <li>Respond to Metro and agency communications within <strong>2 hours</strong> during the workday</li>
+          <li>Dress professionally — Metro polo preferred, or business casual at minimum</li>
+          <li>Introduce yourself as a Metro Mobile clinician placed with [agency name]</li>
+          <li>Never discuss Metro's billing rates, contract terms, or business matters with agency staff or patients</li>
+          <li>Concerns about agency conduct should be directed to Stephen or Evan, not escalated at the agency level</li>
+        </ul>`
+      }
+    ],
+    quiz: [
+      {
+        q: 'A patient calls you directly to reschedule their visit. You should:',
+        options: ['Reschedule and update ConnectTeam', 'Advise the patient to contact their agency coordinator, then notify Metro', 'Tell the patient to call the agency and take no further action', 'Reschedule and let the agency know at your next visit'],
+        answer: 1,
+        explanation: 'Visit scheduling should go through the agency coordinator. Inform Metro as well so the eval tool and scheduling records stay accurate.'
+      }
+    ]
+  },
+
+  {
+    id: 'nh_tablet',
+    track: ['newhire'],
+    icon: '📱',
+    title: 'Samsung Galaxy Tab & ConnectTeam',
+    desc: 'Device policy, Knox MDM, ConnectTeam scheduling, and acceptable use.',
+    slides: [
+      {
+        title: 'Your Metro Tablet',
+        content: `<p>Metro issues a Samsung Galaxy Tab managed by Knox MDM (Mobile Device Management). Key things to know:</p>
+        <ul>
+          <li>The tablet is Metro property — it may be remotely wiped if lost, stolen, or at end of employment</li>
+          <li>Knox MDM may restrict installation of non-approved apps</li>
+          <li>Do not share your tablet with family members or other clinicians</li>
+          <li>Keep the tablet charged and accessible during scheduled work hours</li>
+          <li>Return the tablet and all accessories upon separation from Metro</li>
+        </ul>`
+      },
+      {
+        title: 'ConnectTeam: Your Scheduling Hub',
+        content: `<p>ConnectTeam is Metro's primary communication and scheduling platform. Use it to:</p>
+        <ul>
+          <li>View your assigned visits and confirm or flag scheduling conflicts</li>
+          <li>Log mileage for each visit (required for reimbursement)</li>
+          <li>Complete Metro checklist items and training attestations</li>
+          <li>Communicate with Metro admin (not for PHI)</li>
+        </ul>
+        <div class="callout warn">Do not log patient names, diagnosis codes, or clinical information in ConnectTeam chats or job notes — use the agency EMR for all clinical documentation.</div>`
+      }
+    ],
+    quiz: [
+      {
+        q: 'Your Metro tablet is lost during a patient visit. What do you do?',
+        options: ['Report it to Metro within 24 hours', 'Purchase a replacement before reporting', 'Report it to Metro immediately — same day', 'File a police report and then inform Metro within the week'],
+        answer: 2,
+        explanation: 'Lost devices must be reported immediately so Metro can initiate a remote wipe via Knox MDM and assess for potential HIPAA breach.'
+      }
+    ]
+  },
+
+  // ── ANNUAL ────────────────────────────────────────────────
+  {
+    id: 'ann_hipaa',
+    track: ['annual'],
+    icon: '🔐',
+    title: 'HIPAA Annual Refresher',
+    desc: 'Annual review of PHI handling, patient rights, and breach obligations.',
+    slides: [
+      {
+        title: 'HIPAA — Annual Review',
+        content: `<p>CMS requires annual HIPAA training for all staff who handle PHI. This refresher covers updates and common compliance failures seen across home health settings.</p>
+        <div class="callout">Patient rights under HIPAA include: the right to access their records, request amendments, receive an accounting of disclosures, and file a complaint without retaliation.</div>
+        <p>Common violations Metro clinicians should guard against:</p>
+        <ul>
+          <li>Discussing patients in public settings (restaurants, school pickups, social media)</li>
+          <li>Using personal email to send clinical documentation to agencies</li>
+          <li>Photographing wound sites without documented patient authorization</li>
+          <li>Accessing records of patients not on your active caseload</li>
+        </ul>`
+      },
+      {
+        title: 'Social Media & Electronic Communications',
+        content: `<p>Social media is one of the fastest-growing sources of HIPAA violations in home health.</p>
+        <ul>
+          <li><strong>Never post</strong> any information about a patient, including non-identifying details that could enable identification in context</li>
+          <li>Do not share "feel good" stories about patient progress without a signed HIPAA-compliant authorization</li>
+          <li>Group chats among clinicians (even informal) must not contain PHI</li>
+          <li>Text messages are not HIPAA-compliant for clinical information — use agency EMR secure messaging</li>
+        </ul>`
+      }
+    ],
+    quiz: [
+      {
+        q: 'A clinician posts on Facebook: "So proud of my patient in Broken Arrow who took her first steps today!" This is:',
+        options: ['Acceptable because no name was used', 'A potential HIPAA violation because it could enable identification', 'Acceptable with the patient\'s verbal consent', 'Fine if the patient\'s face is not shown'],
+        answer: 1,
+        explanation: 'Location + condition + context can enable identification even without a name. This is a reportable HIPAA violation.'
+      }
+    ]
+  },
+
+  {
+    id: 'ann_abuse',
+    track: ['annual'],
+    icon: '🛡️',
+    title: 'Abuse, Neglect & Exploitation',
+    desc: 'Mandatory reporter obligations, recognition, and reporting protocols.',
+    slides: [
+      {
+        title: 'Mandatory Reporter Status',
+        content: `<p>As a licensed clinician in Oklahoma, you are a mandatory reporter of suspected abuse, neglect, or exploitation of:</p>
+        <ul>
+          <li>Adults 65 and older</li>
+          <li>Adults with physical or developmental disabilities</li>
+          <li>Children (under 18) in any household you enter</li>
+        </ul>
+        <p>Mandatory reporting is not optional. You are required by law to report reasonable suspicion — you do not need to prove abuse has occurred.</p>
+        <div class="callout danger">Failure to report is a criminal offense in Oklahoma. Good-faith reports are protected from civil liability even if the report turns out to be unfounded.</div>`
+      },
+      {
+        title: 'Signs of Abuse & Neglect',
+        content: `<p>Common indicators to document and report:</p>
+        <ul>
+          <li><strong>Physical abuse:</strong> unexplained bruising, injuries inconsistent with explanation, burns, welts</li>
+          <li><strong>Neglect:</strong> malnutrition, dehydration, poor hygiene, unsafe home conditions, untreated medical conditions</li>
+          <li><strong>Financial exploitation:</strong> sudden changes in financial situation, unpaid bills, new persons controlling finances</li>
+          <li><strong>Emotional abuse:</strong> patient appears fearful of caregiver, caregiver is controlling, patient is isolated</li>
+        </ul>`
+      },
+      {
+        title: 'How to Report in Oklahoma',
+        content: `<p><strong>Oklahoma Adult Protective Services:</strong> 1-800-522-3511 (24/7)</p>
+        <p><strong>Oklahoma DHS Child Abuse Hotline:</strong> 1-800-522-3511</p>
+        <p>Steps after identifying a concern:</p>
+        <ol>
+          <li>Ensure immediate safety — if in danger, call 911</li>
+          <li>Contact Metro leadership (Stephen or Evan) to notify of the situation</li>
+          <li>Make the APS or DHS report — you can do this; you do not need Metro's permission</li>
+          <li>Document your clinical observations in detail in the agency EMR</li>
+          <li>Do not confront the suspected abuser</li>
+        </ol>`
+      }
+    ],
+    quiz: [
+      {
+        q: 'You notice an elderly patient has multiple unexplained bruises during your visit. The patient becomes anxious when their adult child enters the room. You should:',
+        options: ['Document your observations and wait to see if it happens again', 'Ask the adult child directly about the bruises', 'Report your concerns to APS and notify Metro leadership', 'Complete your visit and mention it to the agency on your next call'],
+        answer: 2,
+        explanation: 'You are a mandatory reporter. Reasonable suspicion requires reporting — you do not need certainty. Report to APS and inform Metro leadership.'
+      }
+    ]
+  },
+
+  {
+    id: 'ann_emergency',
+    track: ['annual'],
+    icon: '🚨',
+    title: 'Emergency Procedures',
+    desc: 'Patient emergencies, severe weather, and critical incident protocols.',
+    slides: [
+      {
+        title: 'Medical Emergencies During a Visit',
+        content: `<p>If a patient experiences a medical emergency during your home visit:</p>
+        <ol>
+          <li><strong>Call 911 immediately</strong> — do not delay for any administrative step</li>
+          <li>Provide basic life support within your licensure scope if trained and appropriate</li>
+          <li>Stay with the patient until EMS arrives</li>
+          <li>Notify the agency and Metro leadership as soon as possible</li>
+          <li>Document the event in detail including time, patient status, interventions, and EMS arrival</li>
+        </ol>
+        <div class="callout danger">Do not transport a patient in your personal vehicle under any circumstances.</div>`
+      },
+      {
+        title: 'Severe Weather',
+        content: `<p>Oklahoma weather can change rapidly. If severe weather threatens during a visit:</p>
+        <ul>
+          <li>Do not begin driving if a tornado warning is active for your location</li>
+          <li>Shelter with the patient if necessary — interior room, lowest floor, away from windows</li>
+          <li>Notify Metro when safe to do so</li>
+          <li>Do not attempt to reach a patient if roads are flooded or conditions are unsafe</li>
+        </ul>
+        <p>Metro will not penalize clinicians for safety-related visit delays or cancellations due to severe weather.</p>`
+      }
+    ],
+    quiz: [
+      {
+        q: 'A patient becomes unresponsive during your visit. Your first action is:',
+        options: ['Call Metro to report the incident', 'Call the patient\'s emergency contact', 'Call 911', 'Attempt to contact the agency scheduler'],
+        answer: 2,
+        explanation: 'A 911 call is always the first action in a life-threatening emergency. All other notifications come after.'
+      }
+    ]
+  },
+
+  {
+    id: 'ann_infection',
+    track: ['annual'],
+    icon: '🧤',
+    title: 'Infection Control Annual',
+    desc: 'Hand hygiene, PPE, TB, influenza, and current infection control protocols.',
+    slides: [
+      {
+        title: 'Hand Hygiene: The #1 Intervention',
+        content: `<p>Proper hand hygiene prevents more healthcare-associated infections than any other single measure.</p>
+        <p>Wash with soap and water for at least 20 seconds — or use hand sanitizer with at least 60% alcohol — in these situations:</p>
+        <ul>
+          <li>Before entering and after leaving any patient home</li>
+          <li>Before and after direct patient contact</li>
+          <li>Before and after handling any wound dressings or medical equipment</li>
+          <li>After removing gloves</li>
+          <li>After contact with body fluids or potentially contaminated surfaces</li>
+        </ul>
+        <div class="callout">Hand sanitizer is not a substitute for soap and water when hands are visibly soiled or after contact with C. difficile.</div>`
+      },
+      {
+        title: 'Annual Health Requirements',
+        content: `<p>Metro staff are required to maintain documentation of the following:</p>
+        <ul>
+          <li><strong>TB screening:</strong> Annual TB test or symptom questionnaire if prior positive test</li>
+          <li><strong>Influenza vaccine:</strong> Recommended annually; declination form accepted if declined</li>
+          <li><strong>COVID-19:</strong> Follow current CDC and CMS guidance — requirements vary by agency partner</li>
+          <li><strong>Hepatitis B:</strong> Series recommended for clinical staff with blood exposure risk</li>
+        </ul>
+        <p>Submit updated immunization documentation to Metro admin each credentialing renewal cycle.</p>`
+      }
+    ],
+    quiz: [
+      {
+        q: 'After removing gloves during a wound care visit, you should:',
+        options: ['Proceed to the next task — gloves provided full protection', 'Perform hand hygiene before touching anything else', 'Use hand sanitizer only if hands are visibly soiled', 'Wash hands when you return to your vehicle'],
+        answer: 1,
+        explanation: 'Gloves are not a substitute for hand hygiene. Perform hand hygiene immediately after glove removal.'
+      }
+    ]
+  }
+
 ];
-let evals=[], clins=[...DEF_CLINS], agencies=[...DEF_AGENCIES];
-let pri='normal', fil='all', saving=false;
-let userName = localStorage.getItem('mmhc_user')||'';
 
-// ── INIT ──
-// ── CAPACITY ──
-let capacity = [];
+// ══════════════════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════════════════
+let currentUser = null;
+let currentTrack = 'newhire';
+let currentModule = null;
+let currentSlide = 0;
+let quizAnswers = {};
+let completions = {};  // { moduleId: { score, signed, completed_at } }
 
-async function saveCapacity(cap) {
-  await sb.from('capacity').upsert({
-    name: cap.name, role: cap.role||'PTA',
-    available: cap.available, region: cap.region||'',
-    updated_at: new Date().toISOString()
-  }, {onConflict: 'name'});
+// ══════════════════════════════════════════════════════════════
+// AUTH
+// ══════════════════════════════════════════════════════════════
+function doLogin() {
+  const name = document.getElementById('nameSelect').value;
+  const pin = document.getElementById('pinInput').value;
+  const errEl = document.getElementById('loginError');
+  errEl.style.display = 'none';
+
+  if (!name) { showErr('Please select your name.'); return; }
+  if (!pin) { showErr('Please enter your PIN.'); return; }
+  if (PINS[name] !== pin) { showErr('Incorrect PIN. Contact Stephen or Evan if you need help.'); return; }
+
+  currentUser = name;
+  document.getElementById('userBadge').textContent = name;
+  document.getElementById('userBadge').style.display = 'block';
+  document.getElementById('logoutBtn').style.display = 'block';
+
+  showScreen('dashScreen');
+  loadCompletions();
 }
 
-async function loadCapacity() {
-  const {data} = await sb.from('capacity').select('*').order('name');
-  if (data) capacity = data.map(r => ({name:r.name, role:r.role, available:r.available, region:r.region||''}));
-  renderCapacity();
+document.getElementById('pinInput').addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+
+function showErr(msg) {
+  const el = document.getElementById('loginError');
+  el.textContent = msg;
+  el.style.display = 'block';
 }
 
-function renderCapacity() {
-  const list = document.getElementById('capList'); if (!list) return;
-  // Filter clinicians to PTA/COTA only, then merge with capacity records
-  const ptaCota = clins.filter(c => c.role === 'PTA' || c.role === 'COTA');
-  // Also include any manually added capacity entries not in main roster
-  const allNames = [...new Set([...ptaCota.map(c=>c.name), ...capacity.map(c=>c.name)])];
-  
-  if (!allNames.length) {
-    list.innerHTML = '<div class="qa-empty">No PTAs or COTAs in roster yet.<br>Add them in Settings first.</div>';
+function logout() {
+  currentUser = null; currentModule = null; completions = {};
+  document.getElementById('userBadge').style.display = 'none';
+  document.getElementById('logoutBtn').style.display = 'none';
+  document.getElementById('nameSelect').value = '';
+  document.getElementById('pinInput').value = '';
+  showScreen('loginScreen');
+}
+
+// ══════════════════════════════════════════════════════════════
+// SUPABASE OPS
+// ══════════════════════════════════════════════════════════════
+async function loadCompletions() {
+  try {
+    const { data } = await sb.from('compliance_completions')
+      .select('*').eq('employee_name', currentUser);
+    completions = {};
+    if (data) data.forEach(r => { completions[r.module_id] = r; });
+  } catch(e) { console.warn('Supabase not configured yet — running in demo mode.'); }
+  renderDash();
+  if (ADMINS.includes(currentUser)) {
+    document.getElementById('adminSection').style.display = 'block';
+    loadAdminTable();
+    loadAdminFilters();
+  }
+}
+
+async function saveCompletion(moduleId, score, signature) {
+  const payload = {
+    employee_name: currentUser,
+    module_id: moduleId,
+    track: currentTrack,
+    score,
+    signature,
+    completed_at: new Date().toISOString()
+  };
+  try {
+    await sb.from('compliance_completions').upsert(payload, { onConflict: 'employee_name,module_id' });
+  } catch(e) { console.warn('Supabase save skipped (demo mode).'); }
+  completions[moduleId] = payload;
+}
+
+async function loadAdminTable() {
+  const empFilter = document.getElementById('adminFilterEmployee').value;
+  const trackFilter = document.getElementById('adminFilterTrack').value;
+  try {
+    let q = sb.from('compliance_completions').select('*').order('completed_at', { ascending: false });
+    if (empFilter) q = q.eq('employee_name', empFilter);
+    if (trackFilter) q = q.eq('track', trackFilter);
+    const { data } = await q;
+    renderAdminTable(data || []);
+  } catch(e) {
+    renderAdminTable([]);
+  }
+}
+
+async function loadAdminFilters() {
+  try {
+    const { data } = await sb.from('compliance_completions').select('employee_name').order('employee_name');
+    const names = [...new Set((data||[]).map(r => r.employee_name))];
+    const sel = document.getElementById('adminFilterEmployee');
+    names.forEach(n => {
+      const o = document.createElement('option'); o.value = n; o.textContent = n; sel.appendChild(o);
+    });
+  } catch(e) {}
+}
+
+function renderAdminTable(rows) {
+  const tbody = document.getElementById('adminTbody');
+  if (!rows.length) {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--gray-400);padding:24px;">No completions recorded yet.</td></tr>';
+    return;
+  }
+  tbody.innerHTML = rows.map(r => {
+    const mod = MODULES.find(m => m.id === r.module_id);
+    const date = r.completed_at ? new Date(r.completed_at).toLocaleDateString() : '—';
+    return `<tr>
+      <td>${r.employee_name}</td>
+      <td>${mod ? mod.title : r.module_id}</td>
+      <td>${r.track === 'newhire' ? 'New Hire' : 'Annual'}</td>
+      <td><span class="${r.score >= 70 ? 'tag-done' : 'tag-pend'}">${r.score}%</span></td>
+      <td>${r.signature ? '✓ ' + r.signature : '—'}</td>
+      <td>${date}</td>
+    </tr>`;
+  }).join('');
+}
+
+function exportCSV() {
+  // Pull from rendered table
+  const rows = document.querySelectorAll('#adminTbody tr');
+  let csv = 'Employee,Module,Track,Score,Signed,Completed\n';
+  rows.forEach(tr => {
+    const cells = [...tr.querySelectorAll('td')].map(td => `"${td.textContent.trim()}"`);
+    csv += cells.join(',') + '\n';
+  });
+  const a = document.createElement('a');
+  a.href = 'data:text/csv;charset=utf-8,' + encodeURIComponent(csv);
+  a.download = `mmhc-compliance-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
+}
+
+// ══════════════════════════════════════════════════════════════
+// DASHBOARD RENDER
+// ══════════════════════════════════════════════════════════════
+function setTrack(track, btn) {
+  currentTrack = track;
+  document.querySelectorAll('.track-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderDash();
+}
+
+function renderDash() {
+  const mods = MODULES.filter(m => m.track.includes(currentTrack));
+  const grid = document.getElementById('modulesGrid');
+  const name = currentUser ? currentUser.split(',')[0] : 'Team';
+  document.getElementById('dashGreeting').textContent = `Hello, ${name}`;
+
+  const done = mods.filter(m => completions[m.id]).length;
+  document.getElementById('dashSub').textContent =
+    `${currentTrack === 'newhire' ? 'New Hire' : 'Annual Compliance'} Track — ${done}/${mods.length} modules complete`;
+
+  grid.innerHTML = mods.map(m => {
+    const comp = completions[m.id];
+    let badgeClass = 'badge-todo', badgeLabel = 'Not Started';
+    if (comp) { badgeClass = 'badge-done'; badgeLabel = '✓ Completed'; }
+
+    return `<div class="module-card ${comp ? 'completed' : ''}" onclick="openModule('${m.id}')">
+      <div class="module-icon">${m.icon}</div>
+      <div class="module-title">${m.title}</div>
+      <div class="module-meta">${m.slides.length} slides · ${m.quiz.length} quiz question${m.quiz.length !== 1 ? 's' : ''}</div>
+      <span class="status-badge ${badgeClass}">${badgeLabel}</span>
+      ${comp ? `<div class="progress-bar-wrap"><div class="progress-bar-fill" style="width:100%"></div></div>` : ''}
+      ${comp ? `<div style="font-size:11px;color:var(--gray-400);margin-top:8px;">Score: ${comp.score}% · ${new Date(comp.completed_at).toLocaleDateString()}</div>` : ''}
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════════
+// MODULE VIEWER
+// ══════════════════════════════════════════════════════════════
+function openModule(id) {
+  currentModule = MODULES.find(m => m.id === id);
+  currentSlide = 0;
+  quizAnswers = {};
+  document.getElementById('mvIcon').textContent = currentModule.icon;
+  document.getElementById('mvTitle').textContent = currentModule.title;
+  document.getElementById('mvDesc').textContent = currentModule.desc;
+  showScreen('moduleScreen');
+  renderSlide();
+}
+
+function goBack() {
+  showScreen('dashScreen');
+  renderDash();
+}
+
+function renderSlide() {
+  const total = currentModule.slides.length + 1; // +1 for quiz
+  const fill = Math.round((currentSlide / total) * 100);
+  document.getElementById('slideProgressFill').style.width = fill + '%';
+
+  const body = document.getElementById('moduleBody');
+
+  if (currentSlide < currentModule.slides.length) {
+    const slide = currentModule.slides[currentSlide];
+    body.innerHTML = `
+      <h3>${slide.title}</h3>
+      ${slide.content}
+      <div class="slide-nav">
+        <span class="slide-counter">Slide ${currentSlide + 1} of ${currentModule.slides.length}</span>
+        <div style="display:flex;gap:10px;">
+          ${currentSlide > 0 ? `<button class="nav-btn prev" onclick="goSlide(-1)">← Previous</button>` : ''}
+          <button class="nav-btn next" onclick="goSlide(1)">Next →</button>
+        </div>
+      </div>`;
+  } else {
+    renderQuiz();
+  }
+}
+
+function goSlide(dir) {
+  currentSlide += dir;
+  renderSlide();
+  document.getElementById('moduleBody').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function renderQuiz() {
+  document.getElementById('slideProgressFill').style.width = '90%';
+  const qs = currentModule.quiz;
+  const body = document.getElementById('moduleBody');
+
+  if (completions[currentModule.id]) {
+    showCompletionState(body);
     return;
   }
 
-  list.innerHTML = allNames.map(name => {
-    const clinRole = clins.find(c=>c.name===name)?.role || 'PTA';
-    const cap = capacity.find(c=>c.name===name) || {name, available:false, region:'', role:clinRole};
-    return `<div style="background:var(--bg);border:1px solid ${cap.available?'#fbbf24':'var(--border)'};border-radius:8px;padding:10px;margin-bottom:8px;transition:border-color 0.2s;">
-      <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
-        <div style="display:flex;align-items:center;gap:8px;">
-          <div style="width:10px;height:10px;border-radius:50%;background:${cap.available?'#fbbf24':'var(--muted)'};flex-shrink:0;"></div>
-          <div>
-            <div style="font-weight:700;font-size:13px;">${name}</div>
-            <div style="font-size:10px;color:var(--muted);">${clinRole}</div>
-          </div>
-        </div>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:${cap.available?'#fbbf24':'var(--muted)'};">
-          <input type="checkbox" ${cap.available?'checked':''} onchange="toggleCapAvail('${name}',this.checked)" style="accent-color:var(--accent);width:15px;height:15px;">
-          ${cap.available?'Available':'Unavailable'}
-        </label>
-      </div>
-      <input value="${cap.region||''}" placeholder="Territory (e.g. Tulsa South, BA)" 
-        style="font-size:11px;padding:5px 8px;" 
-        onchange="updateCapRegion('${name}',this.value)">
+  body.innerHTML = `
+    <h3 style="margin-bottom:20px;">Knowledge Check</h3>
+    <div class="quiz-wrap" id="quizWrap">
+      ${qs.map((q, qi) => `
+        <div class="quiz-q" id="qq${qi}">
+          <div class="q-text">${qi + 1}. ${q.q}</div>
+          ${q.options.map((opt, oi) => `
+            <label class="quiz-option" id="opt_${qi}_${oi}">
+              <input type="radio" name="q${qi}" value="${oi}" onchange="selectAnswer(${qi}, ${oi})" />
+              <span>${opt}</span>
+            </label>`).join('')}
+        </div>`).join('')}
+    </div>
+    <div class="slide-nav">
+      <button class="nav-btn prev" onclick="goSlide(-1)">← Review Slides</button>
+      <button class="nav-btn next" id="submitQuizBtn" onclick="submitQuiz()" disabled>Submit →</button>
     </div>`;
-  }).join('');
 }
 
-async function markAllAvailable(val) {
-  const ptaCota = clins.filter(c => c.role === 'PTA' || c.role === 'COTA');
-  for (const clin of ptaCota) {
-    let cap = capacity.find(c=>c.name===clin.name);
-    if (!cap) { cap = {name:clin.name, available:val, region:'', role:clin.role}; capacity.push(cap); }
-    else cap.available = val;
-    await saveCapacity(cap);
-  }
-  renderCapacity();
-  flash(val ? '✓ All marked available' : 'All marked unavailable');
+function selectAnswer(qi, oi) {
+  quizAnswers[qi] = oi;
+  const allAnswered = currentModule.quiz.every((_, i) => quizAnswers[i] !== undefined);
+  document.getElementById('submitQuizBtn').disabled = !allAnswered;
 }
 
-async function toggleCapAvail(name, val) {
-  let cap = capacity.find(c=>c.name===name);
-  const clinRole = clins.find(c=>c.name===name)?.role || 'PTA';
-  if (!cap) { cap = {name, available:val, region:'', role:clinRole}; capacity.push(cap); }
-  else cap.available = val;
-  renderCapacity();
-  await saveCapacity(cap);
-  flash(val ? `✓ ${name} marked available` : `${name} marked unavailable`);
-}
-
-async function updateCapRegion(name, val) {
-  const clinRole = clins.find(c=>c.name===name)?.role || 'PTA';
-  let cap = capacity.find(c=>c.name===name);
-  if (!cap) { cap = {name, available:false, region:val, role:clinRole}; capacity.push(cap); }
-  else cap.region = val;
-  await saveCapacity(cap);
-}
-
-async function addCapClin() {
-  const name = document.getElementById('capName').value.trim();
-  const region = document.getElementById('capRegion').value.trim();
-  const role = document.getElementById('capRole').value;
-  if (!name) return;
-  if (!clins.find(c=>c.name===name)) {
-    clins.push({name, role});
-    await sb.from('clinicians').insert({name, role});
-    renderClins();
-  }
-  const cap = {name, available:false, region, role};
-  if (!capacity.find(c=>c.name===name)) capacity.push(cap);
-  await saveCapacity(cap);
-  renderCapacity();
-  document.getElementById('capName').value='';
-  document.getElementById('capRegion').value='';
-  flash('✓ Added ' + name);
-}
-
-function getSuggestedClinician(location, zip) {
-  const available = capacity.filter(c=>c.available && c.region);
-  if (!available.length) return null;
-
-  const locLower = location.toLowerCase().trim();
-  const zipClean = (zip||'').trim();
-
-  // Score each available clinician by match quality
-  let best = null, bestScore = 0;
-
-  for (const c of available) {
-    let score = 0;
-    const regions = c.region.toLowerCase();
-    // Split region into individual entries (comma or slash separated)
-    const regionParts = regions.split(/[,\/]/).map(r=>r.trim()).filter(Boolean);
-
-    for (const part of regionParts) {
-      // Exact zip match — strongest signal
-      if (zipClean && part === zipClean) { score = 100; break; }
-      // Exact city match
-      if (part === locLower) { score = 90; break; }
-      // City name contained in region part
-      if (locLower.length > 3 && part.includes(locLower)) { score = Math.max(score, 70); }
-      // Zip prefix match (first 3 digits) — only if zip provided
-      if (zipClean.length === 5 && part.length >= 3 && zipClean.startsWith(part.substring(0,3)) && /^\d/.test(part)) {
-        score = Math.max(score, 50);
-      }
-    }
-
-    if (score > bestScore) { bestScore = score; best = c; }
-  }
-
-  // Only suggest if there's a real match (score > 0) — no fallback to random
-  return bestScore > 0 ? best : null;
-}
-
-window.onload = async () => {
-  document.getElementById('wd').value = new Date().toISOString().split('T')[0];
-  updateWk();
-  if (userName) document.getElementById('userName').value = userName;
-  renderAgencies(); renderClins(); render();
-  await loadAll();
-  await loadCapacity();
-  // Realtime subscription
-  sb.channel('evals-changes')
-    .on('postgres_changes', {event:'*', schema:'public', table:'evals'}, () => {
-      if (!saving) loadAll();
-    })
-    .subscribe();
-
-  sb.channel('capacity-changes')
-    .on('postgres_changes', {event:'*', schema:'public', table:'capacity'}, () => {
-      loadCapacity();
-    })
-    .subscribe();
-};
-
-function saveUserName() {
-  userName = document.getElementById('userName').value.trim();
-  localStorage.setItem('mmhc_user', userName);
-  flash('✓ Name saved: ' + userName);
-}
-
-function setSyncStatus(state, msg) {
-  const dot = document.getElementById('syncDot');
-  document.getElementById('syncMsg').textContent = msg;
-  dot.className = 'sync-dot' + (state==='live'?' live':state==='syncing'?' syncing':state==='err'?' err':'');
-}
-
-async function loadAll() {
-  setSyncStatus('syncing', 'Syncing...');
-  try {
-    const [evR, clR, agR] = await Promise.all([
-      sb.from('evals').select('*').order('created_at', {ascending:false}),
-      sb.from('clinicians').select('*').order('name'),
-      sb.from('agencies').select('*').order('name')
-    ]);
-    if (evR.data) evals = evR.data.map(dbToEval);
-    if (clR.data && clR.data.length) clins = clR.data.map(r=>({name:r.name,role:r.role,phone:r.phone||'',email:r.email||''}));
-    if (agR.data && agR.data.length) agencies = agR.data.map(r=>r.name);
-    render(); renderClins(); renderAgencies(); renderQA(); renderCapacity();
-    setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
-  } catch(e) {
-    console.error('loadAll:', e);
-    setSyncStatus('err', 'Sync error');
-  }
-}
-
-function dbToEval(r) {
-  return {
-    id: r.id, location: r.location, zip: r.zip||'',
-    discipline: r.discipline, agency: r.agency, priority: r.priority,
-    note: r.note||'', patient: r.patient||'', status: r.status,
-    clinician: r.clinician||'', ptaClinician: r.pta_clinician||'',
-    addedBy: r.added_by||'',
-    assignedBy: r.assigned_by||'', dateAdded: r.date_added||'',
-    weekDate: r.week_date||'', qa: r.qa||{}
-  };
-}
-
-function evalToDB(e) {
-  return {
-    id: String(e.id), location: e.location, zip: e.zip||'',
-    discipline: e.discipline, agency: e.agency, priority: e.priority,
-    note: e.note||'', patient: e.patient||'', status: e.status,
-    clinician: e.clinician||'', pta_clinician: e.ptaClinician||'',
-    added_by: e.addedBy||userName||'',
-    assigned_by: e.assignedBy||'', date_added: e.dateAdded||null,
-    week_date: e.weekDate||null, qa: e.qa||{}
-  };
-}
-
-// ── UI ──
-function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='qa')renderQA();if(name==='hist')renderHistory();if(name==='cap')renderCapacity();}
-
-function renderHistory(){
-  const list=document.getElementById('histList');if(!list)return;
-  const completed=evals.filter(e=>e.status==='complete').sort((a,b)=>new Date(b.dateAdded)-new Date(a.dateAdded));
-  if(!completed.length){list.innerHTML='<div class="qa-empty">No completed evals yet.</div>';return;}
-  list.innerHTML=completed.map(e=>{
-    const qa=e.qa||{};
-    const checks=[qa.seen?'✓ Seen':'',qa.orders?'✓ Orders':'',qa.pta?'✓ PTA':'',qa.scheduled?'✓ Scheduled':''].filter(Boolean).join(' · ');
-    return`<div style="background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px;">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
-        <div>
-          <div style="font-weight:700;font-size:13px;color:var(--text)">${e.location}${e.zip?' '+e.zip:''}</div>
-          <div style="font-size:11px;color:var(--muted)">👤 ${e.clinician||'—'} · ${e.agency||''} · ${e.discipline}</div>
-          ${e.patient?`<div style="font-size:11px;color:#93c5fd">${e.patient}</div>`:''}
-        </div>
-        <button onclick="rmEval('${e.id}')" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ Remove</button>
-      </div>
-      ${checks?`<div style="font-size:11px;color:#fbbf24;margin-top:6px;">${checks}</div>`:''}
-      ${qa.seenDate?`<div style="font-size:10px;color:var(--muted);margin-top:2px;">Seen: ${qa.seenDate}</div>`:''}
-      ${qa.notes?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:4px;">${qa.notes}</div>`:''}
-      <div style="font-size:10px;color:var(--muted);margin-top:4px;">${e.dateAdded}${e.addedBy?' · Added by '+e.addedBy:''}${e.assignedBy?' · Assigned by '+e.assignedBy:''}</div>
-    </div>`;
-  }).join('');
-}
-
-async function clrHistory(){
-  if(!confirm('Delete all completed evals? This cannot be undone.'))return;
-  const ids=evals.filter(e=>e.status==='complete').map(e=>e.id);
-  evals=evals.filter(e=>e.status!=='complete');
-  renderHistory();render();
-  if(ids.length)await sb.from('evals').delete().in('id',ids);
-  flash('✓ History cleared');
-}
-function sp(p){pri=p;document.getElementById('pbN').className='pb'+(p==='normal'?' pn':'');document.getElementById('pbA').className='pb'+(p==='asap'?' pa':'');document.getElementById('pbU').className='pb'+(p==='urgent'?' pu':'');}
-function setThisWeek(){document.getElementById('wd').value=new Date().toISOString().split('T')[0];updateWk();}
-function updateWk(){const d=new Date(document.getElementById('wd').value+'T12:00:00');const s=new Date(d);s.setDate(d.getDate()-d.getDay());const e=new Date(s);e.setDate(s.getDate()+6);const f=x=>x.toLocaleDateString('en-US',{month:'short',day:'numeric'});document.getElementById('wk').textContent=`Week of ${f(s)} – ${f(e)}`;}
-function disc(){return document.getElementById('defDisc').value||'PT';}
-
-// ── PARSE ──
-function isIntroLine(l){const w=l.trim().split(/\s+/);if(w.length<=2)return false;
-  // Don't filter lines that contain city names or discipline codes
-  if(/\b(PT|OT|SLP|PTA|COTA|SOC|eval|Ortho|ortho)\b/i.test(l)) return false;
-  return/\b(do you|can you|want|would|could|please|any of|these|next week|this week|available|hello|hey |thanks|thank you|let me know|please see|see below|following|attached|regarding|fyi|heads up|wanted|checking|reaching out|hope|good morning|good afternoon)\b/i.test(l)&&w.length>5;}
-
-function parseText(text,ag,wd,p){
-  const out=[];const urg=/asap|urgent/i.test(text);
-  const abbrMap={BA:'Broken Arrow',TUL:'Tulsa',OKM:'Okmulgee',CLA:'Claremore',JEN:'Jenks',OWA:'Owasso',SS:'Sand Springs',MFD:'Mannford',SKT:'Skiatook',HEN:'Henryetta',BIX:'Bixby',SAP:'Sapulpa','MAN FORD':'Mannford',MANFORD:'Mannford',MANNFORD:'Mannford'};
-  const cityNames=['Tulsa','Oologah','Catoosa','Claremore','Broken Arrow','Okmulgee','Henryetta','Jenks','Owasso','Bixby','Skiatook','Sapulpa','Muskogee','Pryor','Wagoner','Collinsville','Sand Springs','Mannford','Bristow','Depew','Glenpool','Beggs','Drumright','Cushing','Pawhuska','Hominy','Bartlesville','Vinita','Miami','Tahlequah','Stilwell','Sallisaw','Coweta','Verdigris','Inola','Chelsea','Chouteau','Adair','Locust Grove','Fort Gibson','Checotah','Eufaula','Sperry','Kellyville','Kiefer','Leonard','Mounds','Prue','Terlton','Wynona','Barnsdall','Avant'];
-  const zipCity={'74101':'Tulsa','74102':'Tulsa','74103':'Tulsa','74104':'Tulsa','74105':'Tulsa','74106':'Tulsa','74107':'Tulsa','74108':'Tulsa','74110':'Tulsa','74112':'Tulsa','74114':'Tulsa','74115':'Tulsa','74116':'Tulsa','74117':'Tulsa','74119':'Tulsa','74120':'Tulsa','74126':'Tulsa','74127':'Tulsa','74128':'Tulsa','74129':'Tulsa','74130':'Tulsa','74131':'Tulsa','74132':'Tulsa','74133':'Tulsa','74134':'Tulsa','74135':'Tulsa','74136':'Tulsa','74137':'Tulsa','74141':'Tulsa','74145':'Tulsa','74146':'Tulsa','74011':'Broken Arrow','74012':'Broken Arrow','74013':'Broken Arrow','74014':'Broken Arrow','74055':'Owasso','74037':'Jenks','74008':'Bixby','74063':'Sand Springs','74066':'Sapulpa','74017':'Claremore','74018':'Claremore','74015':'Catoosa','74070':'Skiatook','74021':'Collinsville','74044':'Mannford','74053':'Oologah','74401':'Muskogee','74403':'Muskogee','74447':'Okmulgee','74437':'Henryetta','74010':'Bristow','74028':'Depew','74467':'Wagoner','74429':'Coweta','74033':'Glenpool','74003':'Bartlesville','74006':'Bartlesville','74056':'Pawhuska','74301':'Vinita','74023':'Cushing','74030':'Drumright','74361':'Pryor','74464':'Tahlequah','74421':'Beggs','74035':'Hominy'};
-
-  function expandZip(z){if(!z)return'';z=String(z).trim().split('-')[0];if(z.length===5)return z;return'74'+z.padStart(3,'0');}
-  function mkE(loc,zip,d,note,patient,clin,date){return{id:String(Date.now()+Math.random()),location:loc,zip,discipline:d,agency:ag,priority:urg?'urgent':p,note:note||'',patient:patient||'',status:'pending',clinician:clin||'',ptaClinician:'',addedBy:userName||'',assignedBy:'',dateAdded:date||wd,weekDate:date||wd,qa:{}};}
-  function cleanName(n){const m=n.match(/^([A-Z]+)\s*\(METRO\),\s*([A-Z]+)/i);if(m)return m[2][0].toUpperCase()+m[2].slice(1).toLowerCase()+' '+m[1][0].toUpperCase()+m[1].slice(1).toLowerCase();return n.trim();}
-  function cleanPat(n){const m=n.match(/^([A-Z\-]+),\s*([A-Z]+)/i);if(m)return m[2][0].toUpperCase()+m[2].slice(1).toLowerCase()+' '+m[1][0].toUpperCase()+m[1].slice(1).toLowerCase();return n.trim();}
-  function resolveCity(raw){const u=raw.trim().toUpperCase();return abbrMap[u]||cityNames.find(c=>c.toLowerCase()===raw.trim().toLowerCase())||raw.trim();}
-
-  // Split comma-separated input into lines
-  const rawLines=text.split('\n');
-  const expandedLines=[];
-  rawLines.forEach(line=>{
-    if(line.includes(',')&&!line.match(/^[A-Z]+\s*\(METRO\)/i)){
-      line.split(',').forEach(part=>{if(part.trim())expandedLines.push(part.trim());});
-    }else{if(line.trim())expandedLines.push(line.trim());}
-  });
-  const lines=expandedLines.filter(l=>l&&!/^evals needed$/i.test(l));
-
-  // ── FORMAT A: BIOS structured blocks ──
-  if(lines.some(l=>/^[A-Z]+\s*\(METRO\),\s*[A-Z]+/i.test(l))){
-    let i=0;while(i<lines.length){
-      if(/^[A-Z]+\s*\(METRO\),\s*[A-Z]+/i.test(lines[i])){
-        const b={cr:lines[i]};let j=i+1;
-        if(j<lines.length&&/^(PT|OT|SLP|PTA|COTA)\s+(Eval|SOC)/i.test(lines[j])){b.vt=lines[j];j++;}
-        if(j<lines.length&&/^(METROMOBILE|METRO)/i.test(lines[j])){j++;}
-        if(j<lines.length&&/^[A-Z\-]+,\s*[A-Z]+/i.test(lines[j])&&!/^(PT|OT|SLP)/i.test(lines[j])){b.pat=lines[j];j++;}
-        if(j<lines.length&&!/^\d{5}/.test(lines[j])&&!/^\d{2}\//.test(lines[j])){b.city=lines[j];j++;}
-        if(j<lines.length&&/^\d{5}/.test(lines[j])){b.zip=lines[j];j++;}
-        if(j<lines.length&&/^\d{2}\/\d{2}\/\d{4}$/.test(lines[j])){b.date=lines[j];j++;}
-        const city=(b.city||'').trim().replace(/\b\w/g,x=>x.toUpperCase());
-        const zip=expandZip(b.zip||'');const d=b.vt?b.vt.split(/\s+/)[0].toUpperCase():disc();
-        const vd=['PT','OT','SLP','PTA','COTA'].includes(d)?d:'PT';
-        let evalDate=wd;if(b.date){const dp=b.date.match(/(\d{2})\/(\d{2})\/(\d{4})/);if(dp)evalDate=dp[3]+'-'+dp[1]+'-'+dp[2];}
-        out.push(mkE(city||(zipCity[zip]||'Unknown'),zip,vd,b.vt||'',b.pat?cleanPat(b.pat):'',cleanName(b.cr),evalDate));i=j;
-      }else{i++;}
-    }
-    return out;
-  }
-
-  // ── FORMAT B: Standard batch "City ZIP-DISCIPLINE" ──
-  if(lines.some(l=>/[-\u2013]\s*(PT|OT|SLP|PTA|COTA)/i.test(l))){
-    lines.forEach(line=>{
-      const m=line.match(/^(.+?)(?:\s+(\d{3,5}))?[-\u2013]\s*(PT|OT|SLP|PTA|COTA)(.*)$/i);
-      if(m){const loc=abbrMap[m[1].trim().toUpperCase()]||m[1].trim();const note=(m[4]||'').replace(/^[-\u2013\s]+/,'').trim();out.push(mkE(loc,expandZip(m[2]||''),m[3].toUpperCase(),note,'','',wd));}
+function submitQuiz() {
+  const qs = currentModule.quiz;
+  let correct = 0;
+  qs.forEach((q, qi) => {
+    const chosen = quizAnswers[qi];
+    const isRight = chosen === q.answer;
+    if (isRight) correct++;
+    document.querySelectorAll(`#qq${qi} .quiz-option`).forEach((el, oi) => {
+      el.querySelector('input').disabled = true;
+      if (oi === q.answer) el.classList.add('correct');
+      else if (oi === chosen && !isRight) el.classList.add('incorrect');
     });
-    if(out.length)return out;
-  }
-
-  // ── FORMAT C: "City Discipline VisitType Day" e.g. "Pryor Ortho eval Thursday, SS PT soc Friday" ──
-  const visitRe=/^(.+?)\s+(PT|OT|SLP|PTA|COTA|Ortho|ortho)\s+(eval|soc|re-?eval|visit)\b/i;
-  if(lines.some(l=>visitRe.test(l.trim()))){
-    lines.forEach(line=>{
-      const l=line.trim();
-      const m=l.match(/^(.+?)\s+(PT|OT|SLP|PTA|COTA|Ortho|ortho)\s+(eval|soc|re-?eval|visit)\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)?/i);
-      if(m){
-        const rawLoc=m[1].replace(/^(i have a?|we have a?|there is a?|a )\s*/i,'').trim();
-        const loc=resolveCity(rawLoc);
-        const discRaw=m[2].toUpperCase();
-        const discipline=discRaw==='ORTHO'?'PT':(['PT','OT','SLP','PTA','COTA'].includes(discRaw)?discRaw:'PT');
-        const vt=m[3].toUpperCase();const day=m[4]||'';
-        const note=vt+(day?' \u2013 '+day.charAt(0).toUpperCase()+day.slice(1):'');
-        out.push(mkE(loc,'',discipline,note,'','',wd));
-      } else {
-        // Fallback: treat as plain city/zip
-        const fz=l.match(/^\d{3,5}$/)?expandZip(l):null;
-        if(fz){out.push(mkE(zipCity[fz]||'Tulsa',fz,disc(),'','','',wd));}
-        else{out.push(mkE(resolveCity(l),'',disc(),'','','',wd));}
-      }
-    });
-    return out;
-  }
-
-  // ── FORMAT D: SOC/patient prose (no commas) ──
-  if(/\b(SOC|eval)\b/i.test(text)&&lines.length<=8&&!text.includes(',')){
-    const found=cityNames.filter(c=>new RegExp('\\b'+c+'\\b','i').test(text));
-    const vt=/\bSOC\b/i.test(text)?'SOC':'Eval';
-    const nm=(text.match(/\b([A-Z][a-z]{3,}(?:swamy|shan|kumar|patel|singh)?)\b/g)||[])[0]||'';
-    (found.length?found:['See note']).forEach(city=>out.push(mkE(city,'','PT',nm?nm+'\u2013'+vt:vt,'','',wd)));
-    return out;
-  }
-
-  // ── FORMAT E: Inline zip list ──
-  const inlineZips=text.match(/\b\d{5}\b/g);
-  const allZips=lines.every(l=>/^\d{3,5}$/.test(l.trim()));
-  if(inlineZips&&inlineZips.length>1&&lines.length<=3&&allZips){
-    inlineZips.forEach(zip=>{const fz=expandZip(zip);out.push(mkE(zipCity[fz]||'Tulsa',fz,disc(),'','','',wd));});
-    return out;
-  }
-
-  // ── FORMAT F: One item per line ──
-  lines.forEach(line=>{
-    const l=line.trim();if(!l)return;
-    const isZip=/^\d{3,5}$/.test(l);
-    const isAbbr=/^[A-Za-z]{2,3}(\s+\d{1,3})?$/.test(l)&&!/^(PT|OT|SLP|PTA|COTA)$/i.test(l);
-    if(isZip){const fz=expandZip(l);out.push(mkE(zipCity[fz]||'Tulsa',fz,disc(),'','','',wd));}
-    else if(isAbbr){const parts=l.match(/^([A-Za-z]+)\s*(\d*)$/);const loc=abbrMap[(parts[1]||'').toUpperCase()]||parts[1];const zip=parts[2]?expandZip(parts[2]):'';out.push(mkE(loc,zip,disc(),'','','',wd));}
-    else{
-      const normalized=l.replace(/\s+/g,' ').trim();const noSpace=l.replace(/\s+/g,'').toLowerCase();
-      let loc=abbrMap[normalized.toUpperCase()]||cityNames.find(c=>c.toLowerCase()===normalized.toLowerCase());
-      if(!loc)loc=cityNames.find(c=>c.replace(/\s+/g,'').toLowerCase()===noSpace);
-      if(!loc)loc=cityNames.find(c=>c.replace(/\s+/g,'').toLowerCase().includes(noSpace)||noSpace.includes(c.replace(/\s+/g,'').toLowerCase()));
-      if(!loc&&noSpace.length>=4)loc=cityNames.find(c=>c.replace(/\s+/g,'').toLowerCase().startsWith(noSpace.substring(0,4)));
-      if(!loc)loc=normalized;
-      out.push(mkE(loc,'',disc(),'','','',wd));
-    }
   });
-  return out;
-}
 
-async function parseAdd(){
-  const text=document.getElementById('rt').value.trim();if(!text){flash('⚠️ Nothing to parse');return;}
-  const ag=document.getElementById('ag').value,wd=document.getElementById('wd').value;
-  const items=parseText(text,ag,wd,pri);if(!items.length){flash('⚠️ Could not parse');return;}
-  document.getElementById('parseBtn').disabled=true;
-  saving=true;
-  evals=[...items,...evals];render();document.getElementById('rt').value='';
-  setSyncStatus('syncing',`Saving ${items.length} evals...`);
-  let saved=0;
-  for(const ev of items){
-    const {error}=await sb.from('evals').insert(evalToDB(ev));
-    if(!error){saved++;}else{console.error('insert error:',error);}
-    setSyncStatus('syncing',`Saving ${saved}/${items.length}...`);
-  }
-  saving=false;
-  document.getElementById('parseBtn').disabled=false;
-  setSyncStatus('live',`Live · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
-  flash(`✓ Added ${saved} eval${saved>1?'s':''} to shared board`);
-  await loadAll();
-}
+  const score = Math.round((correct / qs.length) * 100);
+  const passed = score >= 70;
 
-async function addOne(){
-  const loc=document.getElementById('sl').value.trim();if(!loc)return;
-  const wd=document.getElementById('wd').value;
-  const ev={id:String(Date.now()+Math.random()),location:loc,zip:document.getElementById('sz').value.trim(),discipline:document.getElementById('sd').value,agency:document.getElementById('ag').value,priority:pri,note:document.getElementById('sn').value.trim(),patient:document.getElementById('spt').value.trim(),status:'pending',clinician:'',addedBy:userName||'',assignedBy:'',dateAdded:wd,weekDate:wd,qa:{}};
-  evals=[ev,...evals];render();['sl','sz','sn','spt'].forEach(id=>document.getElementById(id).value='');
-  await sb.from('evals').insert(evalToDB(ev));
-  flash('✓ Eval added to shared board');
-}
-
-// ── BOARD ──
-function sf(f,el){fil=f;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));el.classList.add('on');render();}
-function age(d){if(!d)return 0;const str=String(d).trim();const parsed=str.includes('T')?new Date(str):new Date(str+'T12:00:00');if(isNaN(parsed.getTime()))return 0;return Math.max(0,Math.floor((Date.now()-parsed.getTime())/86400000));}
-
-function render(){
-  const monthSel=document.getElementById('monthFilter');
-  const selectedMonth=monthSel?monthSel.value:'';
-  const months=[...new Set(evals.map(e=>String(e.dateAdded||'').substring(0,7)).filter(d=>d&&d.length>=7))].sort().reverse();
-  if(monthSel){const cur=monthSel.value;monthSel.innerHTML='<option value="">All Months</option>'+months.map(m=>{const[y,mo]=m.split('-');const label=new Date(y,mo-1).toLocaleDateString('en-US',{month:'long',year:'numeric'});return`<option value="${m}"${m===cur?' selected':''}>${label}</option>`;}).join('');}
-
-  let list=evals.slice();
-  // Main board never shows complete — they go to History tab
-  list=list.filter(e=>e.status!=='complete');
-  if(fil==='pending')list=list.filter(e=>e.status==='pending');
-  else if(fil==='assigned')list=list.filter(e=>e.status==='assigned');
-  else if(fil==='urgent')list=list.filter(e=>e.priority==='urgent'||e.priority==='asap');
-  if(selectedMonth)list=list.filter(e=>String(e.dateAdded||'').startsWith(selectedMonth));
-  const so={pending:0,assigned:1,complete:2},po={urgent:0,asap:1,normal:2};
-  list.sort((a,b)=>so[a.status]!==so[b.status]?so[a.status]-so[b.status]:(po[a.priority]||2)-(po[b.priority]||2));
-  document.getElementById('sP').textContent=evals.filter(e=>e.status==='pending').length;
-  document.getElementById('sA').textContent=evals.filter(e=>e.status==='assigned').length;
-  document.getElementById('sC').textContent=evals.filter(e=>e.status==='complete').length;
-  const g=document.getElementById('grid');
-  if(!list.length){g.innerHTML='<div class="empty"><div class="ei">📋</div><div class="et">No evals on the board</div><div style="font-size:13px;line-height:1.5">Paste a referral list using the panel on the left.</div></div>';return;}
-  g.innerHTML=list.map(e=>{
-    const a=age(e.dateAdded),ac=a<=1?'af':a<=3?'aa':'ao',al=a===0?'Today':a===1?'1 day ago':`${a} days ago`;
-    const opts=clins.map(c=>`<option value="${c.name}"${e.clinician===c.name?' selected':''}>${c.name} (${c.role})</option>`).join('');
-    return`<div class="card s${e.status[0]} p${e.priority[0]}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-        <div class="cloc">${e.location}${e.zip?`<span class="czip">${e.zip}</span>`:''}</div>
-        <div class="br"><span class="badge d${e.discipline}">${e.discipline}</span><span class="badge bag">${e.agency||''}</span></div>
+  document.getElementById('quizWrap').insertAdjacentHTML('afterend', `
+    <div class="quiz-result" style="margin-top:20px;">
+      <div class="score">${score}%</div>
+      <div class="score-label">${correct} of ${qs.length} correct</div>
+      <div class="pass-msg ${passed ? 'pass' : 'fail'}">
+        ${passed ? '✓ Passed — please sign below to complete this module.' : '✗ Score below 70% — please review the slides and retake.'}
       </div>
-      <div class="br">
-        ${e.priority==='urgent'?'<span class="badge burg">🚨 Urgent</span>':''}
-        ${e.priority==='asap'?'<span class="badge basp">⚡ ASAP</span>':''}
-        <span class="badge b${e.status==='pending'?'pend':e.status==='assigned'?'ass':'com'}">${e.status.charAt(0).toUpperCase()+e.status.slice(1)}</span>
-        ${e.clinician?`<span class="badge bcl">👤 ${e.clinician.split(' ')[0]}</span>`:''}
-      </div>
-      ${e.patient?`<div class="cpat">👤 ${e.patient}</div>`:''}
-      ${e.note?`<div class="cnote">${e.note}</div>`:''}
-      <div class="cmeta">
-        <span class="cdate">${e.dateAdded}${e.addedBy?' · '+e.addedBy:''}</span>
-        <span class="agebadge ${ac}">${al}</span>
-      </div>
-      ${e.assignedBy?`<div style="font-size:10px;color:var(--muted)">Assigned by ${e.assignedBy}</div>`:''}
-      <div style="margin-bottom:4px"><input class="csel" style="font-size:11px;padding:5px 7px;" placeholder="Patient name..." value="${e.patient||''}" onchange="updPat('${e.id}',this.value)"></div>
-      ${(()=>{const s=getSuggestedClinician(e.location,e.zip);return s?`<div style="font-size:10px;color:#fbbf24;margin-bottom:4px;">💡 ${s.name} available${s.region?' · '+s.region:''}</div>`:''})()}
-      <div class="cact">
-        <select class="csel" onchange="asgn('${e.id}',this.value)">
-          <option value="">— Assign Clinician —</option>${opts}
-        </select>
-        ${e.status==='complete'
-          ?`<button class="cbtn del" onclick="rmEval('${e.id}')">✕ Delete</button>`
-          :`<button class="cbtn done" onclick="mkDone('${e.id}')">✓ Done</button>
-            <button class="cbtn del" onclick="rmEval('${e.id}')">✕ Cancel</button>`}
-      </div>
-      <div style="margin-top:2px;">
-        <select class="csel" style="font-size:10px;color:var(--muted);" onchange="asgnPTA('${e.id}',this.value)">
-          <option value="">+ Assign PTA/COTA (optional)</option>
-          ${clins.filter(c=>c.role==='PTA'||c.role==='COTA').map(c=>`<option value="${c.name}"${e.ptaClinician===c.name?' selected':''}>${c.name} (${c.role})</option>`).join('')}
-        </select>
-        ${e.ptaClinician?`<div style="font-size:10px;color:#93c5fd;margin-top:2px;">🤝 PTA: ${e.ptaClinician}</div>`:''}
-      </div>
-    </div>`;
-  }).join('');
+    </div>
+    ${passed ? renderAttestation(score) : `<div style="margin-top:20px;text-align:center;"><button class="nav-btn prev" onclick="openModule('${currentModule.id}')">↺ Retake Module</button></div>`}
+  `);
+
+  document.getElementById('submitQuizBtn').remove();
 }
 
-async function updPat(id,val){const e=evals.find(e=>e.id===id);if(!e)return;e.patient=val;await sb.from('evals').update({patient:val}).eq('id',id);}
-async function asgnPTA(id,name){
-  const e=evals.find(e=>e.id===id);if(!e)return;
-  e.ptaClinician=name;
-  render();
-  await sb.from('evals').update({pta_clinician:name}).eq('id',id);
-  if(name) flash(`✓ PTA assigned: ${name}`);
+function renderAttestation(score) {
+  return `<div class="attestation-box" id="attestBox">
+    <h4>Employee Attestation</h4>
+    <p>By signing below, I confirm that I have completed the <strong>${currentModule.title}</strong> training module, reviewed all content, and understand my obligations as a Metro Mobile Health Care clinician.</p>
+    <div class="sig-row">
+      <input type="text" id="sigInput" placeholder="Type your full name to sign" />
+      <button class="attest-btn" id="attestBtn" onclick="submitAttestation(${score})">Sign & Complete</button>
+    </div>
+  </div>`;
 }
 
-async function asgn(id,name){const e=evals.find(e=>e.id===id);if(!e)return;e.clinician=name;e.status=name?'assigned':'pending';e.assignedBy=name?userName:'';render();renderQA();await sb.from('evals').update({clinician:name,status:e.status,assigned_by:e.assignedBy}).eq('id',id);}
-async function mkDone(id){const e=evals.find(e=>e.id===id);if(!e)return;e.status='complete';render();renderQA();renderHistory();await sb.from('evals').update({status:'complete'}).eq('id',id);}
-async function rmEval(id){evals=evals.filter(e=>e.id!==id);render();await sb.from('evals').delete().eq('id',id);}
-async function clrDone(){if(!confirm('Remove all completed evals?'))return;const ids=evals.filter(e=>e.status==='complete').map(e=>e.id);evals=evals.filter(e=>e.status!=='complete');render();if(ids.length)await sb.from('evals').delete().in('id',ids);}
-async function clrAll(){if(!confirm('Clear ALL evals?'))return;evals=[];render();await sb.from('evals').delete().neq('id','');}
+async function submitAttestation(score) {
+  const sig = document.getElementById('sigInput').value.trim();
+  if (!sig) { toast('Please type your full name to sign.'); return; }
+  const btn = document.getElementById('attestBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Saving…';
 
-// ── QA ──
-function renderQA(){
-  const list=document.getElementById('qaList');if(!list)return;
-
-  // Split into active (assigned, not fully QA'd) and completed QA
-  const assigned=evals.filter(e=>e.status==='assigned');
-  const completedQA=evals.filter(e=>e.status==='complete'&&(e.qa?.seen||e.qa?.orders||e.qa?.scheduled));
-
-  // Active QA
-  if(!assigned.length){
-    list.innerHTML='<div class="qa-empty">No assigned evals yet.<br>Assign clinicians on the board first.</div>';
-  } else {
-    list.innerHTML=assigned.map(e=>{
-      const qa=e.qa||{};const allDone=qa.seen&&qa.scheduled;
-      return`<div class="qa-card${allDone?' qa-done':''}">
-        <div style="display:flex;justify-content:space-between;align-items:flex-start">
-          <div><div class="qa-loc">${e.location}${e.zip?` <span style="font-family:monospace;font-size:11px;color:var(--muted)">${e.zip}</span>`:''}</div>
-          <div class="qa-clin">👤 ${e.clinician||'Unassigned'} · ${e.agency||''} · ${e.discipline}</div>
-          ${e.patient?`<div style="font-size:11px;color:#93c5fd">${e.patient}</div>`:''}</div>
-          <span class="badge bass">Assigned</span>
-        </div>
-        <div class="qa-checks">
-          <div class="qa-check${qa.seen?' done':''}"><input type="checkbox" ${qa.seen?'checked':''} onchange="toggleQA('${e.id}','seen',this.checked)"><span>Patient seen</span><input type="date" class="qa-date" value="${qa.seenDate||''}" onchange="toggleQA('${e.id}','seenDate',this.value)"></div>
-          <div class="qa-check${qa.orders?' done':''}"><input type="checkbox" ${qa.orders?'checked':''} onchange="toggleQA('${e.id}','orders',this.checked)"><span>Orders added</span></div>
-          <div class="qa-check${qa.pta?' done':''}"><input type="checkbox" ${qa.pta?'checked':''} onchange="toggleQA('${e.id}','pta',this.checked)"><span>PTA assigned</span></div>
-          <div class="qa-check${qa.scheduled?' done':''}"><input type="checkbox" ${qa.scheduled?'checked':''} onchange="toggleQA('${e.id}','scheduled',this.checked)"><span>Follow-up scheduled</span></div>
-        </div>
-        <textarea class="qa-note" placeholder="QA notes..." onchange="toggleQA('${e.id}','notes',this.value)">${qa.notes||''}</textarea>
-      </div>`;
-    }).join('');
-  }
-
-
+  await saveCompletion(currentModule.id, score, sig);
+  document.getElementById('slideProgressFill').style.width = '100%';
+  showCompletionState(document.getElementById('moduleBody'));
+  toast('✓ Module completed and recorded!');
 }
 
-async function toggleQA(id,field,val){
-  const e=evals.find(e=>e.id===id);if(!e)return;
-  if(!e.qa)e.qa={};e.qa[field]=val;
-  if(e.qa.seen&&e.qa.scheduled){e.status='complete';await sb.from('evals').update({status:'complete'}).eq('id',id);render();}
-  renderQA();
-  await sb.from('evals').update({qa:e.qa}).eq('id',id);
+function showCompletionState(container) {
+  const comp = completions[currentModule.id];
+  container.innerHTML = `<div class="completion-banner">
+    <div class="check">✅</div>
+    <h3>Module Complete</h3>
+    <p>${currentModule.title} was completed on ${new Date(comp.completed_at).toLocaleDateString()} with a score of ${comp.score}%.</p>
+    <span class="gold-pill">Signed: ${comp.signature}</span>
+    <div style="margin-top:24px;">
+      <button class="nav-btn prev" onclick="goBack()">← Back to Dashboard</button>
+    </div>
+  </div>`;
 }
 
-// ── CLINICIANS ──
-function renderClins(){
-  document.getElementById('clinList').innerHTML=clins.map(c=>`
-    <div class="cr" style="flex-direction:column;align-items:stretch;gap:6px;" id="clin-${c.name.replace(/\s+/g,'-')}">
-      <div style="display:flex;align-items:center;justify-content:space-between;">
-        <div style="display:flex;align-items:center;">
-          <div class="av">${c.name.split(' ').map(w=>w[0]).join('').substring(0,2)}</div>
-          <div>
-            <div style="font-size:12px;font-weight:600">${c.name}</div>
-            <div style="font-size:10px;color:var(--muted)">${c.role}</div>
-          </div>
-        </div>
-        <div style="display:flex;gap:6px;align-items:center;">
-          <button onclick="editClin('${c.name}')" style="font-size:10px;color:var(--muted);background:none;border:1px solid var(--border);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;">✏️ Edit</button>
-          <button class="xbtn" onclick="rmClin('${c.name}')">×</button>
-        </div>
-      </div>
-      <div style="display:flex;gap:8px;flex-wrap:wrap;padding-left:35px;" id="clin-info-${c.name.replace(/\s+/g,'-')}">
-        ${c.phone?`<a href="tel:${c.phone}" style="font-size:11px;color:#fbbf24;text-decoration:none;">📞 ${c.phone}</a>`:''}
-        ${c.email?`<a href="mailto:${c.email}" style="font-size:11px;color:#fbbf24;text-decoration:none;">✉️ ${c.email}</a>`:''}
-        ${!c.phone&&!c.email?`<span style="font-size:10px;color:var(--muted);font-style:italic;">No contact info — tap Edit to add</span>`:''}
-      </div>
-      <div id="clin-edit-${c.name.replace(/\s+/g,'-')}" style="display:none;padding-left:35px;">
-        <input id="ep-${c.name.replace(/\s+/g,'-')}" value="${c.phone||''}" placeholder="Phone" style="margin-bottom:4px;font-size:11px;padding:5px 8px;">
-        <input id="ee-${c.name.replace(/\s+/g,'-')}" value="${c.email||''}" placeholder="Email" style="margin-bottom:6px;font-size:11px;padding:5px 8px;">
-        <div style="display:flex;gap:6px;">
-          <button onclick="saveClinContact('${c.name}')" style="flex:1;padding:5px;border-radius:5px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">Save</button>
-          <button onclick="cancelEditClin('${c.name}')" style="flex:1;padding:5px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;cursor:pointer;font-family:inherit;">Cancel</button>
-        </div>
-      </div>
-    </div>`).join('');
+// ══════════════════════════════════════════════════════════════
+// UTILS
+// ══════════════════════════════════════════════════════════════
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
 }
 
-function editClin(name) {
-  const key = name.replace(/\s+/g,'-');
-  document.getElementById('clin-edit-'+key).style.display='block';
-  document.getElementById('clin-info-'+key).style.display='none';
+let toastTimer;
+function toast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 3500);
 }
-
-function cancelEditClin(name) {
-  const key = name.replace(/\s+/g,'-');
-  document.getElementById('clin-edit-'+key).style.display='none';
-  document.getElementById('clin-info-'+key).style.display='flex';
-}
-
-async function saveClinContact(name) {
-  const key = name.replace(/\s+/g,'-');
-  const phone = document.getElementById('ep-'+key).value.trim();
-  const email = document.getElementById('ee-'+key).value.trim();
-  const c = clins.find(c=>c.name===name);
-  if (c) { c.phone=phone; c.email=email; }
-  await sb.from('clinicians').update({phone, email}).eq('name', name);
-  renderClins();
-  flash('✓ Contact info saved for ' + name);
-}
-async function addClin(){
-  const n=document.getElementById('nn').value.trim();if(!n)return;
-  const c={name:n,role:document.getElementById('nr').value,phone:document.getElementById('nphone').value.trim(),email:document.getElementById('nemail').value.trim()};
-  clins.push(c);renderClins();render();
-  document.getElementById('nn').value='';document.getElementById('nphone').value='';document.getElementById('nemail').value='';
-  await sb.from('clinicians').insert({name:c.name,role:c.role,phone:c.phone||'',email:c.email||''});
-  flash('✓ Clinician added');
-}
-async function rmClin(name){clins=clins.filter(c=>c.name!==name);renderClins();render();await sb.from('clinicians').delete().eq('name',name);}
-
-// ── AGENCIES ──
-function renderAgencies(){
-  const sel=document.getElementById('ag');const cur=sel.value;
-  sel.innerHTML=agencies.map(a=>`<option value="${a}"${a===cur?' selected':''}>${a}</option>`).join('');
-  document.getElementById('agencyList').innerHTML=agencies.map(a=>`
-    <div class="cr"><div style="display:flex;align-items:center"><div class="av" style="background:#1e3a2a">${a.substring(0,2).toUpperCase()}</div>
-    <div style="font-size:12px;font-weight:600">${a}</div></div>
-    <button class="xbtn" onclick="rmAgency('${a}')">×</button></div>`).join('');
-}
-async function addAgency(){const n=document.getElementById('na').value.trim();if(!n||agencies.includes(n))return;agencies.push(n);renderAgencies();document.getElementById('na').value='';await sb.from('agencies').insert({name:n});flash('✓ Agency added');}
-async function rmAgency(name){agencies=agencies.filter(a=>a!==name);renderAgencies();await sb.from('agencies').delete().eq('name',name);}
-
-// ── TEMPLATES ──
-function ct(el){navigator.clipboard.writeText(el.querySelector('.tpl-b').textContent);flash('Copied ✓');}
-function cc(){navigator.clipboard.writeText(document.getElementById('cu').value);flash('Copied ✓');}
-function exportClinicians(){
-  const headers=['Name','Role','Phone','Email'];
-  const rows=clins.map(c=>[c.name,c.role,c.phone||'',c.email||'']);
-  const csv=[headers,...rows].map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
-  const blob=new Blob([csv],{type:'text/csv'});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement('a');
-  a.href=url;a.download='MMHC_Clinician_Roster.csv';
-  document.body.appendChild(a);a.click();
-  document.body.removeChild(a);URL.revokeObjectURL(url);
-  flash('✓ Roster exported');
-}
-
-function flash(msg){const el=document.getElementById('fl');el.textContent=msg;el.classList.add('on');setTimeout(()=>el.classList.remove('on'),2200);}
 </script>
 </body>
 </html>
