@@ -201,7 +201,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
     </div>
 
     <div class="panel hidden" id="tp-cap">
-      <div class="lbl" style="margin-bottom:6px">PTA / COTA Availability</div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+        <div class="lbl" style="margin-bottom:0">PTA / COTA Availability</div>
+        <div style="display:flex;gap:5px;">
+          <button onclick="markAllAvailable(true)" style="font-size:10px;color:var(--accent);background:none;border:1px solid rgba(0,212,170,0.3);border-radius:4px;padding:3px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">✓ All</button>
+          <button onclick="markAllAvailable(false)" style="font-size:10px;color:var(--muted);background:none;border:1px solid var(--border);border-radius:4px;padding:3px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ None</button>
+        </div>
+      </div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">Mark who has room this week. Add their territory so the tool can suggest the right clinician.</div>
       <div id="capList"></div>
       <div class="hr" style="margin:10px 0"></div>
@@ -294,9 +300,21 @@ let userName = localStorage.getItem('mmhc_user')||'';
 
 // ── INIT ──
 // ── CAPACITY ──
-let capacity = JSON.parse(localStorage.getItem('mmhc_cap') || '[]');
+let capacity = [];
 
-function saveCapacity() { localStorage.setItem('mmhc_cap', JSON.stringify(capacity)); }
+async function saveCapacity(cap) {
+  await sb.from('capacity').upsert({
+    name: cap.name, role: cap.role||'PTA',
+    available: cap.available, region: cap.region||'',
+    updated_at: new Date().toISOString()
+  }, {onConflict: 'name'});
+}
+
+async function loadCapacity() {
+  const {data} = await sb.from('capacity').select('*').order('name');
+  if (data) capacity = data.map(r => ({name:r.name, role:r.role, available:r.available, region:r.region||''}));
+  renderCapacity();
+}
 
 function renderCapacity() {
   const list = document.getElementById('capList'); if (!list) return;
@@ -334,33 +352,50 @@ function renderCapacity() {
   }).join('');
 }
 
-function toggleCapAvail(name, val) {
+async function markAllAvailable(val) {
+  const ptaCota = clins.filter(c => c.role === 'PTA' || c.role === 'COTA');
+  for (const clin of ptaCota) {
+    let cap = capacity.find(c=>c.name===clin.name);
+    if (!cap) { cap = {name:clin.name, available:val, region:'', role:clin.role}; capacity.push(cap); }
+    else cap.available = val;
+    await saveCapacity(cap);
+  }
+  renderCapacity();
+  flash(val ? '✓ All marked available' : 'All marked unavailable');
+}
+
+async function toggleCapAvail(name, val) {
   let cap = capacity.find(c=>c.name===name);
-  if (!cap) { cap = {name, available:val, region:''}; capacity.push(cap); }
+  const clinRole = clins.find(c=>c.name===name)?.role || 'PTA';
+  if (!cap) { cap = {name, available:val, region:'', role:clinRole}; capacity.push(cap); }
   else cap.available = val;
-  saveCapacity(); renderCapacity();
+  renderCapacity();
+  await saveCapacity(cap);
   flash(val ? `✓ ${name} marked available` : `${name} marked unavailable`);
 }
 
-function updateCapRegion(name, val) {
+async function updateCapRegion(name, val) {
+  const clinRole = clins.find(c=>c.name===name)?.role || 'PTA';
   let cap = capacity.find(c=>c.name===name);
-  if (!cap) { cap = {name, available:false, region:val}; capacity.push(cap); }
+  if (!cap) { cap = {name, available:false, region:val, role:clinRole}; capacity.push(cap); }
   else cap.region = val;
-  saveCapacity();
+  await saveCapacity(cap);
 }
 
-function addCapClin() {
+async function addCapClin() {
   const name = document.getElementById('capName').value.trim();
   const region = document.getElementById('capRegion').value.trim();
   const role = document.getElementById('capRole').value;
   if (!name) return;
-  // Add to main clinician roster if not already there
   if (!clins.find(c=>c.name===name)) {
     clins.push({name, role});
-    sb.from('clinicians').insert({name, role});
+    await sb.from('clinicians').insert({name, role});
+    renderClins();
   }
-  if (!capacity.find(c=>c.name===name)) capacity.push({name, available:false, region, role});
-  saveCapacity(); renderCapacity();
+  const cap = {name, available:false, region, role};
+  if (!capacity.find(c=>c.name===name)) capacity.push(cap);
+  await saveCapacity(cap);
+  renderCapacity();
   document.getElementById('capName').value='';
   document.getElementById('capRegion').value='';
   flash('✓ Added ' + name);
@@ -387,11 +422,17 @@ window.onload = async () => {
   if (userName) document.getElementById('userName').value = userName;
   renderAgencies(); renderClins(); render();
   await loadAll();
+  await loadCapacity();
   // Realtime subscription
   sb.channel('evals-changes')
     .on('postgres_changes', {event:'*', schema:'public', table:'evals'}, () => {
-      // Only reload if we're not currently saving
       if (!saving) loadAll();
+    })
+    .subscribe();
+
+  sb.channel('capacity-changes')
+    .on('postgres_changes', {event:'*', schema:'public', table:'capacity'}, () => {
+      loadCapacity();
     })
     .subscribe();
 };
