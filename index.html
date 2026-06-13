@@ -195,6 +195,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
       <div class="lbl">QA Tracker</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.5">Track evals after assignment.</div>
       <div id="qaList"></div>
+      <div id="qaCompletedSection" class="hidden">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;margin-bottom:6px;">
+          <div class="lbl" style="margin-bottom:0">Completed QA History</div>
+          <button onclick="clrQAHistory()" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:3px 8px;cursor:pointer;font-family:inherit;">Clear History</button>
+        </div>
+        <div id="qaCompletedList"></div>
+      </div>
     </div>
 
     <div class="panel hidden" id="tp-set">
@@ -562,26 +569,70 @@ async function clrAll(){if(!confirm('Clear ALL evals?'))return;evals=[];render()
 // ── QA ──
 function renderQA(){
   const list=document.getElementById('qaList');if(!list)return;
-  const qaEvals=evals.filter(e=>e.status==='assigned'||e.status==='complete');
-  if(!qaEvals.length){list.innerHTML='<div class="qa-empty">No assigned evals yet.</div>';return;}
-  list.innerHTML=qaEvals.map(e=>{
-    const qa=e.qa||{};const allDone=qa.seen&&qa.scheduled;
-    return`<div class="qa-card${allDone?' qa-done':''}">
-      <div style="display:flex;justify-content:space-between;align-items:flex-start">
-        <div><div class="qa-loc">${e.location}${e.zip?` <span style="font-family:monospace;font-size:11px;color:var(--muted)">${e.zip}</span>`:''}</div>
-        <div class="qa-clin">👤 ${e.clinician||'Unassigned'} · ${e.agency||''} · ${e.discipline}</div>
-        ${e.patient?`<div style="font-size:11px;color:#93c5fd">${e.patient}</div>`:''}</div>
-        <span class="badge b${e.status==='complete'?'com':'ass'}">${e.status}</span>
-      </div>
-      <div class="qa-checks">
-        <div class="qa-check${qa.seen?' done':''}"><input type="checkbox" ${qa.seen?'checked':''} onchange="toggleQA('${e.id}','seen',this.checked)"><span>Patient seen</span><input type="date" class="qa-date" value="${qa.seenDate||''}" onchange="toggleQA('${e.id}','seenDate',this.value)"></div>
-        <div class="qa-check${qa.orders?' done':''}"><input type="checkbox" ${qa.orders?'checked':''} onchange="toggleQA('${e.id}','orders',this.checked)"><span>Orders added</span></div>
-        <div class="qa-check${qa.pta?' done':''}"><input type="checkbox" ${qa.pta?'checked':''} onchange="toggleQA('${e.id}','pta',this.checked)"><span>PTA assigned</span></div>
-        <div class="qa-check${qa.scheduled?' done':''}"><input type="checkbox" ${qa.scheduled?'checked':''} onchange="toggleQA('${e.id}','scheduled',this.checked)"><span>Follow-up scheduled</span></div>
-      </div>
-      <textarea class="qa-note" placeholder="QA notes..." onchange="toggleQA('${e.id}','notes',this.value)">${qa.notes||''}</textarea>
-    </div>`;
-  }).join('');
+
+  // Split into active (assigned, not fully QA'd) and completed QA
+  const assigned=evals.filter(e=>e.status==='assigned');
+  const completedQA=evals.filter(e=>e.status==='complete'&&(e.qa?.seen||e.qa?.orders||e.qa?.scheduled));
+
+  // Active QA
+  if(!assigned.length){
+    list.innerHTML='<div class="qa-empty">No assigned evals yet.<br>Assign clinicians on the board first.</div>';
+  } else {
+    list.innerHTML=assigned.map(e=>{
+      const qa=e.qa||{};const allDone=qa.seen&&qa.scheduled;
+      return`<div class="qa-card${allDone?' qa-done':''}">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div><div class="qa-loc">${e.location}${e.zip?` <span style="font-family:monospace;font-size:11px;color:var(--muted)">${e.zip}</span>`:''}</div>
+          <div class="qa-clin">👤 ${e.clinician||'Unassigned'} · ${e.agency||''} · ${e.discipline}</div>
+          ${e.patient?`<div style="font-size:11px;color:#93c5fd">${e.patient}</div>`:''}</div>
+          <span class="badge bass">Assigned</span>
+        </div>
+        <div class="qa-checks">
+          <div class="qa-check${qa.seen?' done':''}"><input type="checkbox" ${qa.seen?'checked':''} onchange="toggleQA('${e.id}','seen',this.checked)"><span>Patient seen</span><input type="date" class="qa-date" value="${qa.seenDate||''}" onchange="toggleQA('${e.id}','seenDate',this.value)"></div>
+          <div class="qa-check${qa.orders?' done':''}"><input type="checkbox" ${qa.orders?'checked':''} onchange="toggleQA('${e.id}','orders',this.checked)"><span>Orders added</span></div>
+          <div class="qa-check${qa.pta?' done':''}"><input type="checkbox" ${qa.pta?'checked':''} onchange="toggleQA('${e.id}','pta',this.checked)"><span>PTA assigned</span></div>
+          <div class="qa-check${qa.scheduled?' done':''}"><input type="checkbox" ${qa.scheduled?'checked':''} onchange="toggleQA('${e.id}','scheduled',this.checked)"><span>Follow-up scheduled</span></div>
+        </div>
+        <textarea class="qa-note" placeholder="QA notes..." onchange="toggleQA('${e.id}','notes',this.value)">${qa.notes||''}</textarea>
+      </div>`;
+    }).join('');
+  }
+
+  // Completed QA History
+  const section=document.getElementById('qaCompletedSection');
+  const clist=document.getElementById('qaCompletedList');
+  if(completedQA.length){
+    section.classList.remove('hidden');
+    clist.innerHTML=completedQA.map(e=>{
+      const qa=e.qa||{};
+      const checks=[qa.seen?'✓ Seen':'',qa.orders?'✓ Orders':'',qa.pta?'✓ PTA':'',qa.scheduled?'✓ Scheduled':''].filter(Boolean).join(' · ');
+      return`<div style="background:rgba(0,212,170,0.04);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px;">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
+          <div>
+            <div style="font-weight:700;font-size:13px;color:var(--text)">${e.location}${e.zip?' '+e.zip:''}</div>
+            <div style="font-size:11px;color:var(--muted)">👤 ${e.clinician||'—'} · ${e.agency||''} · ${e.discipline}</div>
+            ${e.patient?`<div style="font-size:11px;color:#93c5fd">${e.patient}</div>`:''}
+          </div>
+          <span class="badge bcom">Complete</span>
+        </div>
+        <div style="font-size:11px;color:var(--accent);margin-top:6px;">${checks||'No QA recorded'}</div>
+        ${qa.seenDate?`<div style="font-size:10px;color:var(--muted);margin-top:2px;">Seen: ${qa.seenDate}</div>`:''}
+        ${qa.notes?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:4px;">${qa.notes}</div>`:''}
+        <div style="font-size:10px;color:var(--muted);margin-top:4px;">${e.dateAdded}${e.addedBy?' · '+e.addedBy:''}</div>
+      </div>`;
+    }).join('');
+  } else {
+    section.classList.add('hidden');
+  }
+}
+
+async function clrQAHistory(){
+  if(!confirm('Clear completed QA history? This will delete all completed evals from the board.')) return;
+  const ids=evals.filter(e=>e.status==='complete').map(e=>e.id);
+  evals=evals.filter(e=>e.status!=='complete');
+  render(); renderQA();
+  if(ids.length) await sb.from('evals').delete().in('id',ids);
+  flash('✓ QA history cleared');
 }
 
 async function toggleQA(id,field,val){
