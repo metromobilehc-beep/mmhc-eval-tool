@@ -6,7 +6,7 @@
 <title>MMHC · Eval Workflow</title>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{--bg:#0d1117;--surface:#161b22;--border:#2a3340;--accent:#00d4aa;--red:#ef4444;--blue:#3b82f6;--text:#e2e8f0;--muted:#64748b;--pending:#f59e0b;}
+:root{--bg:#0f1923;--surface:#1a2535;--border:#2d3f55;--accent:#00d4aa;--red:#f87171;--blue:#60a5fa;--text:#f0f4f8;--muted:#7a91a8;--pending:#fbbf24;}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;min-height:100vh;}
 header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;flex-wrap:wrap;gap:8px;}
@@ -66,10 +66,10 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 .card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;}
 .card.sp{border-left:3px solid var(--pending);}
 .card.sa{border-left:3px solid var(--blue);}
-.card.sc{border-left:3px solid var(--accent);opacity:.55;}
+.card.sc{border-left:3px solid var(--accent);opacity:.4;filter:saturate(0.5);}
 .card.pu{border-top:2px solid var(--red);}
 .card.pp{border-top:2px solid var(--pending);}
-.cloc{font-weight:700;font-size:14px;}
+.cloc{font-weight:700;font-size:15px;letter-spacing:0.2px;}
 .czip{font-size:11px;color:var(--muted);font-family:monospace;margin-left:4px;}
 .br{display:flex;gap:4px;flex-wrap:wrap;}
 .badge{padding:2px 7px;border-radius:4px;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
@@ -78,7 +78,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 .dSLP{background:rgba(236,72,153,.15);color:#f472b6;}
 .dPTA{background:rgba(59,130,246,.1);color:#93c5fd;}
 .dCOTA{background:rgba(168,85,247,.1);color:#d8b4fe;}
-.bag{background:rgba(0,212,170,.08);color:var(--accent);}
+.bag{background:rgba(0,212,170,.15);color:var(--accent);font-weight:800;}
 .burg{background:rgba(239,68,68,.15);color:#f87171;}
 .basp{background:rgba(245,158,11,.15);color:var(--pending);}
 .bpend{background:rgba(245,158,11,.1);color:var(--pending);}
@@ -97,7 +97,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 .csel{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:11px;padding:5px 7px;outline:none;cursor:pointer;}
 .cbtn{padding:5px 10px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;}
 .cbtn.done{color:var(--accent);border-color:var(--accent);}
-.cbtn.del{color:var(--red);}
+.cbtn.del{color:var(--red);border-color:rgba(248,113,113,0.3);}
+.cbtn.del:hover{background:rgba(248,113,113,0.1);}
 .empty{text-align:center;padding:60px 20px;color:var(--muted);grid-column:1/-1;}
 .ei{font-size:40px;margin-bottom:12px;}
 .et{font-size:16px;font-weight:600;color:var(--text);margin-bottom:6px;}
@@ -265,7 +266,7 @@ const DEF_CLINS = [
   {name:'Kym Crane',role:'SLP'},{name:'Kasey Rideout',role:'SLP'}
 ];
 let evals=[], clins=[...DEF_CLINS], agencies=[...DEF_AGENCIES];
-let pri='normal', fil='all';
+let pri='normal', fil='all', saving=false;
 let userName = localStorage.getItem('mmhc_user')||'';
 
 // ── INIT ──
@@ -277,7 +278,10 @@ window.onload = async () => {
   await loadAll();
   // Realtime subscription
   sb.channel('evals-changes')
-    .on('postgres_changes', {event:'*', schema:'public', table:'evals'}, () => loadAll())
+    .on('postgres_changes', {event:'*', schema:'public', table:'evals'}, () => {
+      // Only reload if we're not currently saving
+      if (!saving) loadAll();
+    })
     .subscribe();
 };
 
@@ -342,23 +346,34 @@ function updateWk(){const d=new Date(document.getElementById('wd').value+'T12:00
 function disc(){return document.getElementById('defDisc').value||'PT';}
 
 // ── PARSE ──
-function isIntroLine(l){const w=l.trim().split(/\s+/);if(w.length<=2)return false;return/\b(do you|can you|want|would|could|please|any of|these|tomorrow|next week|this week|available|hello|hi |hey |thanks|thank you|let me know|please see|see below|following|attached|regarding|fyi|heads up|just|wanted|checking|reaching out|hope|good morning|good afternoon)\b/i.test(l)&&w.length>4;}
+function isIntroLine(l){const w=l.trim().split(/\s+/);if(w.length<=2)return false;
+  // Don't filter lines that contain city names or discipline codes
+  if(/\b(PT|OT|SLP|PTA|COTA|SOC|eval|Ortho|ortho)\b/i.test(l)) return false;
+  return/\b(do you|can you|want|would|could|please|any of|these|next week|this week|available|hello|hey |thanks|thank you|let me know|please see|see below|following|attached|regarding|fyi|heads up|wanted|checking|reaching out|hope|good morning|good afternoon)\b/i.test(l)&&w.length>5;}
 
 function parseText(text,ag,wd,p){
   const out=[];const urg=/asap|urgent/i.test(text);
   const abbrMap={BA:'Broken Arrow',TUL:'Tulsa',OKM:'Okmulgee',CLA:'Claremore',JEN:'Jenks',OWA:'Owasso',SS:'Sand Springs',MFD:'Mannford',SKT:'Skiatook',HEN:'Henryetta',BIX:'Bixby',SAP:'Sapulpa','MAN FORD':'Mannford',MANFORD:'Mannford',MANNFORD:'Mannford'};
-  const cityNames=['Tulsa','Oologah','Catoosa','Claremore','Broken Arrow','Okmulgee','Henryetta','Jenks','Owasso','Bixby','Skiatook','Sapulpa','Muskogee','Pryor','Wagoner','Collinsville','Sand Springs','Mannford','Bristow','Depew','Glenpool','Beggs','Drumright','Cushing','Pawhuska','Hominy','Bartlesville','Vinita','Miami','Tahlequah','Stilwell','Sallisaw','Coweta','Verdigris','Inola','Chelsea','Chouteau','Adair','Locust Grove','Fort Gibson','Checotah','Eufaula'];
+  const cityNames=['Tulsa','Oologah','Catoosa','Claremore','Broken Arrow','Okmulgee','Henryetta','Jenks','Owasso','Bixby','Skiatook','Sapulpa','Muskogee','Pryor','Wagoner','Collinsville','Sand Springs','Mannford','Bristow','Depew','Glenpool','Beggs','Drumright','Cushing','Pawhuska','Hominy','Bartlesville','Vinita','Miami','Tahlequah','Stilwell','Sallisaw','Coweta','Verdigris','Inola','Chelsea','Chouteau','Adair','Locust Grove','Fort Gibson','Checotah','Eufaula','Sperry','Kellyville','Kiefer','Leonard','Mounds','Prue','Terlton','Wynona','Barnsdall','Avant'];
   const zipCity={'74101':'Tulsa','74102':'Tulsa','74103':'Tulsa','74104':'Tulsa','74105':'Tulsa','74106':'Tulsa','74107':'Tulsa','74108':'Tulsa','74110':'Tulsa','74112':'Tulsa','74114':'Tulsa','74115':'Tulsa','74116':'Tulsa','74117':'Tulsa','74119':'Tulsa','74120':'Tulsa','74126':'Tulsa','74127':'Tulsa','74128':'Tulsa','74129':'Tulsa','74130':'Tulsa','74131':'Tulsa','74132':'Tulsa','74133':'Tulsa','74134':'Tulsa','74135':'Tulsa','74136':'Tulsa','74137':'Tulsa','74141':'Tulsa','74145':'Tulsa','74146':'Tulsa','74011':'Broken Arrow','74012':'Broken Arrow','74013':'Broken Arrow','74014':'Broken Arrow','74055':'Owasso','74037':'Jenks','74008':'Bixby','74063':'Sand Springs','74066':'Sapulpa','74017':'Claremore','74018':'Claremore','74015':'Catoosa','74070':'Skiatook','74021':'Collinsville','74044':'Mannford','74053':'Oologah','74401':'Muskogee','74403':'Muskogee','74447':'Okmulgee','74437':'Henryetta','74010':'Bristow','74028':'Depew','74467':'Wagoner','74429':'Coweta','74033':'Glenpool','74003':'Bartlesville','74006':'Bartlesville','74056':'Pawhuska','74301':'Vinita','74023':'Cushing','74030':'Drumright','74361':'Pryor','74464':'Tahlequah','74421':'Beggs','74035':'Hominy'};
+
   function expandZip(z){if(!z)return'';z=String(z).trim().split('-')[0];if(z.length===5)return z;return'74'+z.padStart(3,'0');}
   function mkE(loc,zip,d,note,patient,clin,date){return{id:String(Date.now()+Math.random()),location:loc,zip,discipline:d,agency:ag,priority:urg?'urgent':p,note:note||'',patient:patient||'',status:'pending',clinician:clin||'',addedBy:userName||'',assignedBy:'',dateAdded:date||wd,weekDate:date||wd,qa:{}};}
   function cleanName(n){const m=n.match(/^([A-Z]+)\s*\(METRO\),\s*([A-Z]+)/i);if(m)return m[2][0].toUpperCase()+m[2].slice(1).toLowerCase()+' '+m[1][0].toUpperCase()+m[1].slice(1).toLowerCase();return n.trim();}
   function cleanPat(n){const m=n.match(/^([A-Z\-]+),\s*([A-Z]+)/i);if(m)return m[2][0].toUpperCase()+m[2].slice(1).toLowerCase()+' '+m[1][0].toUpperCase()+m[1].slice(1).toLowerCase();return n.trim();}
+  function resolveCity(raw){const u=raw.trim().toUpperCase();return abbrMap[u]||cityNames.find(c=>c.toLowerCase()===raw.trim().toLowerCase())||raw.trim();}
 
-  // Split comma-separated input
-  const rawLines=text.split('\n');const expandedLines=[];
-  rawLines.forEach(line=>{if(line.includes(',')&&!line.match(/^[A-Z]+\s*\(METRO\)/i)){line.split(',').forEach(part=>expandedLines.push(part.trim()));}else{expandedLines.push(line.trim());}});
-  const lines=expandedLines.filter(l=>l&&!/^evals needed$/i.test(l)&&!isIntroLine(l));
+  // Split comma-separated input into lines
+  const rawLines=text.split('\n');
+  const expandedLines=[];
+  rawLines.forEach(line=>{
+    if(line.includes(',')&&!line.match(/^[A-Z]+\s*\(METRO\)/i)){
+      line.split(',').forEach(part=>{if(part.trim())expandedLines.push(part.trim());});
+    }else{if(line.trim())expandedLines.push(line.trim());}
+  });
+  const lines=expandedLines.filter(l=>l&&!/^evals needed$/i.test(l));
 
+  // ── FORMAT A: BIOS structured blocks ──
   if(lines.some(l=>/^[A-Z]+\s*\(METRO\),\s*[A-Z]+/i.test(l))){
     let i=0;while(i<lines.length){
       if(/^[A-Z]+\s*\(METRO\),\s*[A-Z]+/i.test(lines[i])){
@@ -378,23 +393,58 @@ function parseText(text,ag,wd,p){
     }
     return out;
   }
+
+  // ── FORMAT B: Standard batch "City ZIP-DISCIPLINE" ──
   if(lines.some(l=>/[-\u2013]\s*(PT|OT|SLP|PTA|COTA)/i.test(l))){
-    lines.forEach(line=>{const m=line.match(/^(.+?)(?:\s+(\d{3,5}))?[-\u2013]\s*(PT|OT|SLP|PTA|COTA)(.*)$/i);if(m){const loc=abbrMap[m[1].trim().toUpperCase()]||m[1].trim();const note=(m[4]||'').replace(/^[-\u2013\s]+/,'').trim();out.push(mkE(loc,expandZip(m[2]||''),m[3].toUpperCase(),note,'','',wd));}});
+    lines.forEach(line=>{
+      const m=line.match(/^(.+?)(?:\s+(\d{3,5}))?[-\u2013]\s*(PT|OT|SLP|PTA|COTA)(.*)$/i);
+      if(m){const loc=abbrMap[m[1].trim().toUpperCase()]||m[1].trim();const note=(m[4]||'').replace(/^[-\u2013\s]+/,'').trim();out.push(mkE(loc,expandZip(m[2]||''),m[3].toUpperCase(),note,'','',wd));}
+    });
     if(out.length)return out;
   }
-  if(/\b(SOC|eval)\b/i.test(text)&&lines.length<=8){
+
+  // ── FORMAT C: "City Discipline VisitType Day" e.g. "Pryor Ortho eval Thursday, SS PT soc Friday" ──
+  const visitRe=/^(.+?)\s+(PT|OT|SLP|PTA|COTA|Ortho|ortho)\s+(eval|soc|re-?eval|visit)\b/i;
+  if(lines.some(l=>visitRe.test(l.trim()))){
+    lines.forEach(line=>{
+      const l=line.trim();
+      const m=l.match(/^(.+?)\s+(PT|OT|SLP|PTA|COTA|Ortho|ortho)\s+(eval|soc|re-?eval|visit)\s*(monday|tuesday|wednesday|thursday|friday|saturday|sunday|today|tomorrow)?/i);
+      if(m){
+        const rawLoc=m[1].replace(/^(i have a?|we have a?|there is a?|a )\s*/i,'').trim();
+        const loc=resolveCity(rawLoc);
+        const discRaw=m[2].toUpperCase();
+        const discipline=discRaw==='ORTHO'?'PT':(['PT','OT','SLP','PTA','COTA'].includes(discRaw)?discRaw:'PT');
+        const vt=m[3].toUpperCase();const day=m[4]||'';
+        const note=vt+(day?' \u2013 '+day.charAt(0).toUpperCase()+day.slice(1):'');
+        out.push(mkE(loc,'',discipline,note,'','',wd));
+      } else {
+        // Fallback: treat as plain city/zip
+        const fz=l.match(/^\d{3,5}$/)?expandZip(l):null;
+        if(fz){out.push(mkE(zipCity[fz]||'Tulsa',fz,disc(),'','','',wd));}
+        else{out.push(mkE(resolveCity(l),'',disc(),'','','',wd));}
+      }
+    });
+    return out;
+  }
+
+  // ── FORMAT D: SOC/patient prose (no commas) ──
+  if(/\b(SOC|eval)\b/i.test(text)&&lines.length<=8&&!text.includes(',')){
     const found=cityNames.filter(c=>new RegExp('\\b'+c+'\\b','i').test(text));
     const vt=/\bSOC\b/i.test(text)?'SOC':'Eval';
     const nm=(text.match(/\b([A-Z][a-z]{3,}(?:swamy|shan|kumar|patel|singh)?)\b/g)||[])[0]||'';
-    (found.length?found:['See note']).forEach(city=>out.push(mkE(city,'','PT',nm?nm+' \u2013 '+vt:vt,'','',wd)));
+    (found.length?found:['See note']).forEach(city=>out.push(mkE(city,'','PT',nm?nm+'\u2013'+vt:vt,'','',wd)));
     return out;
   }
+
+  // ── FORMAT E: Inline zip list ──
   const inlineZips=text.match(/\b\d{5}\b/g);
   const allZips=lines.every(l=>/^\d{3,5}$/.test(l.trim()));
   if(inlineZips&&inlineZips.length>1&&lines.length<=3&&allZips){
     inlineZips.forEach(zip=>{const fz=expandZip(zip);out.push(mkE(zipCity[fz]||'Tulsa',fz,disc(),'','','',wd));});
     return out;
   }
+
+  // ── FORMAT F: One item per line ──
   lines.forEach(line=>{
     const l=line.trim();if(!l)return;
     const isZip=/^\d{3,5}$/.test(l);
@@ -419,6 +469,7 @@ async function parseAdd(){
   const ag=document.getElementById('ag').value,wd=document.getElementById('wd').value;
   const items=parseText(text,ag,wd,pri);if(!items.length){flash('⚠️ Could not parse');return;}
   document.getElementById('parseBtn').disabled=true;
+  saving=true;
   evals=[...items,...evals];render();document.getElementById('rt').value='';
   setSyncStatus('syncing',`Saving ${items.length} evals...`);
   let saved=0;
@@ -427,9 +478,11 @@ async function parseAdd(){
     if(!error){saved++;}else{console.error('insert error:',error);}
     setSyncStatus('syncing',`Saving ${saved}/${items.length}...`);
   }
+  saving=false;
   document.getElementById('parseBtn').disabled=false;
   setSyncStatus('live',`Live · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
   flash(`✓ Added ${saved} eval${saved>1?'s':''} to shared board`);
+  await loadAll();
 }
 
 async function addOne(){
@@ -490,9 +543,10 @@ function render(){
         <select class="csel" onchange="asgn('${e.id}',this.value)">
           <option value="">— Assign Clinician —</option>${opts}
         </select>
-        ${e.status!=='complete'
-          ?`<button class="cbtn done" onclick="mkDone('${e.id}')">✓ Done</button>`
-          :`<button class="cbtn del" onclick="rmEval('${e.id}')">✕ Remove</button>`}
+        ${e.status==='complete'
+          ?`<button class="cbtn del" onclick="rmEval('${e.id}')">✕ Delete</button>`
+          :`<button class="cbtn done" onclick="mkDone('${e.id}')">✓ Done</button>
+            <button class="cbtn del" onclick="rmEval('${e.id}')">✕ Cancel</button>`}
       </div>
     </div>`;
   }).join('');
