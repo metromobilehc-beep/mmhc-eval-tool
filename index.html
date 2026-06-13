@@ -803,14 +803,6 @@ function renderQA(){
 
 
 }
-(){
-  if(!confirm('Clear completed QA history? This will delete all completed evals from the board.')) return;
-  const ids=evals.filter(e=>e.status==='complete').map(e=>e.id);
-  evals=evals.filter(e=>e.status!=='complete');
-  render(); renderQA();
-  if(ids.length) await sb.from('evals').delete().in('id',ids);
-  flash('✓ QA history cleared');
-}
 
 async function toggleQA(id,field,val){
   const e=evals.find(e=>e.id===id);if(!e)return;
