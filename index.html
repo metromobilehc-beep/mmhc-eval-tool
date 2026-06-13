@@ -244,13 +244,19 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
         <button class="btn btn-o" onclick="addAgency()">+ Add Agency</button>
       </div>
       <div class="hr"></div>
-      <div><div class="lbl" style="margin-bottom:6px">Clinician Roster</div>
+      <div>
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
+          <div class="lbl" style="margin-bottom:0">Clinician Roster</div>
+          <button onclick="exportClinicians()" style="font-size:10px;color:var(--accent);background:none;border:1px solid rgba(0,212,170,0.3);border-radius:4px;padding:3px 8px;cursor:pointer;font-family:inherit;white-space:nowrap;">📥 Export</button>
+        </div>
         <div id="clinList"></div>
         <div style="display:flex;gap:6px;margin-top:6px">
           <input id="nn" placeholder="Name" style="flex:1">
           <select id="nr" style="width:80px"><option>PT</option><option>PTA</option><option>OT</option><option>COTA</option><option>SLP</option></select>
         </div>
-        <button class="btn btn-o" style="margin-top:6px" onclick="addClin()">+ Add Clinician</button>
+        <input id="nphone" placeholder="Phone (optional)" style="margin-top:5px">
+        <input id="nemail" placeholder="Email (optional)" style="margin-top:5px;margin-bottom:8px">
+        <button class="btn btn-o" onclick="addClin()">+ Add Clinician</button>
       </div>
       <div class="hr"></div>
       <button class="btn btn-o" onclick="clrDone()">🗑 Clear Completed Evals</button>
@@ -458,7 +464,7 @@ async function loadAll() {
       sb.from('agencies').select('*').order('name')
     ]);
     if (evR.data) evals = evR.data.map(dbToEval);
-    if (clR.data && clR.data.length) clins = clR.data.map(r=>({name:r.name,role:r.role}));
+    if (clR.data && clR.data.length) clins = clR.data.map(r=>({name:r.name,role:r.role,phone:r.phone||'',email:r.email||''}));
     if (agR.data && agR.data.length) agencies = agR.data.map(r=>r.name);
     render(); renderClins(); renderAgencies(); renderQA(); renderCapacity();
     setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
@@ -843,11 +849,32 @@ async function toggleQA(id,field,val){
 // ── CLINICIANS ──
 function renderClins(){
   document.getElementById('clinList').innerHTML=clins.map(c=>`
-    <div class="cr"><div style="display:flex;align-items:center"><div class="av">${c.name.split(' ').map(w=>w[0]).join('').substring(0,2)}</div>
-    <div><div style="font-size:12px;font-weight:600">${c.name}</div><div style="font-size:10px;color:var(--muted)">${c.role}</div></div></div>
-    <button class="xbtn" onclick="rmClin('${c.name}')">×</button></div>`).join('');
+    <div class="cr" style="flex-direction:column;align-items:stretch;gap:6px;">
+      <div style="display:flex;align-items:center;justify-content:space-between;">
+        <div style="display:flex;align-items:center;">
+          <div class="av">${c.name.split(' ').map(w=>w[0]).join('').substring(0,2)}</div>
+          <div>
+            <div style="font-size:12px;font-weight:600">${c.name}</div>
+            <div style="font-size:10px;color:var(--muted)">${c.role}</div>
+          </div>
+        </div>
+        <button class="xbtn" onclick="rmClin('${c.name}')">×</button>
+      </div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;padding-left:35px;">
+        ${c.phone?`<a href="tel:${c.phone}" style="font-size:11px;color:var(--accent);text-decoration:none;">📞 ${c.phone}</a>`:''}
+        ${c.email?`<a href="mailto:${c.email}" style="font-size:11px;color:var(--accent);text-decoration:none;">✉️ ${c.email}</a>`:''}
+        ${!c.phone&&!c.email?`<span style="font-size:10px;color:var(--muted);font-style:italic;">No contact info</span>`:''}
+      </div>
+    </div>`).join('');
 }
-async function addClin(){const n=document.getElementById('nn').value.trim();if(!n)return;const c={name:n,role:document.getElementById('nr').value};clins.push(c);renderClins();render();document.getElementById('nn').value='';await sb.from('clinicians').insert({name:c.name,role:c.role});flash('✓ Clinician added');}
+async function addClin(){
+  const n=document.getElementById('nn').value.trim();if(!n)return;
+  const c={name:n,role:document.getElementById('nr').value,phone:document.getElementById('nphone').value.trim(),email:document.getElementById('nemail').value.trim()};
+  clins.push(c);renderClins();render();
+  document.getElementById('nn').value='';document.getElementById('nphone').value='';document.getElementById('nemail').value='';
+  await sb.from('clinicians').insert({name:c.name,role:c.role,phone:c.phone||'',email:c.email||''});
+  flash('✓ Clinician added');
+}
 async function rmClin(name){clins=clins.filter(c=>c.name!==name);renderClins();render();await sb.from('clinicians').delete().eq('name',name);}
 
 // ── AGENCIES ──
@@ -865,6 +892,19 @@ async function rmAgency(name){agencies=agencies.filter(a=>a!==name);renderAgenci
 // ── TEMPLATES ──
 function ct(el){navigator.clipboard.writeText(el.querySelector('.tpl-b').textContent);flash('Copied ✓');}
 function cc(){navigator.clipboard.writeText(document.getElementById('cu').value);flash('Copied ✓');}
+function exportClinicians(){
+  const headers=['Name','Role','Phone','Email'];
+  const rows=clins.map(c=>[c.name,c.role,c.phone||'',c.email||'']);
+  const csv=[headers,...rows].map(r=>r.map(v=>`"${v}"`).join(',')).join('\n');
+  const blob=new Blob([csv],{type:'text/csv'});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url;a.download='MMHC_Clinician_Roster.csv';
+  document.body.appendChild(a);a.click();
+  document.body.removeChild(a);URL.revokeObjectURL(url);
+  flash('✓ Roster exported');
+}
+
 function flash(msg){const el=document.getElementById('fl');el.textContent=msg;el.classList.add('on');setTimeout(()=>el.classList.remove('on'),2200);}
 </script>
 </body>
