@@ -152,7 +152,16 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
       <div><div class="lbl">Paste Referral Text</div>
         <textarea id="rt" placeholder="Paste any format:&#10;&#10;Henryetta&#10;74107, Bristow, Ba 011&#10;&#10;or: Catoosa-PT&#10;Tulsa 74105-PT&#10;&#10;or: BIOS block format"></textarea>
       </div>
-      <div><div class="lbl">Default Discipline</div><select id="defDisc"><option>PT</option><option>OT</option><option>SLP</option><option>PTA</option><option>COTA</option></select></div>
+      <div>
+        <div class="lbl" style="margin-bottom:4px">Default Discipline <span style="font-size:9px;color:var(--muted);font-weight:400;text-transform:none;">(used when not in text)</span></div>
+        <div class="pri-row">
+          <button class="pb pn" id="dPT" onclick="setDisc('PT')">PT</button>
+          <button class="pb" id="dPTA" onclick="setDisc('PTA')">PTA</button>
+          <button class="pb" id="dOT" onclick="setDisc('OT')">OT</button>
+          <button class="pb" id="dCOTA" onclick="setDisc('COTA')">COTA</button>
+          <button class="pb" id="dSLP" onclick="setDisc('SLP')">SLP</button>
+        </div>
+      </div>
       <div><div class="lbl">Priority</div>
         <div class="pri-row">
           <button class="pb pn" id="pbN" onclick="sp('normal')">Normal</button>
@@ -174,7 +183,13 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
         <input id="sz" placeholder="ZIP (optional)" style="margin-bottom:5px">
         <input id="spt" placeholder="Patient name (optional)" style="margin-bottom:5px">
         <input id="sn" placeholder="Notes" style="margin-bottom:5px">
-        <select id="sd" style="margin-bottom:8px"><option>PT</option><option>OT</option><option>SLP</option><option>PTA</option><option>COTA</option></select>
+        <div class="pri-row" style="margin-bottom:8px">
+          <button class="pb" id="sdPT" onclick="setSingleDisc('PT')" style="font-size:10px;">PT</button>
+          <button class="pb" id="sdPTA" onclick="setSingleDisc('PTA')" style="font-size:10px;">PTA</button>
+          <button class="pb" id="sdOT" onclick="setSingleDisc('OT')" style="font-size:10px;">OT</button>
+          <button class="pb" id="sdCOTA" onclick="setSingleDisc('COTA')" style="font-size:10px;">COTA</button>
+          <button class="pb" id="sdSLP" onclick="setSingleDisc('SLP')" style="font-size:10px;">SLP</button>
+        </div>
         <button class="btn btn-o" onclick="addOne()">+ Add Eval</button>
       </div>
     </div>
@@ -446,6 +461,8 @@ function getSuggestedClinician(location, zip) {
 window.onload = async () => {
   document.getElementById('wd').value = new Date().toISOString().split('T')[0];
   updateWk();
+  setDisc('PT');
+  setSingleDisc('PT');
   if (userName) document.getElementById('userName').value = userName;
   renderAgencies(); renderClins(); render();
   await loadAll();
@@ -557,13 +574,35 @@ async function clrHistory(){
 function sp(p){pri=p;document.getElementById('pbN').className='pb'+(p==='normal'?' pn':'');document.getElementById('pbA').className='pb'+(p==='asap'?' pa':'');document.getElementById('pbU').className='pb'+(p==='urgent'?' pu':'');}
 function setThisWeek(){document.getElementById('wd').value=new Date().toISOString().split('T')[0];updateWk();}
 function updateWk(){const d=new Date(document.getElementById('wd').value+'T12:00:00');const s=new Date(d);s.setDate(d.getDate()-d.getDay());const e=new Date(s);e.setDate(s.getDate()+6);const f=x=>x.toLocaleDateString('en-US',{month:'short',day:'numeric'});document.getElementById('wk').textContent=`Week of ${f(s)} – ${f(e)}`;}
-function disc(){return document.getElementById('defDisc').value||'PT';}
+let defaultDisc = 'PT';
+function disc(){return defaultDisc;}
+function setDisc(d){
+  defaultDisc=d;
+  ['PT','PTA','OT','COTA','SLP'].forEach(x=>{
+    const btn=document.getElementById('d'+x);
+    if(btn) btn.className='pb'+(x===d?' pn':'');
+  });
+}
+let singleDisc='PT';
+function setSingleDisc(d){
+  singleDisc=d;
+  ['PT','PTA','OT','COTA','SLP'].forEach(x=>{
+    const btn=document.getElementById('sd'+x);
+    if(btn) btn.className='pb'+(x===d?' pn':'');
+  });
+}
 
 // ── PARSE ──
-function isIntroLine(l){const w=l.trim().split(/\s+/);if(w.length<=2)return false;
+function isIntroLine(l){
+  const t=l.trim();
+  // Filter sender lines: "From amy", "Thanks, Amy", "- Amy"
+  if(/^(from|thanks|thank you|sent by|regards|sincerely)[\s,\-]+\w/i.test(t)) return false; // actually keep filtering these
+  if(/^from\s+\w+$/i.test(t)) return true;
+  if(/^(thanks|thank you)[,.]?\s*\w*$/i.test(t)) return true;
+  const w=t.split(/\s+/);if(w.length<=2)return false;
   // Don't filter lines that contain city names or discipline codes
-  if(/\b(PT|OT|SLP|PTA|COTA|SOC|eval|Ortho|ortho)\b/i.test(l)) return false;
-  return/\b(do you|can you|want|would|could|please|any of|these|next week|this week|available|hello|hey |thanks|thank you|let me know|please see|see below|following|attached|regarding|fyi|heads up|wanted|checking|reaching out|hope|good morning|good afternoon)\b/i.test(l)&&w.length>5;}
+  if(/\b(PT|OT|SLP|PTA|COTA|SOC|eval|Ortho|ortho|evals)\b/i.test(t)) return false;
+  return/\b(do you|can you|want|would|could|please|any of|these|next week|this week|available|hello|hey |thanks|thank you|let me know|please see|see below|following|attached|regarding|fyi|heads up|wanted|checking|reaching out|hope|good morning|good afternoon)\b/i.test(t)&&w.length>5;}
 
 function parseText(text,ag,wd,p){
   const out=[];const urg=/asap|urgent/i.test(text);
@@ -578,14 +617,25 @@ function parseText(text,ag,wd,p){
   function resolveCity(raw){const u=raw.trim().toUpperCase();return abbrMap[u]||cityNames.find(c=>c.toLowerCase()===raw.trim().toLowerCase())||raw.trim();}
 
   // Split comma-separated input into lines
+  // But don't split when comma precedes a dash (e.g. "PT eval,-Coweta")
   const rawLines=text.split('\n');
   const expandedLines=[];
   rawLines.forEach(line=>{
-    if(line.includes(',')&&!line.match(/^[A-Z]+\s*\(METRO\)/i)){
-      line.split(',').forEach(part=>{if(part.trim())expandedLines.push(part.trim());});
-    }else{if(line.trim())expandedLines.push(line.trim());}
+    const l=line.trim();
+    if(!l) return;
+    // Don't split BIOS blocks
+    if(l.match(/^[A-Z]+\s*\(METRO\)/i)){expandedLines.push(l);return;}
+    // Don't split if comma is followed by dash (e.g. "PT eval,-Coweta")
+    // Don't split if it looks like a single discipline-city line
+    const hasDashDisc = /,\s*[-\u2013]/.test(l) || /^(PT|OT|SLP|PTA|COTA)[/\\]?(PT|OT)?(?:\s+evals?)?[,\s]*[-\u2013]/.test(l);
+    if(l.includes(',') && !hasDashDisc){
+      l.split(',').forEach(part=>{if(part.trim())expandedLines.push(part.trim());});
+    } else {
+      // Rejoin lines that were split on comma-dash by merging back
+      expandedLines.push(l.replace(/,\s*-/g,'-'));
+    }
   });
-  const lines=expandedLines.filter(l=>l&&!/^evals needed$/i.test(l));
+  const lines=expandedLines.filter(l=>l&&!/^evals needed$/i.test(l)&&!isIntroLine(l));
 
   // ── FORMAT A: BIOS structured blocks ──
   if(lines.some(l=>/^[A-Z]+\s*\(METRO\),\s*[A-Z]+/i.test(l))){
@@ -608,11 +658,50 @@ function parseText(text,ag,wd,p){
     return out;
   }
 
-  // ── FORMAT B: Standard batch "City ZIP-DISCIPLINE" ──
-  if(lines.some(l=>/[-\u2013]\s*(PT|OT|SLP|PTA|COTA)/i.test(l))){
+  // ── FORMAT B: Discipline-City or City-Discipline batch ──
+  const hasDash = lines.some(l=>/-/.test(l) && /\b(PT|OT|SLP|PTA|COTA|SOC|eval|evals)\b/i.test(l));
+  if(hasDash){
     lines.forEach(line=>{
-      const m=line.match(/^(.+?)(?:\s+(\d{3,5}))?[-\u2013]\s*(PT|OT|SLP|PTA|COTA)(.*)$/i);
-      if(m){const loc=abbrMap[m[1].trim().toUpperCase()]||m[1].trim();const note=(m[4]||'').replace(/^[-\u2013\s]+/,'').trim();out.push(mkE(loc,expandZip(m[2]||''),m[3].toUpperCase(),note,'','',wd));}
+      const l=line.trim().replace(/,\s*-/,'-'); // normalize "PT eval,-City" to "PT eval-City"
+      
+      // Pattern: "DISCIPLINE[-/DISCIPLINE2] [eval[s]]-City [ZIP] [X2]"
+      // e.g. "PT-Hominy", "OT eval-Tulsa 74127", "PT/OT evals-tulsa 74119", "PT eval,-Coweta"
+      const m1=l.match(/^(PT|OT|SLP|PTA|COTA)(?:[/\\](PT|OT|SLP|PTA|COTA))?(?:\s+evals?)?[-\u2013,]\s*(.+)$/i);
+      if(m1){
+        const disc1=m1[1].toUpperCase();
+        const disc2=m1[2]?m1[2].toUpperCase():null;
+        const rest=m1[3].trim();
+        const zm=rest.match(/(\d{5})/);
+        const zip=zm?zm[1]:'';
+        let city=rest.replace(/\d{5}/,'').replace(/[Xx]2/,'').trim().replace(/\b\w/g,x=>x.toUpperCase());
+        city=abbrMap[city.toUpperCase()]||city;
+        const x2=/[Xx]2/.test(rest);
+        out.push(mkE(city,zip,disc1,'','','',wd));
+        // If X2, add second eval
+        if(x2) out.push(mkE(city,zip,disc1,'','','',wd));
+        // If PT/OT, add second discipline
+        if(disc2) out.push(mkE(city,zip,disc2,'','','',wd));
+        return;
+      }
+      
+      // Pattern: "SOC Day-City ZIP" e.g. "Soc Wednesday-Tulsa 74135"
+      const m2=l.match(/^(SOC|eval)\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)?[-\u2013]\s*(.+)$/i);
+      if(m2){
+        const vt=m2[1].toUpperCase();
+        const day=m2[2]||'';
+        const rest=m2[3].trim();
+        const zm=rest.match(/(\d{5})/);
+        const zip=zm?zm[1]:'';
+        let city=rest.replace(/\d{5}/,'').trim().replace(/\b\w/g,x=>x.toUpperCase());
+        city=abbrMap[city.toUpperCase()]||city;
+        const note=vt+(day?' - '+day.charAt(0).toUpperCase()+day.slice(1):'');
+        out.push(mkE(city,zip,'PT',note,'','',wd));
+        return;
+      }
+
+      // Fallback: original "City ZIP-DISCIPLINE" pattern
+      const m3=line.match(/^(.+?)(?:\s+(\d{3,5}))?[-\u2013]\s*(PT|OT|SLP|PTA|COTA)(.*)$/i);
+      if(m3){const loc=abbrMap[m3[1].trim().toUpperCase()]||m3[1].trim();const note=(m3[4]||'').replace(/^[-\u2013\s]+/,'').trim();out.push(mkE(loc,expandZip(m3[2]||''),m3[3].toUpperCase(),note,'','',wd));}
     });
     if(out.length)return out;
   }
@@ -702,7 +791,7 @@ async function parseAdd(){
 async function addOne(){
   const loc=document.getElementById('sl').value.trim();if(!loc)return;
   const wd=document.getElementById('wd').value;
-  const ev={id:String(Date.now()+Math.random()),location:loc,zip:document.getElementById('sz').value.trim(),discipline:document.getElementById('sd').value,agency:document.getElementById('ag').value,priority:pri,note:document.getElementById('sn').value.trim(),patient:document.getElementById('spt').value.trim(),status:'pending',clinician:'',addedBy:userName||'',assignedBy:'',dateAdded:wd,weekDate:wd,qa:{}};
+  const ev={id:String(Date.now()+Math.random()),location:loc,zip:document.getElementById('sz').value.trim(),discipline:singleDisc,agency:document.getElementById('ag').value,priority:pri,note:document.getElementById('sn').value.trim(),patient:document.getElementById('spt').value.trim(),status:'pending',clinician:'',addedBy:userName||'',assignedBy:'',dateAdded:wd,weekDate:wd,qa:{}};
   evals=[ev,...evals];render();['sl','sz','sn','spt'].forEach(id=>document.getElementById(id).value='');
   await sb.from('evals').insert(evalToDB(ev));
   flash('✓ Eval added to shared board');
