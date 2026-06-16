@@ -429,33 +429,42 @@ function getSuggestedClinician(location, zip) {
   const locLower = location.toLowerCase().trim();
   const zipClean = (zip||'').trim();
 
-  // Score each available clinician by match quality
   let best = null, bestScore = 0;
 
   for (const c of available) {
     let score = 0;
-    const regions = c.region.toLowerCase();
-    // Split region into individual entries (comma or slash separated)
-    const regionParts = regions.split(/[,\/]/).map(r=>r.trim()).filter(Boolean);
+    // Split region into individual tokens
+    const regionParts = c.region.toLowerCase().split(/[,\/\s]+/).map(r=>r.trim()).filter(r=>r.length>1);
+    const regionFull = c.region.toLowerCase();
 
-    for (const part of regionParts) {
-      // Exact zip match — strongest signal
-      if (zipClean && part === zipClean) { score = 100; break; }
-      // Exact city match
-      if (part === locLower) { score = 90; break; }
-      // City name contained in region part
-      if (locLower.length > 3 && part.includes(locLower)) { score = Math.max(score, 70); }
-      // Zip prefix match (first 3 digits) — only if zip provided
-      if (zipClean.length === 5 && part.length >= 3 && zipClean.startsWith(part.substring(0,3)) && /^\d/.test(part)) {
-        score = Math.max(score, 50);
+    // Exact zip match — only strongest signal
+    if (zipClean && regionParts.includes(zipClean)) { score = 100; }
+    // Zip prefix match e.g. "74014" matches "74011-74019" type entry
+    else if (zipClean && zipClean.length===5) {
+      const zipEntry = regionParts.find(p=>/^\d{5}$/.test(p) && p.substring(0,3)===zipClean.substring(0,3));
+      if (zipEntry) score = Math.max(score, 60);
+    }
+
+    // City match — only if zip doesn't narrow it down already
+    if (score < 100) {
+      // Exact city match in region (as whole word, not partial)
+      const cityRe = new RegExp('\\b' + locLower.replace(/\s+/g,'\\s+') + '\\b');
+      if (cityRe.test(regionFull)) {
+        // If eval has a zip but territory only has city name (no zip), lower confidence
+        // This prevents "Tulsa" territory matching specific Tulsa zip evals
+        if (zipClean && !/\d{5}/.test(regionFull)) {
+          score = Math.max(score, 30); // low confidence — city only, no zip specificity
+        } else {
+          score = Math.max(score, 80);
+        }
       }
     }
 
     if (score > bestScore) { bestScore = score; best = c; }
   }
 
-  // Only suggest if there's a real match (score > 0) — no fallback to random
-  return bestScore > 0 ? best : null;
+  // Only suggest if confidence is reasonable (>= 60 for zip match, skip low-confidence city-only)
+  return bestScore >= 60 ? best : null;
 }
 
 window.onload = async () => {
