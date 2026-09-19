@@ -302,8 +302,8 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 
 <script>
 // ── SUPABASE ──
-const SUPABASE_URL = 'https://zxserlkhwkfoqiepurdr.supabase.co';
-const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inp4c2VybGtod2tmb3FpZXB1cmRyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0NDM1NDIsImV4cCI6MjA5NjAxOTU0Mn0.cA9LJSn5t4sIbIemdQGQsdwtQFwb-6Q9xIZi48UYq34';
+const SUPABASE_URL = 'https://pgprlrcbjmcivmvdethv.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBncHJscmNiam1jaXZtdmRldGh2Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODkwMDIwNDMsImV4cCI6MjEwNDU3ODA0M30.Ms_ZBQGMR6TeokjUCsrfZp8-_9R2UC1ggB8bvcec_wQ';
 const sb = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 // ── STATE ──
@@ -610,7 +610,7 @@ function isIntroLine(l){
   if(/^(thanks|thank you)[,.]?\s*\w*$/i.test(t)) return true;
   const w=t.split(/\s+/);if(w.length<=2)return false;
   // Don't filter lines that contain city names or discipline codes
-  if(/\b(PT|OT|SLP|PTA|COTA|SOC|eval|Ortho|ortho|evals)\b/i.test(t)) return false;
+  if(/\b(PT|OT|SLP|PTA|COTA|SOC|eval|evals)\b/i.test(t)) return false;
   return/\b(do you|can you|want|would|could|please|any of|these|next week|this week|available|hello|hey |thanks|thank you|let me know|please see|see below|following|attached|regarding|fyi|heads up|wanted|checking|reaching out|hope|good morning|good afternoon)\b/i.test(t)&&w.length>5;}
 
 function parseText(text,ag,wd,p){
