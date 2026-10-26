@@ -89,6 +89,19 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 .cpat{font-size:12px;font-weight:600;color:#93c5fd;}
 .cmeta{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;}
 .cdate{font-size:10px;color:var(--muted);font-family:monospace;}
+.auth-gate{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;}
+.auth-box{width:100%;max-width:340px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;display:flex;flex-direction:column;gap:10px;text-align:center;}
+.auth-box input{width:100%;box-sizing:border-box;}
+.auth-title{font-size:16px;font-weight:700;}
+.auth-sub{font-size:12px;color:var(--muted);margin-bottom:4px;}
+.auth-err{font-size:12px;color:var(--red);min-height:16px;}
+.auth-foot{font-size:11px;color:var(--muted);}
+.staff-row{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;}
+.stuckchip{background:rgba(239,68,68,.15);color:#f87171;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;}
+.stuck-card{background:var(--bg);border:1px solid rgba(239,68,68,.35);border-left:3px solid #f87171;border-radius:8px;padding:10px;margin-bottom:8px;}
+.stuck-r{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:#f87171;margin-top:4px;}
+.vis-row{display:flex;align-items:center;gap:6px;margin:4px 0;font-size:11px;color:var(--muted);}
+.vis-row input{font-size:11px;padding:4px 6px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);font-family:inherit;outline:none;}
 .agebadge{font-size:10px;font-family:monospace;padding:2px 7px;border-radius:4px;}
 .af{background:rgba(0,212,170,.1);color:var(--accent);}
 .aa{background:rgba(245,158,11,.15);color:var(--pending);}
@@ -119,6 +132,18 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 </style>
 </head>
 <body>
+<div id="authGate" class="auth-gate">
+  <div class="auth-box">
+    <div class="mark" style="margin:0 auto 4px">M²</div>
+    <div class="auth-title">Metro Eval Workflow</div>
+    <div class="auth-sub">Sign in with your Metro login</div>
+    <input id="authEmail" type="email" placeholder="Email" autocomplete="username">
+    <input id="authPw" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doSignIn()">
+    <div id="authErr" class="auth-err"></div>
+    <button class="btn btn-g" id="authBtn" onclick="doSignIn()">Sign in</button>
+    <div class="auth-foot">Forgot your password? Ask an admin to reset it.</div>
+  </div>
+</div>
 <header>
   <div class="logo">
     <div class="mark">M²</div>
@@ -133,6 +158,7 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
     <div class="stat"><div class="stat-n" id="sP" style="color:var(--pending)">0</div><div class="stat-l">Pending</div></div>
     <div class="stat"><div class="stat-n" id="sA" style="color:var(--blue)">0</div><div class="stat-l">Assigned</div></div>
     <div class="stat"><div class="stat-n" id="sC" style="color:var(--accent)">0</div><div class="stat-l">Done</div></div>
+    <div class="stat"><div class="stat-n" id="sS" style="color:#f87171">0</div><div class="stat-l">Stuck</div></div>
   </div>
 </header>
 
@@ -140,6 +166,7 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
   <div class="sidebar">
     <div class="tabs">
       <button class="tab on" onclick="sw('paste',this)">📋 Paste</button>
+      <button class="tab" onclick="sw('stuck',this)">🚨 Stuck <span id="stuckN"></span></button>
       <button class="tab" onclick="sw('tpl',this)">💬 Templates</button>
       <button class="tab" onclick="sw('qa',this)">✅ QA</button>
       <button class="tab" onclick="sw('cap',this)">👥 Capacity</button>
@@ -181,7 +208,7 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
       <div><div class="lbl">Add Single Eval</div>
         <input id="sl" placeholder="Location / City" style="margin-bottom:5px">
         <input id="sz" placeholder="ZIP (optional)" style="margin-bottom:5px">
-        <input id="spt" placeholder="Patient name (optional)" style="margin-bottom:5px">
+        <input id="spt" placeholder="Patient initials / ID (optional)" style="margin-bottom:5px">
         <input id="sn" placeholder="Notes" style="margin-bottom:5px">
         <div class="pri-row" style="margin-bottom:8px">
           <button class="pb" id="sdPT" onclick="setSingleDisc('PT')" style="font-size:10px;">PT</button>
@@ -233,10 +260,16 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
       <button class="btn btn-o" onclick="addCapClin()">+ Add</button>
     </div>
 
+    <div class="panel hidden" id="tp-stuck">
+      <div class="lbl" style="margin-bottom:0">Stuck Evals</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5">Evals that have sat too long at a step, worst first. Fix the step on the board or QA tab and it drops off this list.</div>
+      <div id="stuckList"><div class="qa-empty">Nothing stuck.</div></div>
+    </div>
+
     <div class="panel hidden" id="tp-hist">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
         <div class="lbl" style="margin-bottom:0">Completed Evals</div>
-        <button onclick="clrHistory()" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:3px 8px;cursor:pointer;font-family:inherit;">Clear All</button>
+        <button class="admin-only hidden" onclick="clrHistory()" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:3px 8px;cursor:pointer;font-family:inherit;">Clear All</button>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">All completed evals with QA status. Clear when ready to archive.</div>
       <div id="histList"><div class="qa-empty">No completed evals yet.</div></div>
@@ -244,9 +277,24 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 
     <div class="panel hidden" id="tp-set">
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-        <div style="font-size:12px;font-weight:600;color:#fbbf24;margin-bottom:4px;">👤 Your Name</div>
-        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">Set your name so others can see who added or assigned evals.</div>
-        <input id="userName" placeholder="e.g. Stephen, Evan, Kym..." style="margin-bottom:6px;" onchange="saveUserName()">
+        <div style="font-size:12px;font-weight:600;color:#fbbf24;margin-bottom:6px;">🔐 Your Login</div>
+        <div id="acctInfo" style="font-size:12px;line-height:1.5;margin-bottom:8px;"></div>
+        <input id="pwNew" type="password" placeholder="New password (10+ characters)" autocomplete="new-password" style="margin-bottom:5px;">
+        <input id="pwNew2" type="password" placeholder="Confirm new password" autocomplete="new-password" style="margin-bottom:6px;">
+        <div id="pwStatus" style="font-size:11px;min-height:14px;margin-bottom:6px;"></div>
+        <button class="btn btn-o" onclick="changeMyPassword()">Change password</button>
+        <button class="btn btn-r" style="margin-top:4px" onclick="doSignOut()">Sign out</button>
+      </div>
+      <div id="adminBox" class="hidden" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <div style="font-size:12px;font-weight:600;color:#fbbf24;margin-bottom:4px;">👥 Team Logins</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">One Metro login works here and in the quote tool. A new or reset login gets a temporary password, shown once.</div>
+        <div id="staffList"></div>
+        <input id="stName" placeholder="Full name" style="margin-top:8px;margin-bottom:5px;">
+        <input id="stEmail" type="email" placeholder="Email" style="margin-bottom:5px;">
+        <input id="stPhone" placeholder="Phone (optional)" style="margin-bottom:6px;">
+        <div id="stStatus" style="font-size:11px;min-height:14px;margin-bottom:6px;"></div>
+        <button class="btn btn-o" onclick="createStaff()">+ Create login</button>
+        <div id="stCreds" class="hidden" style="margin-top:8px;padding:10px;border:1px solid var(--accent);border-radius:8px;font-size:12px;line-height:1.6;"></div>
       </div>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
         <div style="font-size:12px;font-weight:600;color:#fbbf24;margin-bottom:4px;">📊 Live Shared Board</div>
@@ -274,8 +322,8 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
         <button class="btn btn-o" onclick="addClin()">+ Add Clinician</button>
       </div>
       <div class="hr"></div>
-      <button class="btn btn-o" onclick="clrDone()">🗑 Clear Completed Evals</button>
-      <button class="btn btn-r" style="margin-top:4px" onclick="clrAll()">⚠️ Clear All Evals</button>
+      <button class="btn btn-o admin-only hidden" onclick="clrDone()">🗑 Clear Completed Evals</button>
+      <button class="btn btn-r admin-only hidden" style="margin-top:4px" onclick="clrAll()">⚠️ Clear All Evals</button>
     </div>
   </div>
 
@@ -472,11 +520,16 @@ window.onload = async () => {
   updateWk();
   setDisc('PT');
   setSingleDisc('PT');
-  if (userName) document.getElementById('userName').value = userName;
   renderAgencies(); renderClins(); render();
+  await initAuth();
+};
+
+let rtStarted=false;
+async function startApp(){
   await loadAll();
   await loadCapacity();
-  // Realtime subscription
+  if(rtStarted)return;
+  rtStarted=true;
   sb.channel('evals-changes')
     .on('postgres_changes', {event:'*', schema:'public', table:'evals'}, () => {
       if (!saving) loadAll();
@@ -488,7 +541,7 @@ window.onload = async () => {
       loadCapacity();
     })
     .subscribe();
-};
+}
 
 function saveUserName() {
   userName = document.getElementById('userName').value.trim();
@@ -513,7 +566,7 @@ async function loadAll() {
     if (evR.data) evals = evR.data.map(dbToEval);
     if (clR.data && clR.data.length) clins = clR.data.map(r=>({name:r.name,role:r.role,phone:r.phone||'',email:r.email||''}));
     if (agR.data && agR.data.length) agencies = agR.data.map(r=>r.name);
-    render(); renderClins(); renderAgencies(); renderQA(); renderCapacity();
+    render(); renderClins(); renderAgencies(); renderQA(); renderCapacity(); renderStuck();
     setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
   } catch(e) {
     console.error('loadAll:', e);
@@ -546,7 +599,7 @@ function evalToDB(e) {
 }
 
 // ── UI ──
-function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='qa')renderQA();if(name==='hist')renderHistory();if(name==='cap')renderCapacity();}
+function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='qa')renderQA();if(name==='stuck')renderStuck();if(name==='hist')renderHistory();if(name==='cap')renderCapacity();}
 
 function renderHistory(){
   const list=document.getElementById('histList');if(!list)return;
@@ -806,6 +859,194 @@ async function addOne(){
   flash('✓ Eval added to shared board');
 }
 
+// ── AUTH (same login + profiles table + staff-admin function as the quote tool) ──
+const METRO_COMPANY_ID='b00ca9bc-d669-492d-8ad5-2d2783321ade';
+let me=null;
+function esc(x){return String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
+function authMsg(t){document.getElementById('authErr').textContent=t||'';}
+function showGate(){document.getElementById('authGate').classList.remove('hidden');}
+function hideGate(){document.getElementById('authGate').classList.add('hidden');}
+
+async function initAuth(){
+  sb.auth.onAuthStateChange((ev)=>{if(ev==='SIGNED_OUT'&&me)location.reload();});
+  const {data}=await sb.auth.getSession();
+  if(data&&data.session)await afterLogin(data.session.user);else showGate();
+}
+async function doSignIn(){
+  const email=document.getElementById('authEmail').value.trim();
+  const pw=document.getElementById('authPw').value;
+  const btn=document.getElementById('authBtn');
+  authMsg('');
+  if(!email||!pw){authMsg('Enter your email and password.');return;}
+  btn.disabled=true;
+  const {data,error}=await sb.auth.signInWithPassword({email,password:pw});
+  btn.disabled=false;
+  if(error){authMsg('Invalid email or password.');return;}
+  document.getElementById('authPw').value='';
+  await afterLogin(data.user);
+}
+async function afterLogin(user){
+  const {data:p,error}=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();
+  const deny=async(msg)=>{authMsg(msg);await sb.auth.signOut();showGate();};
+  if(error||!p){await deny('No staff profile found for this login.');return;}
+  if(String(p.company_id)!==METRO_COMPANY_ID){await deny("This login isn't set up for Metro.");return;}
+  if(p.active===false){await deny('This account is inactive. Contact an admin.');return;}
+  me=p;userName=p.full_name||user.email||'';
+  hideGate();renderAccount();
+  await startApp();
+}
+async function doSignOut(){await sb.auth.signOut();location.reload();}
+
+function renderAccount(){
+  const el=document.getElementById('acctInfo');if(!el||!me)return;
+  el.innerHTML='Signed in as <b>'+esc(me.full_name||'')+'</b><br><span style="color:var(--muted)">'+esc(me.email||'')+(me.is_super_admin?' · Admin':'')+'</span>';
+  document.getElementById('adminBox').classList.toggle('hidden',!me.is_super_admin);
+  document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',!me.is_super_admin));
+  if(me.is_super_admin)loadStaffAdmin();
+}
+function pwSay(t,ok){const e=document.getElementById('pwStatus');e.textContent=t;e.style.color=ok?'var(--accent)':'var(--red)';}
+async function changeMyPassword(){
+  const a=document.getElementById('pwNew').value,b=document.getElementById('pwNew2').value;
+  if(a.length<10){pwSay('Use at least 10 characters.',false);return;}
+  if(a!==b){pwSay("Passwords don't match.",false);return;}
+  const {error}=await sb.auth.updateUser({password:a});
+  if(error){pwSay(error.message,false);return;}
+  document.getElementById('pwNew').value='';document.getElementById('pwNew2').value='';
+  pwSay('Password changed. It applies to the quote tool too.',true);
+}
+
+async function staffApi(action,payload){
+  const {data,error}=await sb.functions.invoke('staff-admin',{body:{action,...(payload||{})}});
+  if(error){
+    let msg=error.message||'Request failed';
+    try{const j=await error.context.json();if(j&&j.error)msg=j.error;}catch(_){}
+    throw new Error(msg);
+  }
+  if(data&&data.error)throw new Error(data.error);
+  return data;
+}
+let staffRows=[];
+async function loadStaffAdmin(){
+  const el=document.getElementById('staffList');if(!el)return;
+  const {data,error}=await sb.from('profiles').select('id, full_name, email, phone, active').eq('company_id',METRO_COMPANY_ID).order('full_name');
+  if(error){el.innerHTML='<div style="font-size:11px;color:var(--red)">Could not load staff: '+esc(error.message)+'</div>';return;}
+  staffRows=data||[];
+  if(!staffRows.length){el.innerHTML='<div style="font-size:11px;color:var(--muted)">No staff yet.</div>';return;}
+  el.innerHTML=staffRows.map(r=>{
+    const off=r.active===false;
+    return `<div class="staff-row" style="opacity:${off?.55:1}">
+      <div style="min-width:0"><div style="font-weight:600">${esc(r.full_name||'—')}${off?' <span style="color:var(--red);font-weight:400">(inactive)</span>':''}</div>
+      <div style="color:var(--muted);font-size:11px;overflow-wrap:anywhere">${esc(r.email||'')}</div></div>
+      <div style="display:flex;gap:5px">
+        <button class="cbtn" onclick="resetStaffPw('${esc(r.id)}')">Reset password</button>
+        <button class="cbtn${off?'':' del'}" onclick="toggleStaff('${esc(r.id)}',${off})">${off?'Reactivate':'Deactivate'}</button>
+      </div></div>`;
+  }).join('');
+}
+function showCreds(name,email,pw){
+  const box=document.getElementById('stCreds');
+  box.innerHTML='<div style="font-weight:600;margin-bottom:4px">Login for '+esc(name)+'</div><div>Email: <b>'+esc(email)+'</b></div><div>Temporary password: <b style="font-family:monospace;font-size:14px">'+esc(pw)+'</b></div><div style="color:var(--muted);font-size:11px;margin-top:4px">Shown once. Copy it now and send it securely. Ask them to change it after first sign-in (Settings → Your Login).</div><button class="cbtn" style="margin-top:6px" onclick="copyCreds()">Copy email + password</button>';
+  box.dataset.copy='Email: '+email+'\nTemporary password: '+pw;
+  box.classList.remove('hidden');
+}
+function copyCreds(){const b=document.getElementById('stCreds');navigator.clipboard.writeText(b.dataset.copy||'').then(()=>flash('✓ Copied')).catch(()=>{});}
+async function createStaff(){
+  const st=document.getElementById('stStatus');
+  const full_name=document.getElementById('stName').value.trim();
+  const email=document.getElementById('stEmail').value.trim().toLowerCase();
+  const phone=document.getElementById('stPhone').value.trim();
+  const say=(t,ok)=>{st.textContent=t;st.style.color=ok?'var(--accent)':'var(--red)';};
+  if(!full_name||!/^\S+@\S+\.\S+$/.test(email)){say('Enter a name and a valid email.',false);return;}
+  say('Creating...',true);
+  try{
+    const res=await staffApi('create',{full_name,email,phone});
+    say('Login created.',true);
+    showCreds(full_name,email,res.temp_password);
+    ['stName','stEmail','stPhone'].forEach(id=>document.getElementById(id).value='');
+    loadStaffAdmin();
+  }catch(e){say("Couldn't create login: "+e.message,false);}
+}
+async function resetStaffPw(id){
+  const r=staffRows.find(x=>x.id===id);if(!r)return;
+  if(!confirm('Reset the password for '+(r.full_name||r.email)+'? Their current password stops working, including in the quote tool.'))return;
+  try{const res=await staffApi('reset_password',{user_id:id});showCreds(r.full_name||r.email,r.email,res.temp_password);}
+  catch(e){flash('✕ '+e.message);}
+}
+async function toggleStaff(id,makeActive){
+  if(me&&id===me.id){flash("You can't deactivate your own login.");return;}
+  const r=staffRows.find(x=>x.id===id);if(!r)return;
+  if(!makeActive&&!confirm('Deactivate '+(r.full_name||r.email)+"? They won't be able to sign in."))return;
+  try{await staffApi('set_active',{user_id:id,active:makeActive});loadStaffAdmin();}
+  catch(e){flash('✕ '+e.message);}
+}
+
+// ── STUCK / AGING ──
+// Days an eval may sit at each step before it is flagged. Edit these to tune.
+const STUCK={unassigned:1,noVisit:1,notInConnecteam:1,ordersAfterSeen:2,agencySystemAfterSeen:3};
+function stuckReasons(e){
+  if(e.status==='complete')return[];
+  const q=e.qa||{},r=[];
+  const urgent=e.priority==='urgent'||e.priority==='asap';
+  if(e.status==='pending'){
+    const a=age(e.dateAdded);
+    if(a>=STUCK.unassigned||urgent)r.push({k:'Not assigned',d:a});
+    return r;
+  }
+  const sinceAssign=age(q.assignedAt||e.dateAdded);
+  if(!q.visitDate){
+    if(sinceAssign>=STUCK.noVisit)r.push({k:'No visit date set',d:sinceAssign});
+  }else if(!q.seen){
+    const past=age(q.visitDate);
+    if(past>=1)r.push({k:'Visit date passed, not marked seen',d:past});
+    else if(!q.ct){
+      const s=age(q.visitSetAt||q.assignedAt||e.dateAdded);
+      if(s>=STUCK.notInConnecteam)r.push({k:'Visit not in Connecteam',d:s});
+    }
+  }
+  if(q.seen){
+    const s=age(q.seenDate||q.seenAt||'');
+    if(!q.orders&&s>=STUCK.ordersAfterSeen)r.push({k:'Orders not added',d:s});
+    if(!q.sysScheduled&&s>=STUCK.agencySystemAfterSeen)r.push({k:'Not scheduled in agency system',d:s});
+  }
+  return r;
+}
+function stuckList(){
+  return evals.map(e=>({e,r:stuckReasons(e)})).filter(x=>x.r.length)
+    .sort((a,b)=>{
+      const ua=(a.e.priority==='urgent'||a.e.priority==='asap')?0:1,ub=(b.e.priority==='urgent'||b.e.priority==='asap')?0:1;
+      if(ua!==ub)return ua-ub;
+      return Math.max(...b.r.map(x=>x.d))-Math.max(...a.r.map(x=>x.d));
+    });
+}
+function updateStuckCount(){
+  const n=stuckList().length;
+  const a=document.getElementById('sS'),b=document.getElementById('stuckN');
+  if(a)a.textContent=n;
+  if(b)b.textContent=n?'('+n+')':'';
+}
+function renderStuck(){
+  const list=document.getElementById('stuckList');if(!list)return;
+  const items=stuckList();
+  updateStuckCount();
+  if(!items.length){list.innerHTML='<div class="qa-empty">Nothing stuck. 🎉</div>';return;}
+  list.innerHTML=items.map(({e,r})=>`<div class="stuck-card">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
+      <div><div class="qa-loc">${e.location}${e.zip?` <span style="font-family:monospace;font-size:11px;color:var(--muted)">${e.zip}</span>`:''}</div>
+      <div class="qa-clin">${e.clinician?'👤 '+e.clinician:'Unassigned'} · ${e.agency||''} · ${e.discipline}</div></div>
+      ${e.priority==='urgent'?'<span class="badge burg">🚨 Urgent</span>':e.priority==='asap'?'<span class="badge basp">⚡ ASAP</span>':''}
+    </div>
+    ${r.map(x=>`<div class="stuck-r"><span>⚠ ${x.k}</span><span>${x.d} day${x.d===1?'':'s'}</span></div>`).join('')}
+  </div>`).join('');
+}
+async function setVisit(id,field,val){
+  const e=evals.find(e=>e.id===id);if(!e)return;
+  if(!e.qa)e.qa={};
+  e.qa[field]=val;
+  if(field==='visitDate'){e.qa.visitSetAt=val?new Date().toISOString():'';e.qa.ct=false;e.qa.ctAt='';}
+  render();renderQA();renderStuck();
+  await sb.from('evals').update({qa:e.qa}).eq('id',id);
+}
+
 // ── BOARD ──
 function sf(f,el){fil=f;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));el.classList.add('on');render();}
 function age(d){if(!d)return 0;const str=String(d).trim();const parsed=str.includes('T')?new Date(str):new Date(str+'T12:00:00');if(isNaN(parsed.getTime()))return 0;return Math.max(0,Math.floor((Date.now()-parsed.getTime())/86400000));}
@@ -828,6 +1069,7 @@ function render(){
   document.getElementById('sP').textContent=evals.filter(e=>e.status==='pending').length;
   document.getElementById('sA').textContent=evals.filter(e=>e.status==='assigned').length;
   document.getElementById('sC').textContent=evals.filter(e=>e.status==='complete').length;
+  updateStuckCount();
   const g=document.getElementById('grid');
   if(!list.length){g.innerHTML='<div class="empty"><div class="ei">📋</div><div class="et">No evals on the board</div><div style="font-size:13px;line-height:1.5">Paste a referral list using the panel on the left.</div></div>';return;}
   g.innerHTML=list.map(e=>{
@@ -843,6 +1085,7 @@ function render(){
         ${e.priority==='asap'?'<span class="badge basp">⚡ ASAP</span>':''}
         <span class="badge b${e.status==='pending'?'pend':e.status==='assigned'?'ass':'com'}">${e.status.charAt(0).toUpperCase()+e.status.slice(1)}</span>
         ${e.clinician?`<span class="badge bcl">👤 ${e.clinician.split(' ')[0]}</span>`:''}
+        ${(()=>{const sr=stuckReasons(e);return sr.length?`<span class="stuckchip">⚠ ${sr[0].k} · ${sr[0].d}d</span>`:''})()}
       </div>
       ${e.patient?`<div class="cpat">👤 ${e.patient}</div>`:''}
       ${e.note?`<div class="cnote">${e.note}</div>`:''}
@@ -851,7 +1094,8 @@ function render(){
         <span class="agebadge ${ac}">${al}</span>
       </div>
       ${e.assignedBy?`<div style="font-size:10px;color:var(--muted)">Assigned by ${e.assignedBy}</div>`:''}
-      <div style="margin-bottom:4px"><input class="csel" style="font-size:11px;padding:5px 7px;" placeholder="Patient name..." value="${e.patient||''}" onchange="updPat('${e.id}',this.value)"></div>
+      <div style="margin-bottom:4px"><input class="csel" style="font-size:11px;padding:5px 7px;" placeholder="Patient initials / ID" value="${e.patient||''}" onchange="updPat('${e.id}',this.value)"></div>
+      ${e.status==='assigned'?`<div class="vis-row"><span>📅 Visit</span><input type="date" value="${(e.qa&&e.qa.visitDate)||''}" onchange="setVisit('${e.id}','visitDate',this.value)"><input type="time" value="${(e.qa&&e.qa.visitTime)||''}" onchange="setVisit('${e.id}','visitTime',this.value)"></div>`:''}
       ${(()=>{const s=getSuggestedClinician(e.location,e.zip);return s?`<div style="font-size:10px;color:#fbbf24;margin-bottom:4px;">💡 ${s.name} available${s.region?' · '+s.region:''}</div>`:''})()}
       <div class="cact">
         <select class="csel" onchange="asgn('${e.id}',this.value)">
@@ -882,7 +1126,18 @@ async function asgnPTA(id,name){
   if(name) flash(`✓ PTA assigned: ${name}`);
 }
 
-async function asgn(id,name){const e=evals.find(e=>e.id===id);if(!e)return;e.clinician=name;e.status=name?'assigned':'pending';e.assignedBy=name?userName:'';render();renderQA();await sb.from('evals').update({clinician:name,status:e.status,assigned_by:e.assignedBy}).eq('id',id);}
+async function asgn(id,name){
+  const e=evals.find(e=>e.id===id);if(!e)return;
+  const changed=e.clinician!==name;
+  e.clinician=name;e.status=name?'assigned':'pending';e.assignedBy=name?userName:'';
+  if(!e.qa)e.qa={};
+  if(name){
+    if(changed||!e.qa.assignedAt)e.qa.assignedAt=new Date().toISOString();
+    if(changed&&e.qa.visitDate){e.qa.ct=false;e.qa.ctAt='';} // shift belongs to the previous clinician
+  }else{delete e.qa.assignedAt;}
+  render();renderQA();renderStuck();
+  await sb.from('evals').update({clinician:name,status:e.status,assigned_by:e.assignedBy,qa:e.qa}).eq('id',id);
+}
 async function mkDone(id){const e=evals.find(e=>e.id===id);if(!e)return;e.status='complete';render();renderQA();renderHistory();await sb.from('evals').update({status:'complete'}).eq('id',id);}
 async function rmEval(id){evals=evals.filter(e=>e.id!==id);render();await sb.from('evals').delete().eq('id',id);}
 async function clrDone(){if(!confirm('Remove all completed evals?'))return;const ids=evals.filter(e=>e.status==='complete').map(e=>e.id);evals=evals.filter(e=>e.status!=='complete');render();if(ids.length)await sb.from('evals').delete().in('id',ids);}
@@ -914,6 +1169,8 @@ function renderQA(){
           <div class="qa-check${qa.orders?' done':''}"><input type="checkbox" ${qa.orders?'checked':''} onchange="toggleQA('${e.id}','orders',this.checked)"><span>Orders added</span></div>
           <div class="qa-check${qa.pta?' done':''}"><input type="checkbox" ${qa.pta?'checked':''} onchange="toggleQA('${e.id}','pta',this.checked)"><span>PTA assigned</span></div>
           <div class="qa-check${qa.scheduled?' done':''}"><input type="checkbox" ${qa.scheduled?'checked':''} onchange="toggleQA('${e.id}','scheduled',this.checked)"><span>Follow-up scheduled</span></div>
+          <div class="qa-check${qa.sysScheduled?' done':''}"><input type="checkbox" ${qa.sysScheduled?'checked':''} onchange="toggleQA('${e.id}','sysScheduled',this.checked)"><span>Scheduled in agency system</span></div>
+          <div class="qa-check${qa.ct?' done':''}"><input type="checkbox" ${qa.ct?'checked':''} onchange="toggleQA('${e.id}','ct',this.checked)"><span>Shift in Connecteam</span></div>
         </div>
         <textarea class="qa-note" placeholder="QA notes..." onchange="toggleQA('${e.id}','notes',this.value)">${qa.notes||''}</textarea>
       </div>`;
@@ -926,8 +1183,9 @@ function renderQA(){
 async function toggleQA(id,field,val){
   const e=evals.find(e=>e.id===id);if(!e)return;
   if(!e.qa)e.qa={};e.qa[field]=val;
+  if(['seen','orders','pta','scheduled','sysScheduled','ct'].includes(field))e.qa[field+'At']=val?new Date().toISOString():'';
   if(e.qa.seen&&e.qa.scheduled){e.status='complete';await sb.from('evals').update({status:'complete'}).eq('id',id);render();}
-  renderQA();
+  renderQA();renderStuck();render();
   await sb.from('evals').update({qa:e.qa}).eq('id',id);
 }
 
