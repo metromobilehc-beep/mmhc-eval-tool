@@ -729,7 +729,7 @@ function evalToDB(e) {
 }
 
 // ── UI ──
-function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='qa')renderQA();if(name==='stuck')renderStuck();if(name==='hist')renderHistory();if(name==='cap')renderCapacity();if(name==='set'&&me&&me.is_super_admin){checkCt();if(!ctUsers.length)loadCtUsers();}if(name==='avail'){if(!avData&&!avBusy)loadAvail();else renderAvail();}}
+function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='qa')renderQA();if(name==='stuck')renderStuck();if(name==='hist')renderHistory();if(name==='cap')renderCapacity();if(name==='set'&&me&&me.is_super_admin){if(Date.now()-(window.__ctChecked||0)>60000){window.__ctChecked=Date.now();checkCt();}if(!ctUsers.length)loadCtUsers();}if(name==='avail'){if(!avData&&!avBusy)loadAvail();else renderAvail();}}
 
 function renderHistory(){
   const list=document.getElementById('histList');if(!list)return;
@@ -1188,6 +1188,11 @@ async function checkCt(){
       return;
     }
     const mine=sch.find(x=>String(x.schedulerId)===String(st.schedulerId));
+    if(listErr&&st.configured){
+      ctReady=true;el.style.color='#fbbf24';
+      el.innerHTML='Could not verify the scheduler right now: '+esc(listErr)+'.<br>Connecteam may be rate-limiting. Wait a minute and click Check connection again. Shifts and the calendar still work meanwhile.';
+      return;
+    }
     ctReady=!!mine;
     el.style.color=ctReady?'var(--accent)':'var(--red)';
     let jobNote='';
