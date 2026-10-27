@@ -624,7 +624,7 @@ async function addCapClin() {
   flash('✓ Added ' + name);
 }
 
-function getSuggestedClinician(location, zip) {
+function getSuggestedClinician(location, zip, date) {
   const available = capacity.filter(c=>c.available && c.region);
   if (!available.length) return null;
 
@@ -662,6 +662,12 @@ function getSuggestedClinician(location, zip) {
       }
     }
 
+    // Connecteam availability for the visit day (when loaded): skip anyone who is off, favor people who prefer to work
+    if (date && score > 0) {
+      const ad = asstDay(c.name, date);
+      if (ad && avOff(ad)) continue;
+      if (ad && hasPref(ad)) score += 15;
+    }
     if (score > bestScore) { bestScore = score; best = c; }
   }
 
@@ -682,7 +688,7 @@ let rtStarted=false;
 async function startApp(){
   await loadAll();
   await loadCapacity();
-  ctApi('status').then(r=>{ctReady=!!(r&&r.configured);}).catch(()=>{ctReady=false;});
+  ctApi('status').then(r=>{ctReady=!!(r&&r.configured);if(ctReady)primeAsst();}).catch(()=>{ctReady=false;});
   if(rtStarted)return;
   rtStarted=true;
   sb.channel('evals-changes')
@@ -773,7 +779,7 @@ function renderHistory(){
         </div>
         <div style="display:flex;gap:4px;flex-direction:column;align-items:flex-end">
           ${isArchived(e)?`<span style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--muted)">Archived${e.qa.archivedFrom?' · was '+e.qa.archivedFrom:''}</span><button onclick="restoreEval('${e.id}')" style="font-size:10px;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">↩ Restore</button>`:''}
-          ${!isArchived(e)&&e.status==='complete'?`<button onclick="reopenEval('${e.id}')" style="font-size:10px;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">↩ Back to board</button>`:''}
+          ${!isArchived(e)&&e.status==='complete'?`<button onclick="reopenEval('${e.id}')" style="font-size:10px;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">↩ Back to QA</button>`:''}
           <button onclick="delEval('${e.id}')" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ Remove</button>
         </div>
       </div>
@@ -1453,7 +1459,7 @@ async function reopenEval(id){
   e.status=e.clinician?'assigned':'pending';
   render();renderQA();renderStuck();renderHistory();
   await sb.from('evals').update({status:e.status}).eq('id',id);
-  flash('✓ Back on the board');
+  flash('✓ Back in QA and on the board');
 }
 async function restoreEval(id){
   const e=evals.find(x=>x.id===id);if(!e||!e.qa)return;
@@ -1482,15 +1488,44 @@ function isAsst(c){return !!c&&(c.role==='PTA'||c.role==='COTA');}
 function hasPref(d){return !!d&&(d.available||[]).length>0;}
 function prefNote(d){return d&&(d.available||[]).filter(a=>a.note).map(a=>a.note).join('; ');}
 // PTA/COTA availability on a date, from whichever Connecteam data is loaded (calendar or Who's free)
+const asstCache={}; // monday -> {at, data}: availability for the weeks that open evals are booked in
 function asstDay(name,date){
-  const u=(calData&&calData.users&&calData.users[name])||(avData&&avData.users&&avData.users[name]);
-  return u&&u.days?u.days[date]:null;
+  const c=asstCache[mondayISO(date)];
+  const u=(calData&&calData.users&&calData.users[name]&&calData.users[name].days&&calData.users[name].days[date]?calData.users[name]:null)
+    ||(avData&&avData.users&&avData.users[name]&&avData.users[name].days&&avData.users[name].days[date]?avData.users[name]:null)
+    ||(c&&c.data&&c.data.users&&c.data.users[name]);
+  return u&&u.days?u.days[date]||null:null;
+}
+// load availability for the week of every open eval's visit date (each week once, at most 5 minutes old), then redraw the board
+let asstBusy=false;
+async function primeAsst(){
+  if(asstBusy||!ctReady)return;
+  const today=localISO();
+  const weeks=[...new Set(evals.filter(e=>e.status!=='complete'&&!isArchived(e)&&e.qa&&e.qa.visitDate&&e.qa.visitDate>=today).map(e=>mondayISO(e.qa.visitDate)))].sort().slice(0,4);
+  const need=weeks.filter(w=>!asstCache[w]||Date.now()-asstCache[w].at>300000);
+  if(!need.length)return;
+  asstBusy=true;
+  try{
+    for(const w of need){
+      try{const r=await ctApi('availability',{start:w,days:7});asstCache[w]={at:Date.now(),data:r};}catch(_){break;}
+    }
+    render();
+  }finally{asstBusy=false;}
 }
 function asstTag(name,date){
   const d=asstDay(name,date);if(!d)return '';
   if(avOff(d))return ' · OFF that day';
-  if(hasPref(d))return ' · ✓ prefers to work'+(prefNote(d)?' ('+prefNote(d)+')':'');
-  return '';
+  const sh=d.shifts>0?' · '+d.shifts+' shift'+(d.shifts>1?'s':'')+' already':'';
+  if(hasPref(d))return ' · ✓ prefers to work'+(prefNote(d)?' ('+prefNote(d)+')':'')+sh;
+  return sh;
+}
+// sort order for the PTA/COTA picker: prefers to work, then open, then unknown, then off
+function asstRank(name,date){
+  if(!date)return 2;
+  const d=asstDay(name,date);
+  if(!d)return 2;
+  if(avOff(d))return 3;
+  return hasPref(d)?0:1;
 }
 function avCls(d,c,date){if(isAsst(c))return (!d||avOff(d))?'av-none':hasPref(d)?'av-good':'av-low';if(!d||avOff(d))return 'av-none';const left=capFor(c,d)-dayLoad(c,date,d);return left<=0?'av-none':left===1?'av-low':'av-good';}
 function avTxt(d,c,date){if(!d)return '-';if(avOff(d))return 'Off';if(isAsst(c))return hasPref(d)?'✓ Pref':'Open';const n=dayLoad(c,date,d);return n+'/'+capFor(c,d)+(d.offMin>0?'*':'');}
@@ -1704,6 +1739,7 @@ async function setVisit(id,field,val){
   render();renderQA();renderStuck();
   await sb.from('evals').update({qa:e.qa}).eq('id',id);
   if(ctReady&&e.clinician)await ctSync(id); // no shift until someone is assigned; assigning sends it
+  if(field==='visitDate'&&val)primeAsst();
 }
 
 // ── BOARD ──
@@ -1756,7 +1792,7 @@ function render(){
       ${e.assignedBy?`<div style="font-size:10px;color:var(--muted)">Assigned by ${e.assignedBy}</div>`:''}
       <div style="margin-bottom:4px"><input class="csel" style="font-size:11px;padding:5px 7px;" placeholder="Patient initials / ID" value="${e.patient||''}" onchange="updPat('${e.id}',this.value)"></div>
       ${e.status!=='complete'?`<div><div class="vis-cap"><span>📅 Visit date (time optional)</span>${e.qa&&e.qa.ctShiftId?'<span class="ct-ok">✓ Connecteam</span>':''}</div><div class="vis-in"><input type="date" value="${(e.qa&&e.qa.visitDate)||''}" onchange="setVisit('${e.id}','visitDate',this.value)"><input type="time" value="${(e.qa&&e.qa.visitTime)||''}" onchange="setVisit('${e.id}','visitTime',this.value)"></div></div>`:''}
-      ${(()=>{const s=getSuggestedClinician(e.location,e.zip);return s?`<div style="font-size:10px;color:var(--accent);margin-bottom:4px;">💡 ${s.name} available${s.region?' · '+s.region:''}</div>`:''})()}
+      ${(()=>{const sd=e.qa&&e.qa.visitDate,s=getSuggestedClinician(e.location,e.zip,sd);const sdy=s&&sd?asstDay(s.name,sd):null;return s?`<div style="font-size:10px;color:var(--accent);margin-bottom:4px;">💡 ${s.name} available${s.region?' · '+s.region:''}${sdy&&hasPref(sdy)?' · ✓ prefers to work that day':''}</div>`:''})()}
       <div class="cact">
         <select class="csel" onchange="asgn('${e.id}',this.value)">
           <option value="">— Assign Clinician —</option>${opts}
@@ -1770,9 +1806,9 @@ function render(){
       <div style="margin-top:2px;">
         <select class="csel" style="font-size:10px;color:var(--muted);" onchange="asgnPTA('${e.id}',this.value)">
           <option value="">+ Assign PTA/COTA (optional)</option>
-          ${clins.filter(c=>c.role==='PTA'||c.role==='COTA').map(c=>`<option value="${c.name}"${e.ptaClinician===c.name?' selected':''}>${c.name} (${c.role})${e.qa&&e.qa.visitDate?asstTag(c.name,e.qa.visitDate):''}</option>`).join('')}
+          ${clins.filter(c=>c.role==='PTA'||c.role==='COTA').slice().sort((a,b)=>asstRank(a.name,e.qa&&e.qa.visitDate)-asstRank(b.name,e.qa&&e.qa.visitDate)||a.name.localeCompare(b.name)).map(c=>`<option value="${c.name}"${e.ptaClinician===c.name?' selected':''}>${c.name} (${c.role})${e.qa&&e.qa.visitDate?asstTag(c.name,e.qa.visitDate):''}</option>`).join('')}
         </select>
-        ${e.ptaClinician?`<div style="font-size:10px;color:var(--blue);margin-top:2px;">🤝 PTA: ${e.ptaClinician}${e.qa&&e.qa.ctPtaShiftId?' · ✓ on their Connecteam calendar':(e.qa&&e.qa.visitDate?'':' · set the visit date to mark their day')}</div>`:''}
+        ${e.ptaClinician?`<div style="font-size:10px;color:var(--blue);margin-top:2px;">🤝 PTA: ${e.ptaClinician}${e.qa&&e.qa.ctPtaShiftId?' · ✓ on their Connecteam calendar':(e.qa&&e.qa.visitDate?'':' · set the visit date to mark their day')}${(()=>{const ad=e.qa&&e.qa.visitDate?asstDay(e.ptaClinician,e.qa.visitDate):null;return ad&&avOff(ad)?' · <span style="color:var(--red)">⚠ off that day</span>':'';})()}</div>`:''}
       </div>
     </div>`;
   }).join('');
@@ -1781,6 +1817,10 @@ function render(){
 async function updPat(id,val){const e=evals.find(e=>e.id===id);if(!e)return;e.patient=val;await sb.from('evals').update({patient:val}).eq('id',id);}
 async function asgnPTA(id,name){
   const e=evals.find(e=>e.id===id);if(!e)return;
+  if(name&&e.qa&&e.qa.visitDate){
+    const ad=asstDay(name,e.qa.visitDate);
+    if(ad&&avOff(ad)&&!confirm(name+' is marked off on '+e.qa.visitDate+' in Connecteam.\n\nAssign them anyway?')){render();return;}
+  }
   e.ptaClinician=name;
   render();
   await sb.from('evals').update({pta_clinician:name}).eq('id',id);
@@ -1880,7 +1920,8 @@ async function toggleQA(id,field,val){
   const e=evals.find(e=>e.id===id);if(!e)return;
   if(!e.qa)e.qa={};e.qa[field]=val;
   if(['seen','orders','pta','scheduled','sysScheduled','ct'].includes(field))e.qa[field+'At']=val?new Date().toISOString():'';
-  if(e.qa.seen&&e.qa.scheduled){e.status='complete';await sb.from('evals').update({status:'complete'}).eq('id',id);render();}
+  // only finishing the last of seen + scheduled completes it, so an eval sent back to QA stays there while you edit its boxes
+  if(val&&(field==='seen'||field==='scheduled')&&e.qa.seen&&e.qa.scheduled&&e.status!=='complete'){e.status='complete';await sb.from('evals').update({status:'complete'}).eq('id',id);render();}
   renderQA();renderStuck();render();
   await sb.from('evals').update({qa:e.qa}).eq('id',id);
 }
