@@ -135,6 +135,14 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 .qa-empty{text-align:center;padding:30px;color:var(--muted);font-size:13px;}
 .flash{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--accent);color:#0a1628;font-weight:700;font-size:13px;padding:9px 22px;border-radius:24px;z-index:999;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap;}
 .flash.on{opacity:1;}
+.modal{position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;}
+.modal-box{width:100%;max-width:430px;max-height:92vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:8px;}
+.modal-sum{font-size:12px;color:var(--muted);line-height:1.5;}
+.opt{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.5;cursor:pointer;display:block;padding-left:23px;position:relative;}
+.opt>input[type=radio],.opt>input[type=checkbox]{position:absolute;left:0;top:2px;}
+.opt input[type=radio],.opt input[type=checkbox]{width:15px;height:15px;margin-top:2px;accent-color:#fbbf24;flex-shrink:0;}
+.opt input[type=number]{width:56px;padding:2px 6px;display:inline-block;}
+.modal-pre{font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;line-height:1.5;margin-top:4px;}
 .menu-btn{display:none;padding:6px 12px;border-radius:20px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
 @media(max-width:680px){
   header{padding:10px 12px;}
@@ -151,6 +159,25 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 </style>
 </head>
 <body>
+<div id="clrModal" class="modal hidden">
+  <div class="modal-box">
+    <div class="auth-title" style="text-align:left">🧹 Clear the board</div>
+    <div id="clrSummary" class="modal-sum"></div>
+    <div class="lbl" style="margin-top:6px">What to clear</div>
+    <label class="opt"><input type="radio" name="clrScope" value="all" checked onchange="clrPreview()"> Everything on the board</label>
+    <label class="opt"><input type="radio" name="clrScope" value="older" onchange="clrPreview()"> Only evals added more than <input type="number" id="clrDays" value="7" min="1" oninput="clrPreview()"> days ago</label>
+    <label class="opt"><input type="checkbox" id="clrKeep" checked onchange="clrPreview()"> Keep evals that have a visit date still ahead</label>
+    <div class="lbl" style="margin-top:8px">What happens to them</div>
+    <label class="opt"><input type="radio" name="clrMode" value="archive" checked onchange="clrPreview()"> Archive: hidden from the board, kept in History, can be restored</label>
+    <label class="opt admin-only hidden"><input type="radio" name="clrMode" value="delete" onchange="clrPreview()"> Delete permanently (admins only, cannot be undone)</label>
+    <label class="opt hidden" id="clrShiftOpt"><input type="checkbox" id="clrShifts" checked> Also remove their upcoming Connecteam shifts</label>
+    <div id="clrPre" class="modal-pre"></div>
+    <div style="display:flex;gap:8px;margin-top:4px">
+      <button class="btn btn-o" onclick="closeClearBoard()">Cancel</button>
+      <button class="btn btn-g" id="clrGo" onclick="runClearBoard()">Clear board</button>
+    </div>
+  </div>
+</div>
 <div id="authGate" class="auth-gate">
   <div class="auth-box">
     <div class="mark" style="margin:0 auto 4px">M²</div>
@@ -289,10 +316,10 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 
     <div class="panel hidden" id="tp-hist">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <div class="lbl" style="margin-bottom:0">Completed Evals</div>
+        <div class="lbl" style="margin-bottom:0">History</div>
         <button class="admin-only hidden" onclick="clrHistory()" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:3px 8px;cursor:pointer;font-family:inherit;">Clear All</button>
       </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">All completed evals with QA status. Clear when ready to archive.</div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">Completed evals and evals cleared from the board. Restore brings an archived eval back to the board.</div>
       <div id="histList"><div class="qa-empty">No completed evals yet.</div></div>
     </div>
 
@@ -352,15 +379,16 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
       </div>
       <div class="hr"></div>
       <button class="btn btn-o admin-only hidden" onclick="clrDone()">🗑 Clear Completed Evals</button>
-      <button class="btn btn-r admin-only hidden" style="margin-top:4px" onclick="clrAll()">⚠️ Clear All Evals</button>
+      <button class="btn btn-r admin-only hidden" style="margin-top:4px" onclick="clrAll()">⚠️ Delete ALL evals (permanent)</button>
     </div>
   </div>
 
   <div class="board">
     <div class="bh">
-      <div style="display:flex;align-items:center;gap:10px;">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <div class="bt">Weekly Eval Board</div>
         <button onclick="loadAll()" style="padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--accent);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🔄 Refresh</button>
+        <button onclick="openClearBoard()" style="padding:5px 12px;border-radius:20px;border:1px solid rgba(252,165,165,.5);background:transparent;color:var(--red);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;">🧹 Clear board</button>
       </div>
       <div class="fr">
         <button class="fb on" onclick="sf('all',this)">All</button>
@@ -634,8 +662,8 @@ function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.re
 
 function renderHistory(){
   const list=document.getElementById('histList');if(!list)return;
-  const completed=evals.filter(e=>e.status==='complete').sort((a,b)=>new Date(b.dateAdded)-new Date(a.dateAdded));
-  if(!completed.length){list.innerHTML='<div class="qa-empty">No completed evals yet.</div>';return;}
+  const completed=evals.filter(inHistory).sort((a,b)=>new Date(b.dateAdded)-new Date(a.dateAdded));
+  if(!completed.length){list.innerHTML='<div class="qa-empty">Nothing in history yet.</div>';return;}
   list.innerHTML=completed.map(e=>{
     const qa=e.qa||{};
     const checks=[qa.seen?'✓ Seen':'',qa.orders?'✓ Orders':'',qa.pta?'✓ PTA':'',qa.scheduled?'✓ Scheduled':''].filter(Boolean).join(' · ');
@@ -646,7 +674,10 @@ function renderHistory(){
           <div style="font-size:11px;color:var(--muted)">👤 ${e.clinician||'—'} · ${e.agency||''} · ${e.discipline}</div>
           ${e.patient?`<div style="font-size:11px;color:#93c5fd">${e.patient}</div>`:''}
         </div>
-        <button onclick="rmEval('${e.id}')" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ Remove</button>
+        <div style="display:flex;gap:4px;flex-direction:column;align-items:flex-end">
+          ${isArchived(e)?`<span style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--muted)">Archived${e.qa.archivedFrom?' · was '+e.qa.archivedFrom:''}</span><button onclick="restoreEval('${e.id}')" style="font-size:10px;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">↩ Restore</button>`:''}
+          <button onclick="rmEval('${e.id}')" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ Remove</button>
+        </div>
       </div>
       ${checks?`<div style="font-size:11px;color:#fbbf24;margin-top:6px;">${checks}</div>`:''}
       ${qa.seenDate?`<div style="font-size:10px;color:var(--muted);margin-top:2px;">Seen: ${qa.seenDate}</div>`:''}
@@ -657,9 +688,9 @@ function renderHistory(){
 }
 
 async function clrHistory(){
-  if(!confirm('Delete all completed evals? This cannot be undone.'))return;
-  const ids=evals.filter(e=>e.status==='complete').map(e=>e.id);
-  evals=evals.filter(e=>e.status!=='complete');
+  if(!confirm('Permanently delete everything in History (completed and archived)? This cannot be undone.'))return;
+  const ids=evals.filter(inHistory).map(e=>e.id);
+  evals=evals.filter(e=>!inHistory(e));
   renderHistory();render();
   if(ids.length)await sb.from('evals').delete().in('id',ids);
   flash('✓ History cleared');
@@ -1099,6 +1130,95 @@ async function autoMatchCt(){
   flash(n?'✓ Matched '+n+' clinician'+(n>1?'s':''):'No new exact name matches');
 }
 
+// ── ARCHIVE / CLEAR BOARD ──
+function isArchived(e){return !!(e&&e.qa&&e.qa.archived);}
+function inHistory(e){return e.status==='complete'||isArchived(e);}
+function upcomingVisit(e){const d=e.qa&&e.qa.visitDate;return !!d&&d>=localISO();}
+function clearCandidates(){
+  const scope=document.querySelector('input[name=clrScope]:checked').value;
+  const days=Math.max(1,parseInt(document.getElementById('clrDays').value,10)||7);
+  const keep=document.getElementById('clrKeep').checked;
+  return evals.filter(e=>e.status!=='complete'&&!isArchived(e))
+    .filter(e=>scope==='all'||age(e.dateAdded)>days)
+    .filter(e=>!(keep&&upcomingVisit(e)));
+}
+function openClearBoard(){
+  document.querySelector('input[name=clrScope][value=all]').checked=true;
+  document.querySelector('input[name=clrMode][value=archive]').checked=true;
+  document.getElementById('clrKeep').checked=true;
+  document.getElementById('clrDays').value=7;
+  document.getElementById('clrModal').classList.remove('hidden');
+  clrPreview();
+}
+function closeClearBoard(){document.getElementById('clrModal').classList.add('hidden');}
+function clrPreview(){
+  const active=evals.filter(e=>e.status!=='complete'&&!isArchived(e));
+  const items=clearCandidates();
+  const mode=document.querySelector('input[name=clrMode]:checked').value;
+  const pend=items.filter(e=>e.status==='pending').length,asg=items.filter(e=>e.status==='assigned').length;
+  const kept=active.length-items.length;
+  const shifts=items.filter(e=>e.qa&&e.qa.ctShiftId&&upcomingVisit(e)).length;
+  document.getElementById('clrSummary').textContent='On the board now: '+active.filter(e=>e.status==='pending').length+' pending, '+active.filter(e=>e.status==='assigned').length+' assigned.';
+  document.getElementById('clrShiftOpt').classList.toggle('hidden',!(ctReady&&shifts>0));
+  const verb=mode==='delete'?'permanently delete':'archive';
+  let t=items.length?('This will <b>'+verb+' '+items.length+'</b> eval'+(items.length>1?'s':'')+' ('+pend+' pending, '+asg+' assigned).'):'Nothing matches, so nothing will change.';
+  if(kept>0)t+='<br>'+kept+' will stay on the board.';
+  if(ctReady&&shifts>0)t+='<br>'+shifts+' upcoming Connecteam shift'+(shifts>1?'s':'')+' can be removed.';
+  document.getElementById('clrPre').innerHTML=t;
+  const go=document.getElementById('clrGo');
+  go.disabled=!items.length;
+  go.textContent=items.length?(mode==='delete'?'Delete '+items.length:'Clear '+items.length+' from board'):'Nothing to clear';
+}
+async function runClearBoard(){
+  const items=clearCandidates();if(!items.length)return;
+  const mode=document.querySelector('input[name=clrMode]:checked').value;
+  const rmShifts=!document.getElementById('clrShiftOpt').classList.contains('hidden')&&document.getElementById('clrShifts').checked;
+  if(mode==='delete'){
+    if(!me||!me.is_super_admin){flash('Only admins can delete permanently');return;}
+    if(!confirm('Permanently delete '+items.length+' eval'+(items.length>1?'s':'')+'? This cannot be undone.'))return;
+  }
+  const go=document.getElementById('clrGo');go.disabled=true;
+  saving=true;
+  let shiftFail=0,saveFail=0;
+  try{
+    if(rmShifts&&ctReady){
+      for(const e of items){
+        if(e.qa&&e.qa.ctShiftId&&upcomingVisit(e)){
+          try{await ctApi('remove',{shift_id:e.qa.ctShiftId});e.qa.ctShiftId='';e.qa.ctUserId='';e.qa.ct=false;e.qa.ctAt='';}
+          catch(_){shiftFail++;}
+        }
+      }
+    }
+    if(mode==='archive'){
+      const now=new Date().toISOString();
+      items.forEach(e=>{if(!e.qa)e.qa={};e.qa.archived=true;e.qa.archivedAt=now;e.qa.archivedBy=userName||'';e.qa.archivedFrom=e.status;});
+      for(let i=0;i<items.length;i+=10){
+        const res=await Promise.all(items.slice(i,i+10).map(e=>sb.from('evals').update({qa:e.qa}).eq('id',e.id)));
+        res.forEach(r=>{if(r&&r.error)saveFail++;});
+      }
+    }else{
+      const ids=items.map(e=>e.id);
+      const r=await sb.from('evals').delete().in('id',ids);
+      if(r&&r.error)saveFail=ids.length;else evals=evals.filter(e=>!ids.includes(e.id));
+    }
+  }finally{saving=false;go.disabled=false;}
+  closeClearBoard();
+  render();renderQA();renderStuck();renderHistory();
+  let msg=(mode==='delete'?'✓ Deleted ':'✓ Cleared ')+(items.length-saveFail)+' eval'+(items.length-saveFail===1?'':'s');
+  if(saveFail)msg='⚠ '+saveFail+' could not be saved. Refresh and try again';
+  else if(shiftFail)msg+=' · ⚠ '+shiftFail+' Connecteam shift'+(shiftFail>1?'s':'')+' not removed, delete by hand';
+  flash(msg);
+  loadAll();
+}
+async function restoreEval(id){
+  const e=evals.find(x=>x.id===id);if(!e||!e.qa)return;
+  e.qa.archived=false;e.qa.archivedAt='';e.qa.restoredAt=new Date().toISOString();
+  render();renderQA();renderStuck();renderHistory();
+  await sb.from('evals').update({qa:e.qa}).eq('id',id);
+  flash('✓ Restored to the board');
+}
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape')closeClearBoard();});
+
 // ── LAYOUT HELPERS ──
 function localISO(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function toggleSide(){const on=document.body.classList.toggle('show-side');document.getElementById('menuBtn').textContent=on?'✕ Close':'☰ Tools';}
@@ -1114,7 +1234,7 @@ function showStuckBoard(){
 // Days an eval may sit at each step before it is flagged. Edit these to tune.
 const STUCK={unassigned:1,noVisit:1,notInConnecteam:1,ordersAfterSeen:2,agencySystemAfterSeen:3};
 function stuckReasons(e){
-  if(e.status==='complete')return[];
+  if(e.status==='complete'||isArchived(e))return[];
   const q=e.qa||{},r=[];
   const urgent=e.priority==='urgent'||e.priority==='asap';
   if(e.status==='pending'){
@@ -1192,7 +1312,7 @@ function render(){
 
   let list=evals.slice();
   // Main board never shows complete — they go to History tab
-  list=list.filter(e=>e.status!=='complete');
+  list=list.filter(e=>e.status!=='complete'&&!isArchived(e));
   if(fil==='pending')list=list.filter(e=>e.status==='pending');
   else if(fil==='assigned')list=list.filter(e=>e.status==='assigned');
   else if(fil==='urgent')list=list.filter(e=>e.priority==='urgent'||e.priority==='asap');
@@ -1200,8 +1320,8 @@ function render(){
   if(selectedMonth)list=list.filter(e=>String(e.dateAdded||'').startsWith(selectedMonth));
   const so={pending:0,assigned:1,complete:2},po={urgent:0,asap:1,normal:2};
   list.sort((a,b)=>so[a.status]!==so[b.status]?so[a.status]-so[b.status]:(po[a.priority]||2)-(po[b.priority]||2));
-  document.getElementById('sP').textContent=evals.filter(e=>e.status==='pending').length;
-  document.getElementById('sA').textContent=evals.filter(e=>e.status==='assigned').length;
+  document.getElementById('sP').textContent=evals.filter(e=>e.status==='pending'&&!isArchived(e)).length;
+  document.getElementById('sA').textContent=evals.filter(e=>e.status==='assigned'&&!isArchived(e)).length;
   document.getElementById('sC').textContent=evals.filter(e=>e.status==='complete').length;
   updateStuckCount();
   const g=document.getElementById('grid');
@@ -1279,15 +1399,15 @@ async function rmEval(id){
   await sb.from('evals').delete().eq('id',id);
   if(ctReady&&sid){try{await ctApi('remove',{shift_id:sid});}catch(_){flash('⚠ Delete that visit from the Connecteam calendar by hand');}}
 }
-async function clrDone(){if(!confirm('Remove all completed evals?'))return;const ids=evals.filter(e=>e.status==='complete').map(e=>e.id);evals=evals.filter(e=>e.status!=='complete');render();if(ids.length)await sb.from('evals').delete().in('id',ids);}
-async function clrAll(){if(!confirm('Clear ALL evals?'))return;evals=[];render();await sb.from('evals').delete().neq('id','');}
+async function clrDone(){if(!confirm('Permanently remove everything in History (completed and archived)?'))return;const ids=evals.filter(inHistory).map(e=>e.id);evals=evals.filter(e=>!inHistory(e));render();if(ids.length)await sb.from('evals').delete().in('id',ids);}
+async function clrAll(){if(!confirm('Permanently delete ALL evals, including history? This cannot be undone.'))return;evals=[];render();await sb.from('evals').delete().neq('id','');}
 
 // ── QA ──
 function renderQA(){
   const list=document.getElementById('qaList');if(!list)return;
 
   // Split into active (assigned, not fully QA'd) and completed QA
-  const assigned=evals.filter(e=>e.status==='assigned');
+  const assigned=evals.filter(e=>e.status==='assigned'&&!isArchived(e));
   const completedQA=evals.filter(e=>e.status==='complete'&&(e.qa?.seen||e.qa?.orders||e.qa?.scheduled));
 
   // Active QA
