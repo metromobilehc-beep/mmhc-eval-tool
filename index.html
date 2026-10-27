@@ -421,6 +421,8 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <div id="agencyList"></div>
         <input id="na" placeholder="New agency name" style="margin-top:6px;margin-bottom:6px">
         <button class="btn btn-o" onclick="addAgency()">+ Add Agency</button>
+        <button class="btn btn-o admin-only" style="margin-top:6px" onclick="agSyncOpen()">↔ Compare with Connecteam Jobs</button>
+        <div id="agSync" style="margin-top:6px"></div>
       </div>
       <div class="hr"></div>
       <div>
@@ -753,6 +755,7 @@ function renderHistory(){
         </div>
         <div style="display:flex;gap:4px;flex-direction:column;align-items:flex-end">
           ${isArchived(e)?`<span style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--muted)">Archived${e.qa.archivedFrom?' · was '+e.qa.archivedFrom:''}</span><button onclick="restoreEval('${e.id}')" style="font-size:10px;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">↩ Restore</button>`:''}
+          ${!isArchived(e)&&e.status==='complete'?`<button onclick="reopenEval('${e.id}')" style="font-size:10px;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">↩ Back to board</button>`:''}
           <button onclick="rmEval('${e.id}')" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ Remove</button>
         </div>
       </div>
@@ -1358,6 +1361,13 @@ async function runClearBoard(){
   flash(msg);
   loadAll();
 }
+async function reopenEval(id){
+  const e=evals.find(x=>x.id===id);if(!e)return;
+  e.status=e.clinician?'assigned':'pending';
+  render();renderQA();renderStuck();renderHistory();
+  await sb.from('evals').update({status:e.status}).eq('id',id);
+  flash('✓ Back on the board');
+}
 async function restoreEval(id){
   const e=evals.find(x=>x.id===id);if(!e||!e.qa)return;
   e.qa.archived=false;e.qa.archivedAt='';e.qa.restoredAt=new Date().toISOString();
@@ -1666,6 +1676,7 @@ async function asgnPTA(id,name){
 }
 
 async function asgn(id,name){
+  lastAsgnAt=Date.now();
   const e=evals.find(e=>e.id===id);if(!e)return;
   const changed=e.clinician!==name;
   e.clinician=name;e.status=name?'assigned':'pending';e.assignedBy=name?userName:'';
@@ -1678,7 +1689,11 @@ async function asgn(id,name){
   await sb.from('evals').update({clinician:name,status:e.status,assigned_by:e.assignedBy,qa:e.qa}).eq('id',id);
   if(ctReady&&(e.qa.visitDate||e.qa.ctShiftId))await ctSync(id);
 }
-async function mkDone(id){const e=evals.find(e=>e.id===id);if(!e)return;e.status='complete';render();renderQA();renderHistory();await sb.from('evals').update({status:'complete'}).eq('id',id);}
+let lastAsgnAt=0;
+async function mkDone(id){const e=evals.find(e=>e.id===id);if(!e)return;
+  if(Date.now()-lastAsgnAt<2500)return; // a tap on the assign list can land on this button
+  if(!confirm('Mark this eval done and move it to History?'))return;
+  e.status='complete';render();renderQA();renderHistory();await sb.from('evals').update({status:'complete'}).eq('id',id);}
 async function rmEval(id){
   const e0=evals.find(e=>e.id===id);const sid=e0&&e0.qa&&e0.qa.ctShiftId;
   evals=evals.filter(e=>e.id!==id);render();
@@ -1808,6 +1823,30 @@ function renderAgencies(){
     <div class="cr"><div style="display:flex;align-items:center"><div class="av" style="background:#1e3a2a">${a.substring(0,2).toUpperCase()}</div>
     <div style="font-size:12px;font-weight:600">${a}</div></div>
     <button class="xbtn" onclick="rmAgency('${a}')">×</button></div>`).join('');
+}
+// Compare the agency list with the Jobs on the Connecteam scheduler; add missing ones with one click
+async function agSyncOpen(){
+  const box=document.getElementById('agSync');
+  box.innerHTML='<div style="font-size:11px;color:var(--muted)">Loading Connecteam Jobs...</div>';
+  try{
+    const jr=await ctApi('list_jobs');const jobs=((jr&&jr.jobs)||[]).filter(j=>j&&!j.parentId&&!j.isDeleted);
+    if(!jobs.length){box.innerHTML='<div style="font-size:11px;color:var(--muted)">No Jobs found on the scheduler.</div>';return;}
+    window.__agJobs=jobs;
+    const newJobs=jobs.filter(j=>!agencies.some(a=>ctJobFor(a,[j])));
+    const noJob=agencies.filter(a=>!ctJobFor(a,jobs));
+    let h='<div style="font-size:11px;margin-bottom:4px"><b>Connecteam Jobs not in your agency list</b> (tick the ones to add):</div>';
+    h+=newJobs.length?newJobs.map((j,i)=>'<label style="display:block;font-size:12px;padding:2px 0"><input type="checkbox" class="agj" value="'+i+'" checked> '+esc(j.title)+'</label>').join('')+'<button class="btn btn-g" style="margin-top:4px" onclick="agSyncAdd()">Add ticked as agencies</button>':'<div style="font-size:11px;color:var(--muted)">None. Every Job is already an agency.</div>';
+    h+='<div style="font-size:11px;margin:8px 0 4px"><b>Agencies with no matching Job</b> (remove with × above, or add a Job in Connecteam):</div>';
+    h+=noJob.length?'<div style="font-size:12px">'+noJob.map(esc).join(', ')+'</div>':'<div style="font-size:11px;color:var(--muted)">None.</div>';
+    box._newJobs=newJobs;
+    box.innerHTML=h;
+  }catch(e){box.innerHTML='<div style="font-size:11px;color:var(--red)">'+esc(e.message)+'</div>';}
+}
+async function agSyncAdd(){
+  const box=document.getElementById('agSync');const nj=box._newJobs||[];
+  const picks=[...box.querySelectorAll('.agj:checked')].map(c=>nj[+c.value]).filter(Boolean);
+  for(const j of picks){const n=String(j.title).trim();if(!n||agencies.includes(n))continue;agencies.push(n);await sb.from('agencies').insert({name:n});}
+  renderAgencies();flash('✓ '+picks.length+' agenc'+(picks.length===1?'y':'ies')+' added');agSyncOpen();
 }
 async function addAgency(){const n=document.getElementById('na').value.trim();if(!n||agencies.includes(n))return;agencies.push(n);renderAgencies();document.getElementById('na').value='';await sb.from('agencies').insert({name:n});flash('✓ Agency added');}
 async function rmAgency(name){agencies=agencies.filter(a=>a!==name);renderAgencies();await sb.from('agencies').delete().eq('name',name);}
