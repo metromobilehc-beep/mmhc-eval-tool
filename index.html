@@ -433,6 +433,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">When an assigned eval has a visit date and time, a shift is created for that clinician in Connecteam. Changing or clearing the visit, reassigning, or cancelling the eval updates or removes it. Shifts carry only discipline, city, zip and agency, never patient info.</div>
         <div id="ctStatus" style="font-size:11px;min-height:14px;margin-bottom:6px;line-height:1.5;"></div>
         <button class="btn btn-o" onclick="checkCt()">Check connection</button>
+        <label style="display:flex;gap:6px;align-items:center;font-size:12px;margin:8px 0 4px"><input type="checkbox" id="autoMsg" style="width:auto" onchange="setAutoMsg(this.checked)"> Message the clinician in Connecteam when I assign an eval</label>
         <button class="btn btn-o" style="margin-top:4px" onclick="loadCtUsers()">Link clinicians to Connecteam users</button>
         <div id="ctMap" style="margin-top:8px"></div>
         <details style="margin-top:8px"><summary style="font-size:11px;color:var(--muted);cursor:pointer">Troubleshooting (rarely needed)</summary>
@@ -1103,6 +1104,7 @@ function cycleTheme(){
   const nx=THEMES[(THEMES.findIndex(x=>x[0]===cur)+1)%THEMES.length][0];
   applyTheme(nx);try{localStorage.setItem('mmhcTheme',nx);}catch(_){}
 }
+document.addEventListener('DOMContentLoaded',()=>{const am=document.getElementById('autoMsg');if(am)am.checked=autoMsgOn();});
 document.addEventListener('DOMContentLoaded',()=>applyTheme(document.documentElement.getAttribute('data-theme')||'dark'));
 function esc(x){return String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function authMsg(t){document.getElementById('authErr').textContent=t||'';}
@@ -1270,6 +1272,22 @@ async function ctApi(action,payload){
   }
   if(data&&data.error)throw new Error(data.error);
   return data;
+}
+// Chat message to the clinician (or PTA) in Connecteam when they are assigned. Once per person per eval; no patient details.
+function autoMsgOn(){try{return localStorage.getItem('mmhcAutoMsg')!=='off';}catch(_){return true;}}
+function setAutoMsg(on){try{localStorage.setItem('mmhcAutoMsg',on?'on':'off');}catch(_){}}
+let senderWarned=false;
+async function ctMessage(id,kind,force){
+  if(!ctReady||(!force&&!autoMsgOn()))return;
+  const e=evals.find(x=>x.id===id);if(!e)return;
+  try{
+    const r=await ctApi('message',{eval_id:id,kind,force:!!force});
+    if(r&&r.qa){if(!e.qa)e.qa={};Object.assign(e.qa,{msgClin:r.qa.msgClin,msgClinAt:r.qa.msgClinAt,msgPta:r.qa.msgPta,msgPtaAt:r.qa.msgPtaAt});}
+    if(r&&r.sent)flash('✉ Messaged '+r.to+' in Connecteam');
+    else if(r&&r.warning==='no_sender'){if(!senderWarned){senderWarned=true;flash('⚠ Messages are not set up yet (add the sender secret). Shifts still work.');}}
+    else if(r&&r.warning==='no_ct_user')flash('⚠ '+r.to+' is not linked to Connecteam, so no message was sent');
+    else if(r&&r.warning==='already_sent'&&force)flash('Already messaged '+r.to);
+  }catch(err){flash('⚠ Could not send the message: '+err.message);}
 }
 async function ctSync(id){
   const e=evals.find(x=>x.id===id);if(!e)return;
@@ -1853,7 +1871,7 @@ function render(){
       </div>
       ${e.assignedBy?`<div style="font-size:10px;color:var(--muted)">Assigned by ${e.assignedBy}</div>`:''}
       <div style="margin-bottom:4px"><input class="csel" style="font-size:11px;padding:5px 7px;" placeholder="Patient initials / ID" value="${e.patient||''}" onchange="updPat('${e.id}',this.value)"></div>
-      ${e.status!=='complete'?`<div><div class="vis-cap"><span>📅 Visit date (time optional)</span>${e.qa&&e.qa.ctShiftId?'<span class="ct-ok">✓ Connecteam</span>':''}</div><div class="vis-in"><input type="date" value="${(e.qa&&e.qa.visitDate)||''}" onchange="setVisit('${e.id}','visitDate',this.value)"><input type="time" value="${(e.qa&&e.qa.visitTime)||''}" onchange="setVisit('${e.id}','visitTime',this.value)"></div></div>`:''}
+      ${e.status!=='complete'?`<div><div class="vis-cap"><span>📅 Visit date (time optional)</span>${e.qa&&e.qa.ctShiftId?'<span class="ct-ok">✓ Connecteam</span>':''}${e.status==='assigned'&&e.clinician?`<a href="#" style="font-size:10px;color:var(--muted);margin-left:6px" title="${e.qa&&e.qa.msgClin?'Messaged '+esc(e.qa.msgClin):'Not messaged yet'}" onclick="ctMessage('${e.id}','assigned',true);return false">✉ ${e.qa&&e.qa.msgClin===e.clinician?'again':'message'}</a>`:''}</div><div class="vis-in"><input type="date" value="${(e.qa&&e.qa.visitDate)||''}" onchange="setVisit('${e.id}','visitDate',this.value)"><input type="time" value="${(e.qa&&e.qa.visitTime)||''}" onchange="setVisit('${e.id}','visitTime',this.value)"></div></div>`:''}
       ${(()=>{const sd=e.qa&&e.qa.visitDate,s=getSuggestedClinician(e.location,e.zip,sd);const sdy=s&&sd?asstDay(s.name,sd):null;return s?`<div style="font-size:10px;color:var(--accent);margin-bottom:4px;">💡 ${s.name} available${s.region?' · '+s.region:''}${sdy&&hasPref(sdy)?' · ✓ prefers to work that day':''}</div>`:''})()}
       <div class="cact">
         <select class="csel" onchange="asgn('${e.id}',this.value)">
@@ -1889,6 +1907,7 @@ async function asgnPTA(id,name){
   if(name) flash(`✓ PTA assigned: ${name}`);
   // the PTA gets a same-day "eval planned" marker on their Connecteam calendar once there is a visit date
   if(ctReady&&((e.qa&&e.qa.visitDate)||(e.qa&&e.qa.ctPtaShiftId)))await ctSync(id);
+  if(name)await ctMessage(id,'pta');
 }
 
 async function asgn(id,name){
@@ -1904,6 +1923,7 @@ async function asgn(id,name){
   render();renderQA();renderStuck();
   await sb.from('evals').update({clinician:name,status:e.status,assigned_by:e.assignedBy,qa:e.qa}).eq('id',id);
   if(ctReady&&(e.qa.visitDate||e.qa.ctShiftId))await ctSync(id);
+  if(name&&changed)await ctMessage(id,'assigned');
 }
 let lastAsgnAt=0;
 async function mkDone(id){const e=evals.find(e=>e.id===id);if(!e)return;
