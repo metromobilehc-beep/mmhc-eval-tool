@@ -4,9 +4,13 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>MMHC · Eval Workflow</title>
+<script>try{document.documentElement.setAttribute('data-theme',localStorage.getItem('mmhcTheme')||'dark')}catch(e){document.documentElement.setAttribute('data-theme','dark')}</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
-:root{--bg:#18453b;--surface:#1f5446;--border:#2d6e5a;--accent:#fbbf24;--red:#fca5a5;--blue:#93c5fd;--text:#ffffff;--muted:#7ab8aa;--pending:#fbbf24;}
+:root,[data-theme=dark]{--bg:#141f1c;--surface:#1a2a26;--border:#2b4540;--accent:#e9b949;--red:#f19a9a;--blue:#8db8ee;--text:#e8f0ed;--muted:#8fb0a6;--pending:#e9b949;--card:#1f332e;--on-accent:#14211d;--soft:#b3cbc3;--opt-bg:#1a2a26;--opt-fg:#e8f0ed;--avbg:#10201c;--ov:rgba(255,255,255,.04);--ov2:rgba(255,255,255,.12);--dis-bg:#26403a;--dis-fg:#5f8176;--cs:dark;}
+[data-theme=light]{--bg:#f1f5f3;--surface:#ffffff;--border:#cbd8d3;--accent:#a15c00;--red:#b42318;--blue:#1d4ed8;--text:#1c2b27;--muted:#5d716a;--pending:#a15c00;--card:#ffffff;--on-accent:#ffffff;--soft:#3f544d;--opt-bg:#ffffff;--opt-fg:#1c2b27;--avbg:#e3ece8;--ov:rgba(0,0,0,.035);--ov2:rgba(0,0,0,.08);--dis-bg:#e3eae7;--dis-fg:#8fa19a;--cs:light;}
+[data-theme=green]{--bg:#18453b;--surface:#1f5446;--border:#2d6e5a;--accent:var(--accent);--red:#fca5a5;--blue:var(--blue);--text:#ffffff;--muted:#7ab8aa;--pending:var(--accent);--card:#265e50;--on-accent:#18453b;--soft:var(--soft);--opt-bg:#12352c;--opt-fg:#eaf6f1;--avbg:#1e3a2a;--ov:rgba(255,255,255,.04);--ov2:rgba(255,255,255,.15);--dis-bg:#2a5a4a;--dis-fg:#5a8a7a;--cs:dark;}
+html{color-scheme:var(--cs);}
 *{box-sizing:border-box;margin:0;padding:0;}
 body{background:var(--bg);color:var(--text);font-family:'Segoe UI',system-ui,sans-serif;font-size:14px;min-height:100vh;}
 header{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 20px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;flex-wrap:wrap;gap:8px;}
@@ -14,31 +18,31 @@ header{background:var(--surface);border-bottom:1px solid var(--border);padding:1
 .mark{width:32px;height:32px;background:#ffffff;border-radius:8px;display:flex;align-items:center;justify-content:center;font-weight:700;font-size:12px;color:#18453b;flex-shrink:0;}
 .logo-text{font-weight:700;font-size:15px;}
 .logo-sub{font-size:11px;color:var(--muted);}
-.week-pill{font-family:monospace;font-size:11px;color:#fbbf24;background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);padding:5px 12px;border-radius:20px;}
+.week-pill{font-family:monospace;font-size:11px;color:var(--accent);background:rgba(251,191,36,0.1);border:1px solid rgba(251,191,36,0.3);padding:5px 12px;border-radius:20px;}
 .stats{display:flex;gap:18px;}
 .stat{text-align:center;}
 .stat-n{font-size:20px;font-weight:700;font-family:monospace;}
 .stat-l{font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;}
 .sync-status{font-size:11px;display:flex;align-items:center;gap:5px;color:var(--muted);}
 .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--muted);flex-shrink:0;}
-.sync-dot.live{background:#fbbf24;box-shadow:0 0 6px rgba(251,191,36,0.5);}
+.sync-dot.live{background:var(--accent);box-shadow:0 0 6px rgba(251,191,36,0.5);}
 .sync-dot.syncing{background:var(--pending);}
 .sync-dot.err{background:var(--red);}
 .layout{display:grid;grid-template-columns:290px 1fr;height:calc(100vh - 57px);}
 .sidebar{background:var(--surface);border-right:1px solid var(--border);display:flex;flex-direction:column;overflow:hidden;}
 .tabs{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border);flex-shrink:0;}
 .tab{padding:9px 2px;text-align:center;font-size:10px;font-weight:600;text-transform:uppercase;color:var(--muted);cursor:pointer;border:none;border-bottom:2px solid transparent;background:none;font-family:inherit;}
-.tab.on{color:#fbbf24;border-bottom-color:#fbbf24;}
+.tab.on{color:var(--accent);border-bottom-color:var(--accent);}
 .panel{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:10px;}
 .hidden{display:none!important;}
 .lbl{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin-bottom:3px;}
 input,select,textarea{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-family:inherit;font-size:12px;padding:7px 10px;outline:none;box-sizing:border-box;}
 textarea{resize:none;height:140px;line-height:1.7;font-family:monospace;}
-input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 .btn{padding:8px 14px;border-radius:6px;border:none;cursor:pointer;font-family:inherit;font-weight:600;font-size:12px;display:flex;align-items:center;gap:6px;justify-content:center;width:100%;}
-.btn-g{background:#fbbf24;color:#18453b;}
+.btn-g{background:var(--accent);color:var(--on-accent);}
 .btn-g:hover{background:#f59e0b;}
-.btn-g:disabled{background:#2a5a4a;color:#5a8a7a;cursor:not-allowed;}
+.btn-g:disabled{background:var(--dis-bg);color:var(--dis-fg);cursor:not-allowed;}
 .btn-o{background:transparent;color:var(--muted);border:1px solid var(--border);}
 .btn-o:hover{color:var(--text);border-color:var(--text);}
 .btn-r{background:rgba(239,68,68,0.1);color:var(--red);border:1px solid transparent;}
@@ -53,7 +57,7 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 .tpl-t{font-size:11px;font-weight:600;text-transform:uppercase;letter-spacing:.5px;color:var(--accent);margin-bottom:5px;}
 .tpl-b{font-size:11px;color:var(--muted);line-height:1.6;font-family:monospace;}
 .cr{display:flex;align-items:center;justify-content:space-between;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:7px 10px;margin-bottom:5px;}
-.av{width:27px;height:27px;border-radius:50%;background:#1e2530;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--accent);margin-right:8px;flex-shrink:0;}
+.av{width:27px;height:27px;border-radius:50%;background:var(--avbg);display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;color:var(--accent);margin-right:8px;flex-shrink:0;}
 .xbtn{background:none;border:none;color:var(--muted);cursor:pointer;font-size:18px;line-height:1;}
 .xbtn:hover{color:var(--red);}
 .board{overflow-y:auto;padding:20px;display:flex;flex-direction:column;gap:14px;}
@@ -61,12 +65,12 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 .bt{font-weight:700;font-size:16px;}
 .fr{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
 .fb{padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
-.fb.on{background:var(--accent);color:#0a1628;border-color:var(--accent);}
+.fb.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent);}
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(255px,1fr));gap:10px;}
-.card{background:#265e50;border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;}
+.card{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:8px;}
 .card.sp{border-left:3px solid var(--pending);}
 .card.sa{border-left:3px solid var(--blue);}
-.card.sc{border-left:3px solid #fbbf24;opacity:.4;filter:saturate(0.5);}
+.card.sc{border-left:3px solid var(--accent);opacity:.4;filter:saturate(0.5);}
 .card.pu{border-top:2px solid var(--red);}
 .card.pp{border-top:2px solid var(--pending);}
 .cloc{font-weight:700;font-size:15px;letter-spacing:0.2px;}
@@ -76,17 +80,17 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 .dPT{background:rgba(59,130,246,.15);color:#60a5fa;}
 .dOT{background:rgba(168,85,247,.15);color:#c084fc;}
 .dSLP{background:rgba(236,72,153,.15);color:#f472b6;}
-.dPTA{background:rgba(59,130,246,.1);color:#93c5fd;}
+.dPTA{background:rgba(59,130,246,.1);color:var(--blue);}
 .dCOTA{background:rgba(168,85,247,.1);color:#d8b4fe;}
-.bag{background:rgba(255,255,255,.15);color:#ffffff;font-weight:800;}
-.burg{background:rgba(239,68,68,.15);color:#f87171;}
+.bag{background:var(--ov2);color:var(--text);font-weight:800;}
+.burg{background:rgba(239,68,68,.15);color:var(--red);}
 .basp{background:rgba(245,158,11,.15);color:var(--pending);}
 .bpend{background:rgba(245,158,11,.1);color:var(--pending);}
 .bass{background:rgba(59,130,246,.1);color:#60a5fa;}
-.bcom{background:rgba(251,191,36,.15);color:#fbbf24;}
-.bcl{background:rgba(59,130,246,.08);color:#93c5fd;font-size:10px;}
+.bcom{background:rgba(251,191,36,.15);color:var(--accent);}
+.bcl{background:rgba(59,130,246,.08);color:var(--blue);font-size:10px;}
 .cnote{font-size:11px;color:var(--muted);font-style:italic;line-height:1.4;}
-.cpat{font-size:12px;font-weight:600;color:#93c5fd;}
+.cpat{font-size:12px;font-weight:600;color:var(--blue);}
 .cmeta{display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:4px;}
 .cdate{font-size:10px;color:var(--muted);font-family:monospace;}
 .auth-gate{position:fixed;inset:0;z-index:9999;background:var(--bg);display:flex;align-items:center;justify-content:center;padding:20px;}
@@ -97,9 +101,9 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 .auth-err{font-size:12px;color:var(--red);min-height:16px;}
 .auth-foot{font-size:11px;color:var(--muted);}
 .staff-row{display:flex;align-items:center;justify-content:space-between;gap:6px;flex-wrap:wrap;padding:7px 0;border-bottom:1px solid var(--border);font-size:12px;}
-.stuckchip{background:rgba(239,68,68,.15);color:#f87171;font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;}
-.stuck-card{background:var(--bg);border:1px solid rgba(239,68,68,.35);border-left:3px solid #f87171;border-radius:8px;padding:10px;margin-bottom:8px;}
-.stuck-r{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:#f87171;margin-top:4px;}
+.stuckchip{background:rgba(239,68,68,.15);color:var(--red);font-size:10px;font-weight:700;padding:2px 7px;border-radius:4px;}
+.stuck-card{background:var(--bg);border:1px solid rgba(239,68,68,.35);border-left:3px solid var(--red);border-radius:8px;padding:10px;margin-bottom:8px;}
+.stuck-r{display:flex;justify-content:space-between;gap:8px;font-size:11px;color:var(--red);margin-top:4px;}
 .vis-row{display:flex;align-items:center;gap:6px;margin:4px 0;font-size:11px;color:var(--muted);flex-wrap:wrap;}
 .vis-row input{flex:1 1 120px;min-width:0;}
 .ct-ok{white-space:nowrap;color:var(--accent);font-weight:600;}
@@ -110,13 +114,13 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 .agebadge{font-size:10px;font-family:monospace;padding:2px 7px;border-radius:4px;}
 .af{background:rgba(0,212,170,.1);color:var(--accent);}
 .aa{background:rgba(245,158,11,.15);color:var(--pending);}
-.ao{background:rgba(239,68,68,.15);color:#f87171;}
+.ao{background:rgba(239,68,68,.15);color:var(--red);}
 .cact{display:flex;gap:6px;flex-wrap:wrap;}
 .cact .csel{flex:1 1 100%;min-width:0;}
 .cact .cbtn{flex:1;}
 .csel{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:11px;padding:5px 7px;outline:none;cursor:pointer;}
 .cbtn{padding:5px 10px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;}
-.cbtn.done{color:#fbbf24;border-color:#fbbf24;}
+.cbtn.done{color:var(--accent);border-color:var(--accent);}
 .cbtn.del{color:var(--red);border-color:rgba(248,113,113,0.3);}
 .cbtn.del:hover{background:rgba(248,113,113,0.1);}
 .empty{text-align:center;padding:60px 20px;color:var(--muted);grid-column:1/-1;}
@@ -128,42 +132,42 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 .qa-clin{font-size:11px;color:var(--muted);}
 .qa-checks{display:flex;flex-direction:column;gap:6px;}
 .qa-check{display:flex;align-items:center;gap:8px;font-size:12px;}
-.qa-check input[type=checkbox]{width:15px;height:15px;accent-color:#fbbf24;cursor:pointer;flex-shrink:0;}
+.qa-check input[type=checkbox]{width:15px;height:15px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;}
 .qa-check.done{color:var(--muted);text-decoration:line-through;}
 .qa-date{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:3px 6px;font-family:inherit;outline:none;width:130px;}
 .qa-note{font-size:11px;background:var(--bg);border:1px solid var(--border);border-radius:4px;color:var(--text);padding:4px 7px;font-family:inherit;outline:none;width:100%;resize:none;height:40px;}
 .qa-empty{text-align:center;padding:30px;color:var(--muted);font-size:13px;}
-.flash{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--accent);color:#0a1628;font-weight:700;font-size:13px;padding:9px 22px;border-radius:24px;z-index:999;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap;}
+.flash{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--accent);color:var(--on-accent);font-weight:700;font-size:13px;padding:9px 22px;border-radius:24px;z-index:999;pointer-events:none;opacity:0;transition:opacity .3s;white-space:nowrap;}
 .flash.on{opacity:1;}
 .modal{position:fixed;inset:0;z-index:5000;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;padding:16px;}
 .modal-box{width:100%;max-width:430px;max-height:92vh;overflow:auto;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;display:flex;flex-direction:column;gap:8px;}
 .modal-sum{font-size:12px;color:var(--muted);line-height:1.5;}
 .opt{display:flex;align-items:flex-start;gap:8px;font-size:12px;line-height:1.5;cursor:pointer;display:block;padding-left:23px;position:relative;}
 .opt>input[type=radio],.opt>input[type=checkbox]{position:absolute;left:0;top:2px;}
-.opt input[type=radio],.opt input[type=checkbox]{width:15px;height:15px;margin-top:2px;accent-color:#fbbf24;flex-shrink:0;}
+.opt input[type=radio],.opt input[type=checkbox]{width:15px;height:15px;margin-top:2px;accent-color:var(--accent);flex-shrink:0;}
 .opt input[type=number]{width:56px;padding:2px 6px;display:inline-block;}
 .modal-pre{font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;line-height:1.5;margin-top:4px;}
 .av-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:6px;}
 .av-row{display:flex;gap:3px;margin-top:6px;}
 .av-chip{flex:1;min-width:0;padding:5px 0;border-radius:6px;text-align:center;font-size:10px;font-weight:700;border:1px solid var(--border);cursor:pointer;background:transparent;font-family:inherit;color:var(--muted);}
 .av-good{color:var(--accent);border-color:rgba(0,212,170,.45);}
-.av-mid{color:#fbbf24;border-color:rgba(251,191,36,.45);}
+.av-mid{color:var(--accent);border-color:rgba(251,191,36,.45);}
 .av-low{color:#fb923c;border-color:rgba(251,146,60,.45);}
 .av-none{color:var(--red);border-color:rgba(248,113,113,.45);}
-.av-sel{outline:2px solid #fbbf24;outline-offset:1px;}
+.av-sel{outline:2px solid var(--accent);outline-offset:1px;}
 .av-days{display:flex;gap:3px;margin-bottom:8px;}
 .av-day{flex:1;min-width:0;padding:5px 0;border-radius:6px;font-size:10px;text-align:center;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit;line-height:1.3;}
-.av-day.on{border-color:#fbbf24;color:#fbbf24;font-weight:700;}
+.av-day.on{border-color:var(--accent);color:var(--accent);font-weight:700;}
 @keyframes calspin{to{transform:rotate(360deg)}}
 .vsw{display:flex;gap:6px;flex-shrink:0;}
 .vsw button{padding:6px 16px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;}
-.vsw button.on{border-color:#fbbf24;color:#fbbf24;background:rgba(251,191,36,.08);}
+.vsw button.on{border-color:var(--accent);color:var(--accent);background:rgba(251,191,36,.08);}
 .cal-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
 .cal-bar button,.cal-bar select{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:13px;cursor:pointer;font-family:inherit;}
-.cal-bar button.on{border-color:#fbbf24;color:#fbbf24;}
+.cal-bar button.on{border-color:var(--accent);color:var(--accent);}
 .cal-bar select{width:auto;}
-select{color-scheme:dark;}
-select option,select optgroup{background:#12352c;color:#eaf6f1;}
+select{color-scheme:var(--cs);}
+select option,select optgroup{background:var(--opt-bg);color:var(--opt-fg);}
 .cal-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px;background:var(--surface);max-height:calc(100vh - 250px);}
 table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;table-layout:fixed;}
 .cal th,.cal td{border-bottom:1px solid var(--border);border-right:1px solid var(--border);padding:8px;vertical-align:top;font-size:13px;}
@@ -171,12 +175,12 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
 .cal th:first-child,.cal td:first-child{position:sticky;left:0;background:var(--surface);z-index:1;width:150px;text-align:left;}
 .cal th:first-child{z-index:3;}
 .cal td{height:72px;}
-.cal th.today{color:#fbbf24;}
+.cal th.today{color:var(--accent);}
 .cal td.today{background:rgba(251,191,36,.07);}
-.cal-n{font-size:12px;color:#b9d3c9;margin-bottom:3px;}
+.cal-n{font-size:12px;color:var(--soft);margin-bottom:3px;}
 .cal-off{color:var(--red);font-weight:700;}
-.cal-ev{border-radius:6px;padding:4px 6px;margin-top:4px;font-size:12px;line-height:1.35;color:#eaf6f1;border:1px solid rgba(0,212,170,.5);background:rgba(0,212,170,.08);}
-.cal-ev.noct{border:1px dashed #fbbf24;background:rgba(251,191,36,.08);}
+.cal-ev{border-radius:6px;padding:4px 6px;margin-top:4px;font-size:12px;line-height:1.35;color:var(--text);border:1px solid rgba(0,212,170,.5);background:rgba(0,212,170,.08);}
+.cal-ev.noct{border:1px dashed var(--accent);background:rgba(251,191,36,.08);}
 .cal-ev.seen{opacity:.55;}
 .menu-btn{display:none;padding:6px 12px;border-radius:20px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
 @media(max-width:680px){
@@ -242,11 +246,12 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
     <span id="syncMsg">Connecting...</span>
   </div>
   <button class="menu-btn" id="menuBtn" onclick="toggleSide()">☰ Tools</button>
+  <button id="themeBtn" onclick="cycleTheme()" title="Change look: dark, light, green" style="background:var(--ov);border:1px solid var(--border);color:var(--text);border-radius:20px;padding:5px 12px;font-size:12px;cursor:pointer;font-family:inherit">🌙 Dark</button>
   <div class="stats">
     <div class="stat"><div class="stat-n" id="sP" style="color:var(--pending)">0</div><div class="stat-l">Pending</div></div>
     <div class="stat"><div class="stat-n" id="sA" style="color:var(--blue)">0</div><div class="stat-l">Assigned</div></div>
     <div class="stat"><div class="stat-n" id="sC" style="color:var(--accent)">0</div><div class="stat-l">Done</div></div>
-    <div class="stat"><div class="stat-n" id="sS" style="color:#f87171">0</div><div class="stat-l">Stuck</div></div>
+    <div class="stat"><div class="stat-n" id="sS" style="color:var(--red)">0</div><div class="stat-l">Stuck</div></div>
   </div>
 </header>
 
@@ -381,7 +386,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
 
     <div class="panel hidden" id="tp-set">
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-        <div style="font-size:12px;font-weight:600;color:#fbbf24;margin-bottom:6px;">🔐 Your Login</div>
+        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:6px;">🔐 Your Login</div>
         <div id="acctInfo" style="font-size:12px;line-height:1.5;margin-bottom:8px;"></div>
         <input id="pwNew" type="password" placeholder="New password (10+ characters)" autocomplete="new-password" style="margin-bottom:5px;">
         <input id="pwNew2" type="password" placeholder="Confirm new password" autocomplete="new-password" style="margin-bottom:6px;">
@@ -390,7 +395,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <button class="btn btn-r" style="margin-top:4px" onclick="doSignOut()">Sign out</button>
       </div>
       <div id="adminBox" class="hidden" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-        <div style="font-size:12px;font-weight:600;color:#fbbf24;margin-bottom:4px;">👥 Team Logins</div>
+        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:4px;">👥 Team Logins</div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">One Metro login works here and in the quote tool. A new or reset login gets a temporary password, shown once.</div>
         <div id="staffList"></div>
         <input id="stName" placeholder="Full name" style="margin-top:8px;margin-bottom:5px;">
@@ -401,7 +406,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <div id="stCreds" class="hidden" style="margin-top:8px;padding:10px;border:1px solid var(--accent);border-radius:8px;font-size:12px;line-height:1.6;"></div>
       </div>
       <div id="ctBox" class="hidden" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-        <div style="font-size:12px;font-weight:600;color:#fbbf24;margin-bottom:4px;">🗓 Connecteam Calendar</div>
+        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:4px;">🗓 Connecteam Calendar</div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">When an assigned eval has a visit date and time, a shift is created for that clinician in Connecteam. Changing or clearing the visit, reassigning, or cancelling the eval updates or removes it. Shifts carry only discipline, city, zip and agency, never patient info.</div>
         <div id="ctStatus" style="font-size:11px;min-height:14px;margin-bottom:6px;line-height:1.5;"></div>
         <button class="btn btn-o" onclick="checkCt()">Check connection</button>
@@ -413,7 +418,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <div id="ctMap" style="margin-top:8px"></div>
       </div>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-        <div style="font-size:12px;font-weight:600;color:#fbbf24;margin-bottom:4px;">📊 Live Shared Board</div>
+        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:4px;">📊 Live Shared Board</div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">Real-time sync via Supabase. All devices see the same board instantly.</div>
         <button class="btn btn-o" onclick="loadAll()">🔄 Force Refresh</button>
       </div>
@@ -479,7 +484,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <button id="calRefresh" onclick="hardRefresh()">🔄 Hard refresh</button>
       </div>
       <div id="calBody"></div>
-      <div style="font-size:12px;color:#b9d3c9;margin-top:10px;line-height:1.6">Boxes show evals from this tool placed on the visit day: <span style="color:var(--accent)">solid green</span> = on the clinician's Connecteam calendar, <span style="color:#fbbf24">dashed amber</span> = not in Connecteam yet. "2 of 3" is evals booked out of that clinician's daily limit (Max/day box, default 3): everything already on their Connecteam calendar plus evals here not in Connecteam yet. Connecteam does not share "prefer to work" times.</div>
+      <div style="font-size:12px;color:var(--soft);margin-top:10px;line-height:1.6">Boxes show evals from this tool placed on the visit day: <span style="color:var(--accent)">solid green</span> = on the clinician's Connecteam calendar, <span style="color:var(--accent)">dashed amber</span> = not in Connecteam yet. "2 of 3" is evals booked out of that clinician's daily limit (Max/day box, default 3): everything already on their Connecteam calendar plus evals here not in Connecteam yet. Connecteam does not share "prefer to work" times.</div>
     </div>
   </div>
 </div>
@@ -537,16 +542,16 @@ function renderCapacity() {
   list.innerHTML = allNames.map(name => {
     const clinRole = clins.find(c=>c.name===name)?.role || 'PTA';
     const cap = capacity.find(c=>c.name===name) || {name, available:false, region:'', role:clinRole};
-    return `<div style="background:var(--bg);border:1px solid ${cap.available?'#fbbf24':'var(--border)'};border-radius:8px;padding:10px;margin-bottom:8px;transition:border-color 0.2s;">
+    return `<div style="background:var(--bg);border:1px solid ${cap.available?'var(--accent)':'var(--border)'};border-radius:8px;padding:10px;margin-bottom:8px;transition:border-color 0.2s;">
       <div style="display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:6px;">
         <div style="display:flex;align-items:center;gap:8px;">
-          <div style="width:10px;height:10px;border-radius:50%;background:${cap.available?'#fbbf24':'var(--muted)'};flex-shrink:0;"></div>
+          <div style="width:10px;height:10px;border-radius:50%;background:${cap.available?'var(--accent)':'var(--muted)'};flex-shrink:0;"></div>
           <div>
             <div style="font-weight:700;font-size:13px;">${name}</div>
             <div style="font-size:10px;color:var(--muted);">${clinRole}</div>
           </div>
         </div>
-        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:${cap.available?'#fbbf24':'var(--muted)'};">
+        <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:11px;color:${cap.available?'var(--accent)':'var(--muted)'};">
           <input type="checkbox" ${cap.available?'checked':''} onchange="toggleCapAvail('${name}',this.checked)" style="accent-color:var(--accent);width:15px;height:15px;">
           ${cap.available?'Available':'Unavailable'}
         </label>
@@ -746,12 +751,12 @@ function renderHistory(){
   list.innerHTML=completed.map(e=>{
     const qa=e.qa||{};
     const checks=[qa.seen?'✓ Seen':'',qa.orders?'✓ Orders':'',qa.pta?'✓ PTA':'',qa.scheduled?'✓ Scheduled':''].filter(Boolean).join(' · ');
-    return`<div style="background:rgba(255,255,255,0.04);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px;">
+    return`<div style="background:var(--ov);border:1px solid var(--border);border-radius:8px;padding:10px;margin-bottom:6px;">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;">
         <div>
           <div style="font-weight:700;font-size:13px;color:var(--text)">${e.location}${e.zip?' '+e.zip:''}</div>
           <div style="font-size:11px;color:var(--muted)">👤 ${e.clinician||'—'} · ${e.agency||''} · ${e.discipline}</div>
-          ${e.patient?`<div style="font-size:11px;color:#93c5fd">${e.patient}</div>`:''}
+          ${e.patient?`<div style="font-size:11px;color:var(--blue)">${e.patient}</div>`:''}
         </div>
         <div style="display:flex;gap:4px;flex-direction:column;align-items:flex-end">
           ${isArchived(e)?`<span style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--muted)">Archived${e.qa.archivedFrom?' · was '+e.qa.archivedFrom:''}</span><button onclick="restoreEval('${e.id}')" style="font-size:10px;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">↩ Restore</button>`:''}
@@ -759,7 +764,7 @@ function renderHistory(){
           <button onclick="rmEval('${e.id}')" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ Remove</button>
         </div>
       </div>
-      ${checks?`<div style="font-size:11px;color:#fbbf24;margin-top:6px;">${checks}</div>`:''}
+      ${checks?`<div style="font-size:11px;color:var(--accent);margin-top:6px;">${checks}</div>`:''}
       ${qa.seenDate?`<div style="font-size:10px;color:var(--muted);margin-top:2px;">Seen: ${qa.seenDate}</div>`:''}
       ${qa.notes?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:4px;">${qa.notes}</div>`:''}
       <div style="font-size:10px;color:var(--muted);margin-top:4px;">${e.dateAdded}${e.addedBy?' · Added by '+e.addedBy:''}${e.assignedBy?' · Assigned by '+e.assignedBy:''}</div>
@@ -1006,6 +1011,17 @@ async function addOne(){
 // ── AUTH (same login + profiles table + staff-admin function as the quote tool) ──
 const METRO_COMPANY_ID='b00ca9bc-d669-492d-8ad5-2d2783321ade';
 let me=null;
+const THEMES=[['dark','🌙 Dark'],['light','☀ Light'],['green','🌿 Green']];
+function applyTheme(t){
+  document.documentElement.setAttribute('data-theme',t);
+  const b=document.getElementById('themeBtn');if(b)b.textContent=(THEMES.find(x=>x[0]===t)||THEMES[0])[1];
+}
+function cycleTheme(){
+  const cur=document.documentElement.getAttribute('data-theme')||'dark';
+  const nx=THEMES[(THEMES.findIndex(x=>x[0]===cur)+1)%THEMES.length][0];
+  applyTheme(nx);try{localStorage.setItem('mmhcTheme',nx);}catch(_){}
+}
+document.addEventListener('DOMContentLoaded',()=>applyTheme(document.documentElement.getAttribute('data-theme')||'dark'));
 function esc(x){return String(x==null?'':x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));}
 function authMsg(t){document.getElementById('authErr').textContent=t||'';}
 function showGate(){document.getElementById('authGate').classList.remove('hidden');}
@@ -1228,7 +1244,7 @@ async function checkCt(){
     }
     const mine=sch.find(x=>String(x.schedulerId)===String(st.schedulerId));
     if(listErr&&st.configured){
-      ctReady=true;el.style.color='#fbbf24';
+      ctReady=true;el.style.color='var(--accent)';
       el.innerHTML='Could not verify the scheduler right now: '+esc(listErr)+'.<br>Connecteam may be rate-limiting. Wait a minute and click Check connection again. Shifts and the calendar still work meanwhile.';
       return;
     }
@@ -1501,7 +1517,7 @@ function renderCal(){
   h+='<div class="cal-wrap"><table class="cal"><thead><tr><th>Clinician</th>'+days.map(d=>'<th class="'+(d===today?'today':'')+'">'+esc(avLabel(d,true))+'</th>').join('')+'</tr></thead><tbody>';
   h+=people.map(c=>{
     const u=calData&&calData.users&&calData.users[c.name];
-    return '<tr><td><b>'+esc(c.name)+'</b><div style="font-size:12px;color:#b9d3c9">'+esc(c.role||'')+(!u&&ctReady&&!calBusy&&!calErr?' · not linked':'')+'</div><label style="font-size:11px;color:#b9d3c9;display:block;margin-top:4px">Max/day <input type="number" min="1" max="10" value="'+maxFor(c)+'" data-name="'+esc(c.name)+'" onchange="setMaxEvals(this.dataset.name,this.value)" style="width:44px;padding:2px 4px;font-size:12px"></label></td>'+days.map(d=>{
+    return '<tr><td><b>'+esc(c.name)+'</b><div style="font-size:12px;color:var(--soft)">'+esc(c.role||'')+(!u&&ctReady&&!calBusy&&!calErr?' · not linked':'')+'</div><label style="font-size:11px;color:var(--soft);display:block;margin-top:4px">Max/day <input type="number" min="1" max="10" value="'+maxFor(c)+'" data-name="'+esc(c.name)+'" onchange="setMaxEvals(this.dataset.name,this.value)" style="width:44px;padding:2px 4px;font-size:12px"></label></td>'+days.map(d=>{
       const x=u&&u.days[d];let top='';
       if(x){const n=dayLoad(c,d,x),mx=capFor(c,x);top=avOff(x)?'<div class="cal-n cal-off">Off all day</div>':'<div class="cal-n'+(n>=mx?' cal-off':'')+'">'+(n>=mx?'Full ':'')+n+' of '+mx+(x.cap!=null?' (note)':'')+(x.offMin>0?' · unavailable '+avHrs(x.offMin):'')+'</div>'+((x.available||[]).length?'<div class="cal-n" style="color:var(--accent)">✓ Available'+(x.available.some(a=>a.note)?': '+esc(x.available.filter(a=>a.note).map(a=>a.note).join('; ')):'')+'</div>':'');}
       const evs=(byCell[c.name+'|'+d]||[]).map(e=>{
@@ -1645,7 +1661,7 @@ function render(){
       ${e.assignedBy?`<div style="font-size:10px;color:var(--muted)">Assigned by ${e.assignedBy}</div>`:''}
       <div style="margin-bottom:4px"><input class="csel" style="font-size:11px;padding:5px 7px;" placeholder="Patient initials / ID" value="${e.patient||''}" onchange="updPat('${e.id}',this.value)"></div>
       ${e.status!=='complete'?`<div><div class="vis-cap"><span>📅 Visit date (time optional)</span>${e.qa&&e.qa.ctShiftId?'<span class="ct-ok">✓ Connecteam</span>':''}</div><div class="vis-in"><input type="date" value="${(e.qa&&e.qa.visitDate)||''}" onchange="setVisit('${e.id}','visitDate',this.value)"><input type="time" value="${(e.qa&&e.qa.visitTime)||''}" onchange="setVisit('${e.id}','visitTime',this.value)"></div></div>`:''}
-      ${(()=>{const s=getSuggestedClinician(e.location,e.zip);return s?`<div style="font-size:10px;color:#fbbf24;margin-bottom:4px;">💡 ${s.name} available${s.region?' · '+s.region:''}</div>`:''})()}
+      ${(()=>{const s=getSuggestedClinician(e.location,e.zip);return s?`<div style="font-size:10px;color:var(--accent);margin-bottom:4px;">💡 ${s.name} available${s.region?' · '+s.region:''}</div>`:''})()}
       <div class="cact">
         <select class="csel" onchange="asgn('${e.id}',this.value)">
           <option value="">— Assign Clinician —</option>${opts}
@@ -1660,7 +1676,7 @@ function render(){
           <option value="">+ Assign PTA/COTA (optional)</option>
           ${clins.filter(c=>c.role==='PTA'||c.role==='COTA').map(c=>`<option value="${c.name}"${e.ptaClinician===c.name?' selected':''}>${c.name} (${c.role})</option>`).join('')}
         </select>
-        ${e.ptaClinician?`<div style="font-size:10px;color:#93c5fd;margin-top:2px;">🤝 PTA: ${e.ptaClinician}</div>`:''}
+        ${e.ptaClinician?`<div style="font-size:10px;color:var(--blue);margin-top:2px;">🤝 PTA: ${e.ptaClinician}</div>`:''}
       </div>
     </div>`;
   }).join('');
@@ -1721,7 +1737,7 @@ function renderQA(){
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div><div class="qa-loc">${e.location}${e.zip?` <span style="font-family:monospace;font-size:11px;color:var(--muted)">${e.zip}</span>`:''}</div>
           <div class="qa-clin">👤 ${e.clinician||'Unassigned'} · ${e.agency||''} · ${e.discipline}</div>
-          ${e.patient?`<div style="font-size:11px;color:#93c5fd">${e.patient}</div>`:''}
+          ${e.patient?`<div style="font-size:11px;color:var(--blue)">${e.patient}</div>`:''}
           ${qa.visitDate?`<div style="font-size:11px;color:var(--muted)">📅 Visit ${qa.visitDate}${qa.visitTime?' '+qa.visitTime:''}</div>`:''}</div>
           <span class="badge bass">Assigned</span>
         </div>
@@ -1768,8 +1784,8 @@ function renderClins(){
         </div>
       </div>
       <div style="display:flex;gap:8px;flex-wrap:wrap;padding-left:35px;" id="clin-info-${c.name.replace(/\s+/g,'-')}">
-        ${c.phone?`<a href="tel:${c.phone}" style="font-size:11px;color:#fbbf24;text-decoration:none;">📞 ${c.phone}</a>`:''}
-        ${c.email?`<a href="mailto:${c.email}" style="font-size:11px;color:#fbbf24;text-decoration:none;">✉️ ${c.email}</a>`:''}
+        ${c.phone?`<a href="tel:${c.phone}" style="font-size:11px;color:var(--accent);text-decoration:none;">📞 ${c.phone}</a>`:''}
+        ${c.email?`<a href="mailto:${c.email}" style="font-size:11px;color:var(--accent);text-decoration:none;">✉️ ${c.email}</a>`:''}
         ${!c.phone&&!c.email?`<span style="font-size:10px;color:var(--muted);font-style:italic;">No contact info — tap Edit to add</span>`:''}
       </div>
       <div id="clin-edit-${c.name.replace(/\s+/g,'-')}" style="display:none;padding-left:35px;">
@@ -1820,7 +1836,7 @@ function renderAgencies(){
   const sel=document.getElementById('ag');const cur=sel.value;
   sel.innerHTML=agencies.map(a=>`<option value="${a}"${a===cur?' selected':''}>${a}</option>`).join('');
   document.getElementById('agencyList').innerHTML=agencies.map(a=>`
-    <div class="cr"><div style="display:flex;align-items:center"><div class="av" style="background:#1e3a2a">${a.substring(0,2).toUpperCase()}</div>
+    <div class="cr"><div style="display:flex;align-items:center"><div class="av" style="background:var(--avbg)">${a.substring(0,2).toUpperCase()}</div>
     <div style="font-size:12px;font-weight:600">${a}</div></div>
     <button class="xbtn" onclick="rmAgency('${a}')">×</button></div>`).join('');
 }
