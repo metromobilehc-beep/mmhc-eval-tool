@@ -728,7 +728,7 @@ function evalToDB(e) {
 }
 
 // ── UI ──
-function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='qa')renderQA();if(name==='stuck')renderStuck();if(name==='hist')renderHistory();if(name==='cap')renderCapacity();if(name==='avail'){if(!avData&&!avBusy)loadAvail();else renderAvail();}}
+function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='qa')renderQA();if(name==='stuck')renderStuck();if(name==='hist')renderHistory();if(name==='cap')renderCapacity();if(name==='set'&&me&&me.is_super_admin){checkCt();if(!ctUsers.length)loadCtUsers();}if(name==='avail'){if(!avData&&!avBusy)loadAvail();else renderAvail();}}
 
 function renderHistory(){
   const list=document.getElementById('histList');if(!list)return;
@@ -1117,9 +1117,12 @@ async function toggleStaff(id,makeActive){
 
 // ── CONNECTEAM (shifts are created by the connecteam-shift Edge Function; the API key never touches this page) ──
 let ctReady=false, ctUsers=[];
+const CT_SYSTEM_ALIAS={mobile:'HelloNote',vitalmuskogee:'HelloNote'};
 function ctNorm(x){return String(x==null?'':x).toLowerCase().replace(/[^a-z0-9]/g,'');}
-function ctJobFor(agency,jobs){const a=ctNorm(agency);if(!a)return null;const live=(jobs||[]).filter(j=>j&&!j.parentId);
-  return live.find(j=>ctNorm(j.title)===a)||live.find(j=>{const t=ctNorm(j.title);return t.length>=3&&(a.includes(t)||t.includes(a));})||null;}
+function ctWords(x){return String(x==null?'':x).toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);}
+function ctJobExact(agency,jobs){const a=ctNorm(agency);if(!a)return null;const live=(jobs||[]).filter(j=>j&&!j.parentId);
+  return live.find(j=>ctNorm(j.title)===a)||live.find(j=>{const t=ctNorm(j.title);return t.length>=3&&(a.includes(t)||t.includes(a));})||live.find(j=>{const aw=ctWords(agency),jw=ctWords(j.title);return aw.length>0&&aw.every(w=>jw.includes(w));})||null;}
+function ctJobFor(agency,jobs){const alias=CT_SYSTEM_ALIAS[ctNorm(agency)];return ctJobExact(agency,jobs)||(alias?ctJobExact(alias,jobs):null);}
 async function ctApi(action,payload){
   const {data,error}=await sb.functions.invoke('connecteam-shift',{body:{action,...(payload||{})}});
   if(error){
@@ -1183,7 +1186,7 @@ async function checkCt(){
     if(ctReady){
       try{const jr=await ctApi('list_jobs');const jobs=(jr&&jr.jobs)||[];
         const miss=agencies.filter(a=>!ctJobFor(a,jobs));
-        jobNote=jobs.length?(miss.length?'<br>Agencies with no matching Connecteam Job (their shifts get the agency in the title): <b>'+miss.map(esc).join(', ')+'</b>':'<br>Every agency matches a Connecteam Job.'):'<br>No Connecteam Jobs found on this scheduler, so shift titles will carry the agency name.';}
+        jobNote=jobs.length?(miss.length?'<br>No matching Connecteam Job (add a Job with this name on the scheduler, or the agency goes in the shift title): <b>'+miss.map(esc).join(', ')+'</b>':'<br>Every agency matches a Connecteam Job.'):'<br>No Connecteam Jobs found on this scheduler, so shift titles will carry the agency name.';}
       catch(_){}
     }
     el.innerHTML=ctReady?'Connected. Visits go to <b>'+esc(mine.name)+'</b> ('+esc(mine.timezone||'')+').'+jobNote:'Scheduler ID '+esc(st.schedulerId)+' was not found in your account.'+(list?'<br>Your schedulers: '+list:(listErr?'<br>Could not load your schedulers: '+esc(listErr):'<br>Connecteam returned no schedulers for this API key.'));
@@ -1202,7 +1205,8 @@ function ctGuess(c){
 }
 function renderCtMap(){
   const box=document.getElementById('ctMap');if(!box)return;
-  box.innerHTML='<button class="btn btn-o" onclick="autoMatchCt()">Auto-match by name</button>'+clins.map(c=>{
+  const linked=clins.filter(c=>c.ctUserId).length;
+  box.innerHTML='<div style="font-size:12px;margin-bottom:6px"><b>'+linked+' of '+clins.length+'</b> clinicians linked to Connecteam</div><button class="btn btn-o" onclick="autoMatchCt()">Auto-match by name</button>'+clins.map(c=>{
     const cur=c.ctUserId||'';
     return '<div class="staff-row"><div><span style="font-weight:600">'+esc(c.name)+'</span> <span style="color:var(--muted)">'+esc(c.role)+'</span></div>'
       +'<select class="csel" style="max-width:170px;font-size:11px" data-name="'+esc(c.name)+'" onchange="setCtUser(this.dataset.name,this.value)"><option value="">Not linked</option>'
