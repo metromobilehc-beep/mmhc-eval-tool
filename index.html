@@ -484,7 +484,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <button id="calRefresh" onclick="hardRefresh()">🔄 Hard refresh</button>
       </div>
       <div id="calBody"></div>
-      <div style="font-size:12px;color:var(--soft);margin-top:10px;line-height:1.6">Boxes show evals from this tool placed on the visit day: <span style="color:var(--accent)">solid green</span> = on the clinician's Connecteam calendar, <span style="color:var(--accent)">dashed amber</span> = not in Connecteam yet. "2 of 3" is evals booked out of that clinician's daily limit (Max/day box, default 3): everything already on their Connecteam calendar plus evals here not in Connecteam yet. Connecteam does not share "prefer to work" times.</div>
+      <div style="font-size:12px;color:var(--soft);margin-top:10px;line-height:1.6">Boxes show evals from this tool placed on the visit day: <span style="color:var(--accent)">solid green</span> = on the clinician's Connecteam calendar, <span style="color:var(--accent)">dashed amber</span> = not in Connecteam yet. "2 of 3" is evals booked out of that clinician's daily limit (Max/day box, default 3): everything already on their Connecteam calendar plus evals here not in Connecteam yet. Prefer-to-work entries (and notes like "2 evals") appear only for ones added after the webhook was turned on.</div>
     </div>
   </div>
 </div>
@@ -1418,8 +1418,22 @@ function unsyncedOn(name,date){return evals.filter(e=>e.status==='assigned'&&!is
 function dayLoad(c,date,d){return avLoad(d)+unsyncedOn(c.name,date);}
 // the day's limit: a note like "2 evals" on their Connecteam availability wins over the clinician's default
 function capFor(c,d){return (d&&d.cap!=null)?d.cap:maxFor(c);}
-function avCls(d,c,date){if(!d||avOff(d))return 'av-none';const left=capFor(c,d)-dayLoad(c,date,d);return left<=0?'av-none':left===1?'av-low':'av-good';}
-function avTxt(d,c,date){if(!d)return '-';if(avOff(d))return 'Off';const n=dayLoad(c,date,d);return n+'/'+capFor(c,d)+(d.offMin>0?'*':'');}
+function isAsst(c){return !!c&&(c.role==='PTA'||c.role==='COTA');}
+function hasPref(d){return !!d&&(d.available||[]).length>0;}
+function prefNote(d){return d&&(d.available||[]).filter(a=>a.note).map(a=>a.note).join('; ');}
+// PTA/COTA availability on a date, from whichever Connecteam data is loaded (calendar or Who's free)
+function asstDay(name,date){
+  const u=(calData&&calData.users&&calData.users[name])||(avData&&avData.users&&avData.users[name]);
+  return u&&u.days?u.days[date]:null;
+}
+function asstTag(name,date){
+  const d=asstDay(name,date);if(!d)return '';
+  if(avOff(d))return ' · OFF that day';
+  if(hasPref(d))return ' · ✓ prefers to work'+(prefNote(d)?' ('+prefNote(d)+')':'');
+  return '';
+}
+function avCls(d,c,date){if(isAsst(c))return (!d||avOff(d))?'av-none':hasPref(d)?'av-good':'av-low';if(!d||avOff(d))return 'av-none';const left=capFor(c,d)-dayLoad(c,date,d);return left<=0?'av-none':left===1?'av-low':'av-good';}
+function avTxt(d,c,date){if(!d)return '-';if(avOff(d))return 'Off';if(isAsst(c))return hasPref(d)?'✓ Pref':'Open';const n=dayLoad(c,date,d);return n+'/'+capFor(c,d)+(d.offMin>0?'*':'');}
 async function setMaxEvals(name,val){
   const n=Math.max(1,Math.min(10,parseInt(val,10)||DEFAULT_MAX_EVALS));
   const c=clins.find(x=>x.name===name);if(!c)return;
@@ -1472,7 +1486,7 @@ function renderAvail(){
   if(!people.length)h+='<div class="qa-empty">No clinicians linked to Connecteam yet. Link them in Settings.</div>';
   if(unlinked)h+='<div style="font-size:10px;color:var(--muted)">'+unlinked+' clinician'+(unlinked>1?'s are':' is')+' not linked to Connecteam and not shown.</div>';
   if(avData.errors&&avData.errors.length)h+='<div style="font-size:10px;color:var(--red);margin-top:4px">Could not load: '+avData.errors.map(e=>esc(e.name)).join(', ')+'</div>';
-  h+='<div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5">Each box is evals booked out of that clinician\'s daily limit. Red = full or off, amber = one spot left. * means part of the day is marked unavailable. Connecteam does not share "prefer to work" times.</div>';
+  h+='<div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5">Each box is evals booked out of that clinician\'s daily limit. Red = full or off, amber = one spot left. * means part of the day is marked unavailable. Prefer-to-work entries (and notes like "2 evals") appear only for ones added after the webhook was turned on.</div>';
   body.innerHTML=h;
 }
 
@@ -1516,7 +1530,9 @@ function renderCal(){
   const days=Array.from({length:calDays},(_,i)=>addDaysISO(calStart,i));
   document.getElementById('calRange').textContent=avLabel(days[0],true)+' – '+avLabel(days[days.length-1],true);
   const role=document.getElementById('calRole').value,today=localISO();
-  const byCell={};
+  const byCell={},byPta={};
+  evals.filter(e=>e.status!=='complete'&&!isArchived(e)&&e.ptaClinician&&e.qa&&e.qa.visitDate&&e.qa.visitDate>=days[0]&&e.qa.visitDate<=days[days.length-1])
+    .forEach(e=>{const k=e.ptaClinician+'|'+e.qa.visitDate;(byPta[k]=byPta[k]||[]).push(e);});
   evals.filter(e=>e.status==='assigned'&&!isArchived(e)&&e.clinician&&e.qa&&e.qa.visitDate&&e.qa.visitDate>=days[0]&&e.qa.visitDate<=days[days.length-1])
     .forEach(e=>{const k=e.clinician+'|'+e.qa.visitDate;(byCell[k]=byCell[k]||[]).push(e);});
   let note='';
@@ -1528,14 +1544,19 @@ function renderCal(){
   h+='<div class="cal-wrap"><table class="cal"><thead><tr><th>Clinician</th>'+days.map(d=>'<th class="'+(d===today?'today':'')+'">'+esc(avLabel(d,true))+'</th>').join('')+'</tr></thead><tbody>';
   h+=people.map(c=>{
     const u=calData&&calData.users&&calData.users[c.name];
-    return '<tr><td><b>'+esc(c.name)+'</b><div style="font-size:12px;color:var(--soft)">'+esc(c.role||'')+(!u&&ctReady&&!calBusy&&!calErr?' · not linked':'')+'</div><label style="font-size:11px;color:var(--soft);display:block;margin-top:4px">Max/day <input type="number" min="1" max="10" value="'+maxFor(c)+'" data-name="'+esc(c.name)+'" onchange="setMaxEvals(this.dataset.name,this.value)" style="width:44px;padding:2px 4px;font-size:12px"></label></td>'+days.map(d=>{
+    return '<tr><td><b>'+esc(c.name)+'</b><div style="font-size:12px;color:var(--soft)">'+esc(c.role||'')+(!u&&ctReady&&!calBusy&&!calErr?' · not linked':'')+'</div>'+(isAsst(c)?'<div style="font-size:11px;color:var(--muted);margin-top:4px">shows prefer-to-work</div>':'<label style="font-size:11px;color:var(--soft);display:block;margin-top:4px">Max/day <input type="number" min="1" max="10" value="'+maxFor(c)+'" data-name="'+esc(c.name)+'" onchange="setMaxEvals(this.dataset.name,this.value)" style="width:44px;padding:2px 4px;font-size:12px"></label>')+'</td>'+days.map(d=>{
       const x=u&&u.days[d];let top='';
-      if(x){const n=dayLoad(c,d,x),mx=capFor(c,x);top=avOff(x)?'<div class="cal-n cal-off">Off all day</div>':'<div class="cal-n'+(n>=mx?' cal-off':'')+'">'+(n>=mx?'Full ':'')+n+' of '+mx+(x.cap!=null?' (note)':'')+(x.offMin>0?' · unavailable '+avHrs(x.offMin):'')+'</div>'+((x.available||[]).length?'<div class="cal-n" style="color:var(--accent)">✓ Available'+(x.available.some(a=>a.note)?': '+esc(x.available.filter(a=>a.note).map(a=>a.note).join('; ')):'')+'</div>':'');}
+      if(x&&isAsst(c)){
+        top=avOff(x)?'<div class="cal-n cal-off">Off all day</div>':hasPref(x)?'<div class="cal-n" style="color:var(--accent)">✓ Prefers to work'+(prefNote(x)?': '+esc(prefNote(x)):'')+'</div>':'<div class="cal-n">No preference set</div>';
+        if(!avOff(x)&&x.offMin>0)top+='<div class="cal-n cal-off">unavailable '+avHrs(x.offMin)+'</div>';
+      }
+      else if(x){const n=dayLoad(c,d,x),mx=capFor(c,x);top=avOff(x)?'<div class="cal-n cal-off">Off all day</div>':'<div class="cal-n'+(n>=mx?' cal-off':'')+'">'+(n>=mx?'Full ':'')+n+' of '+mx+(x.cap!=null?' (note)':'')+(x.offMin>0?' · unavailable '+avHrs(x.offMin):'')+'</div>'+((x.available||[]).length?'<div class="cal-n" style="color:var(--accent)">✓ Available'+(x.available.some(a=>a.note)?': '+esc(x.available.filter(a=>a.note).map(a=>a.note).join('; ')):'')+'</div>':'');}
       const evs=(byCell[c.name+'|'+d]||[]).map(e=>{
         const q=e.qa||{},cls=q.ct?'':' noct';
         return '<div class="cal-ev'+cls+(q.seen?' seen':'')+'" title="'+esc((e.discipline||'')+' eval')+'"><b>'+esc(e.agency||'')+'</b> · '+esc(e.location||'')+(q.visitTime?' · '+esc(avT(q.visitTime)):'')+(q.seen?' ✓':'')+(q.ct?'':'<br>not in Connecteam')+'</div>';
       }).join('');
-      return '<td class="'+(d===today?'today':'')+'">'+top+evs+'</td>';
+      const pev=(byPta[c.name+'|'+d]||[]).map(e=>'<div class="cal-ev'+((e.qa&&e.qa.ctPtaShiftId)?'':' noct')+'" title="Evaluation planned this day"><b>Eval planned</b> · '+esc(e.location||'')+(e.clinician?' · with '+esc(e.clinician):'')+((e.qa&&e.qa.ctPtaShiftId)?'':'<br>not in Connecteam')+'</div>').join('');
+      return '<td class="'+(d===today?'today':'')+'">'+top+evs+pev+'</td>';
     }).join('')+'</tr>';
   }).join('')+'</tbody></table></div>';
   body.innerHTML=h;
@@ -1685,7 +1706,7 @@ function render(){
       <div style="margin-top:2px;">
         <select class="csel" style="font-size:10px;color:var(--muted);" onchange="asgnPTA('${e.id}',this.value)">
           <option value="">+ Assign PTA/COTA (optional)</option>
-          ${clins.filter(c=>c.role==='PTA'||c.role==='COTA').map(c=>`<option value="${c.name}"${e.ptaClinician===c.name?' selected':''}>${c.name} (${c.role})</option>`).join('')}
+          ${clins.filter(c=>c.role==='PTA'||c.role==='COTA').map(c=>`<option value="${c.name}"${e.ptaClinician===c.name?' selected':''}>${c.name} (${c.role})${e.qa&&e.qa.visitDate?asstTag(c.name,e.qa.visitDate):''}</option>`).join('')}
         </select>
         ${e.ptaClinician?`<div style="font-size:10px;color:var(--blue);margin-top:2px;">🤝 PTA: ${e.ptaClinician}${e.qa&&e.qa.ctPtaShiftId?' · ✓ on their Connecteam calendar':(e.qa&&e.qa.visitDate?'':' · set the visit date to mark their day')}</div>`:''}
       </div>
