@@ -349,6 +349,8 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">When an assigned eval has a visit date and time, a shift is created for that clinician in Connecteam. Changing or clearing the visit, reassigning, or cancelling the eval updates or removes it. Shifts carry only discipline, city, zip and agency, never patient info.</div>
         <div id="ctStatus" style="font-size:11px;min-height:14px;margin-bottom:6px;line-height:1.5;"></div>
         <button class="btn btn-o" onclick="checkCt()">Check connection</button>
+        <button class="btn btn-o" style="margin-top:4px" onclick="rawCt()">Show raw reply from Connecteam</button>
+        <pre id="ctRaw" style="display:none;white-space:pre-wrap;word-break:break-all;font-size:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;margin-top:6px;max-height:240px;overflow:auto"></pre>
         <button class="btn btn-o" style="margin-top:4px" onclick="loadCtUsers()">Link clinicians to Connecteam users</button>
         <div id="ctMap" style="margin-top:8px"></div>
       </div>
@@ -1075,13 +1077,18 @@ async function ctSync(id){
   }
   render();renderQA();renderStuck();
 }
+async function rawCt(){
+  const el=document.getElementById('ctRaw');el.style.display='block';el.textContent='Asking Connecteam...';
+  try{const r=await ctApi('debug_schedulers');el.textContent='HTTP '+r.status+'\n'+r.body;}
+  catch(e){el.textContent='Error: '+e.message;}
+}
 async function checkCt(){
   const el=document.getElementById('ctStatus');
   el.style.color='var(--muted)';el.textContent='Checking...';
   try{
     const st=await ctApi('status');
-    let sch=[];
-    try{sch=(await ctApi('list_schedulers')).schedulers.filter(x=>!x.isArchived);}catch(_){}
+    let sch=[],listErr='';
+    try{sch=(await ctApi('list_schedulers')).schedulers.filter(x=>!x.isArchived);}catch(e){listErr=e.message||'could not list schedulers';}
     const list=sch.map(x=>esc(x.name)+' = <b>'+esc(x.schedulerId)+'</b>').join(', ');
     if(!st.configured){
       ctReady=false;el.style.color='var(--red)';
@@ -1091,7 +1098,7 @@ async function checkCt(){
     const mine=sch.find(x=>String(x.schedulerId)===String(st.schedulerId));
     ctReady=!!mine;
     el.style.color=ctReady?'var(--accent)':'var(--red)';
-    el.innerHTML=ctReady?'Connected. Visits go to <b>'+esc(mine.name)+'</b> ('+esc(mine.timezone||'')+').':'Scheduler ID '+esc(st.schedulerId)+' was not found in your account.'+(list?'<br>Your schedulers: '+list:'');
+    el.innerHTML=ctReady?'Connected. Visits go to <b>'+esc(mine.name)+'</b> ('+esc(mine.timezone||'')+').':'Scheduler ID '+esc(st.schedulerId)+' was not found in your account.'+(list?'<br>Your schedulers: '+list:(listErr?'<br>Could not load your schedulers: '+esc(listErr):'<br>Connecteam returned no schedulers for this API key.'));
   }catch(e){ctReady=false;el.style.color='var(--red)';el.textContent=e.message;}
 }
 async function loadCtUsers(){
