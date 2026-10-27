@@ -468,7 +468,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <button id="calB1" class="on" onclick="calSpan(7)">1 week</button>
         <button id="calB2" onclick="calSpan(14)">2 weeks</button>
         <select id="calRole" onchange="renderCal()"><option value="">All roles</option><option>PT</option><option>PTA</option><option>OT</option><option>COTA</option><option>SLP</option></select>
-        <button onclick="loadCal()">🔄</button>
+        <button id="calRefresh" onclick="hardRefresh()">🔄 Hard refresh</button>
       </div>
       <div id="calBody"></div>
       <div style="font-size:12px;color:#b9d3c9;margin-top:10px;line-height:1.6">Boxes show evals from this tool placed on the visit day: <span style="color:var(--accent)">solid green</span> = on the clinician's Connecteam calendar, <span style="color:#fbbf24">dashed amber</span> = not in Connecteam yet. "2 of 3" is evals booked out of that clinician's daily limit (Max/day box, default 3): everything already on their Connecteam calendar plus evals here not in Connecteam yet. Connecteam does not share "prefer to work" times.</div>
@@ -1423,6 +1423,19 @@ async function loadCal(){
   try{const r=await ctApi('availability',{start:calStart,days:calDays});if(key===calStart+'/'+calDays)calData=r;}
   catch(e){if(key===calStart+'/'+calDays){calErr=e.message;calData=null;}}
   if(key===calStart+'/'+calDays){calBusy=false;renderCal();}
+}
+// full reload: evals, clinicians and limits from the database, connection status, and a fresh Connecteam pull (no cache)
+let calRefreshing=false;
+async function hardRefresh(){
+  if(calRefreshing)return;calRefreshing=true;
+  const b=document.getElementById('calRefresh');if(b){b.disabled=true;b.textContent='Refreshing...';}
+  calData=null;avData=null;
+  try{await loadAll();}catch(_){}
+  try{const st=await ctApi('status');ctReady=!!(st&&st.configured);}catch(_){}
+  await loadCal();
+  calRefreshing=false;
+  if(b){b.disabled=false;b.textContent='🔄 Hard refresh';}
+  flash('✓ Calendar refreshed');
 }
 function renderCal(){
   if(!calStart)calStart=mondayISO(localISO());
