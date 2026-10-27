@@ -296,6 +296,14 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
         <button class="btn btn-o" onclick="createStaff()">+ Create login</button>
         <div id="stCreds" class="hidden" style="margin-top:8px;padding:10px;border:1px solid var(--accent);border-radius:8px;font-size:12px;line-height:1.6;"></div>
       </div>
+      <div id="ctBox" class="hidden" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <div style="font-size:12px;font-weight:600;color:#fbbf24;margin-bottom:4px;">🗓 Connecteam Calendar</div>
+        <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">When an assigned eval has a visit date and time, a shift is created for that clinician in Connecteam. Changing or clearing the visit, reassigning, or cancelling the eval updates or removes it. Shifts carry only discipline, city, zip and agency, never patient info.</div>
+        <div id="ctStatus" style="font-size:11px;min-height:14px;margin-bottom:6px;line-height:1.5;"></div>
+        <button class="btn btn-o" onclick="checkCt()">Check connection</button>
+        <button class="btn btn-o" style="margin-top:4px" onclick="loadCtUsers()">Link clinicians to Connecteam users</button>
+        <div id="ctMap" style="margin-top:8px"></div>
+      </div>
       <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
         <div style="font-size:12px;font-weight:600;color:#fbbf24;margin-bottom:4px;">📊 Live Shared Board</div>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">Real-time sync via Supabase. All devices see the same board instantly.</div>
@@ -528,6 +536,7 @@ let rtStarted=false;
 async function startApp(){
   await loadAll();
   await loadCapacity();
+  ctApi('status').then(r=>{ctReady=!!(r&&r.configured);}).catch(()=>{ctReady=false;});
   if(rtStarted)return;
   rtStarted=true;
   sb.channel('evals-changes')
@@ -564,7 +573,7 @@ async function loadAll() {
       sb.from('agencies').select('*').order('name')
     ]);
     if (evR.data) evals = evR.data.map(dbToEval);
-    if (clR.data && clR.data.length) clins = clR.data.map(r=>({name:r.name,role:r.role,phone:r.phone||'',email:r.email||''}));
+    if (clR.data && clR.data.length) clins = clR.data.map(r=>({name:r.name,role:r.role,phone:r.phone||'',email:r.email||'',ctUserId:r.connecteam_user_id||null}));
     if (agR.data && agR.data.length) agencies = agR.data.map(r=>r.name);
     render(); renderClins(); renderAgencies(); renderQA(); renderCapacity(); renderStuck();
     setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
@@ -901,6 +910,7 @@ function renderAccount(){
   const el=document.getElementById('acctInfo');if(!el||!me)return;
   el.innerHTML='Signed in as <b>'+esc(me.full_name||'')+'</b><br><span style="color:var(--muted)">'+esc(me.email||'')+(me.is_super_admin?' · Admin':'')+'</span>';
   document.getElementById('adminBox').classList.toggle('hidden',!me.is_super_admin);
+  document.getElementById('ctBox').classList.toggle('hidden',!me.is_super_admin);
   document.querySelectorAll('.admin-only').forEach(b=>b.classList.toggle('hidden',!me.is_super_admin));
   if(me.is_super_admin)loadStaffAdmin();
 }
@@ -980,6 +990,91 @@ async function toggleStaff(id,makeActive){
   catch(e){flash('✕ '+e.message);}
 }
 
+// ── CONNECTEAM (shifts are created by the connecteam-shift Edge Function; the API key never touches this page) ──
+let ctReady=false, ctUsers=[];
+async function ctApi(action,payload){
+  const {data,error}=await sb.functions.invoke('connecteam-shift',{body:{action,...(payload||{})}});
+  if(error){
+    let msg=error.message||'Request failed';
+    try{const j=await error.context.json();if(j&&j.error)msg=j.error;}catch(_){}
+    throw new Error(msg);
+  }
+  if(data&&data.error)throw new Error(data.error);
+  return data;
+}
+async function ctSync(id){
+  const e=evals.find(x=>x.id===id);if(!e)return;
+  try{
+    const res=await ctApi('sync',{eval_id:id});
+    if(res.qa)e.qa=res.qa;
+    if(res.warning==='no_ct_user')flash('⚠ '+(e.clinician||'Clinician')+' is not linked to Connecteam yet (Settings → Connecteam)');
+    else if(res.warning==='no_time')flash('⚠ Add a visit time to put this on the Connecteam calendar');
+    else if(res.action==='create'||res.action==='replace')flash('✓ Added to Connecteam calendar');
+    else if(res.action==='update')flash('✓ Connecteam shift updated');
+    else if(res.action==='delete')flash('✓ Removed from Connecteam calendar');
+  }catch(err){
+    if(!e.qa)e.qa={};
+    e.qa.ctError=err.message;
+    await sb.from('evals').update({qa:e.qa}).eq('id',id);
+    flash('✕ Connecteam: '+err.message);
+  }
+  render();renderQA();renderStuck();
+}
+async function checkCt(){
+  const el=document.getElementById('ctStatus');
+  el.style.color='var(--muted)';el.textContent='Checking...';
+  try{
+    const st=await ctApi('status');
+    let sch=[];
+    try{sch=(await ctApi('list_schedulers')).schedulers.filter(x=>!x.isArchived);}catch(_){}
+    const list=sch.map(x=>esc(x.name)+' = <b>'+esc(x.schedulerId)+'</b>').join(', ');
+    if(!st.configured){
+      ctReady=false;el.style.color='var(--red)';
+      el.innerHTML='Not set up yet. Add EVAL_CONNECTEAM_API_KEY and EVAL_CONNECTEAM_SCHEDULER_ID in the function secrets.'+(list?'<br>Your schedulers: '+list:'');
+      return;
+    }
+    const mine=sch.find(x=>String(x.schedulerId)===String(st.schedulerId));
+    ctReady=!!mine;
+    el.style.color=ctReady?'var(--accent)':'var(--red)';
+    el.innerHTML=ctReady?'Connected. Visits go to <b>'+esc(mine.name)+'</b> ('+esc(mine.timezone||'')+').':'Scheduler ID '+esc(st.schedulerId)+' was not found in your account.'+(list?'<br>Your schedulers: '+list:'');
+  }catch(e){ctReady=false;el.style.color='var(--red)';el.textContent=e.message;}
+}
+async function loadCtUsers(){
+  const box=document.getElementById('ctMap');
+  box.innerHTML='<div style="font-size:11px;color:var(--muted)">Loading Connecteam users...</div>';
+  try{ctUsers=(await ctApi('list_users')).users||[];renderCtMap();}
+  catch(e){box.innerHTML='<div style="font-size:11px;color:var(--red)">'+esc(e.message)+'</div>';}
+}
+function ctGuess(c){
+  const n=c.name.trim().toLowerCase();
+  const m=ctUsers.filter(u=>u.name.trim().toLowerCase()===n);
+  return m.length===1?m[0].userId:null;
+}
+function renderCtMap(){
+  const box=document.getElementById('ctMap');if(!box)return;
+  box.innerHTML='<button class="btn btn-o" onclick="autoMatchCt()">Auto-match by name</button>'+clins.map(c=>{
+    const cur=c.ctUserId||'';
+    return '<div class="staff-row"><div><span style="font-weight:600">'+esc(c.name)+'</span> <span style="color:var(--muted)">'+esc(c.role)+'</span></div>'
+      +'<select class="csel" style="max-width:170px;font-size:11px" data-name="'+esc(c.name)+'" onchange="setCtUser(this.dataset.name,this.value)"><option value="">Not linked</option>'
+      +ctUsers.map(u=>'<option value="'+esc(u.userId)+'"'+(String(u.userId)===String(cur)?' selected':'')+'>'+esc(u.name)+'</option>').join('')
+      +'</select></div>';
+  }).join('');
+}
+async function setCtUser(name,val){
+  const c=clins.find(x=>x.name===name);if(!c)return;
+  const v=val?Number(val):null;
+  const {error}=await sb.from('clinicians').update({connecteam_user_id:v}).eq('name',name);
+  if(error){flash('✕ '+error.message+' (has the ALTER TABLE been run?)');renderCtMap();return;}
+  c.ctUserId=v;
+  flash(v?'✓ Linked '+name:'Unlinked '+name);
+}
+async function autoMatchCt(){
+  let n=0;
+  for(const c of clins){if(c.ctUserId)continue;const g=ctGuess(c);if(g){await setCtUser(c.name,String(g));n++;}}
+  renderCtMap();
+  flash(n?'✓ Matched '+n+' clinician'+(n>1?'s':''):'No new exact name matches');
+}
+
 // ── STUCK / AGING ──
 // Days an eval may sit at each step before it is flagged. Edit these to tune.
 const STUCK={unassigned:1,noVisit:1,notInConnecteam:1,ordersAfterSeen:2,agencySystemAfterSeen:3};
@@ -993,6 +1088,7 @@ function stuckReasons(e){
     return r;
   }
   const sinceAssign=age(q.assignedAt||e.dateAdded);
+  if(q.ctError)r.push({k:'Connecteam sync failed',d:age(q.visitSetAt||q.assignedAt||e.dateAdded)});
   if(!q.visitDate){
     if(sinceAssign>=STUCK.noVisit)r.push({k:'No visit date set',d:sinceAssign});
   }else if(!q.seen){
@@ -1045,6 +1141,7 @@ async function setVisit(id,field,val){
   if(field==='visitDate'){e.qa.visitSetAt=val?new Date().toISOString():'';e.qa.ct=false;e.qa.ctAt='';}
   render();renderQA();renderStuck();
   await sb.from('evals').update({qa:e.qa}).eq('id',id);
+  if(ctReady)await ctSync(id);
 }
 
 // ── BOARD ──
@@ -1095,7 +1192,7 @@ function render(){
       </div>
       ${e.assignedBy?`<div style="font-size:10px;color:var(--muted)">Assigned by ${e.assignedBy}</div>`:''}
       <div style="margin-bottom:4px"><input class="csel" style="font-size:11px;padding:5px 7px;" placeholder="Patient initials / ID" value="${e.patient||''}" onchange="updPat('${e.id}',this.value)"></div>
-      ${e.status==='assigned'?`<div class="vis-row"><span>📅 Visit</span><input type="date" value="${(e.qa&&e.qa.visitDate)||''}" onchange="setVisit('${e.id}','visitDate',this.value)"><input type="time" value="${(e.qa&&e.qa.visitTime)||''}" onchange="setVisit('${e.id}','visitTime',this.value)"></div>`:''}
+      ${e.status==='assigned'?`<div class="vis-row"><span>📅 Visit</span><input type="date" value="${(e.qa&&e.qa.visitDate)||''}" onchange="setVisit('${e.id}','visitDate',this.value)"><input type="time" value="${(e.qa&&e.qa.visitTime)||''}" onchange="setVisit('${e.id}','visitTime',this.value)">${e.qa&&e.qa.ctShiftId?'<span style="color:var(--accent)">✓ Connecteam</span>':''}</div>`:''}
       ${(()=>{const s=getSuggestedClinician(e.location,e.zip);return s?`<div style="font-size:10px;color:#fbbf24;margin-bottom:4px;">💡 ${s.name} available${s.region?' · '+s.region:''}</div>`:''})()}
       <div class="cact">
         <select class="csel" onchange="asgn('${e.id}',this.value)">
@@ -1137,9 +1234,15 @@ async function asgn(id,name){
   }else{delete e.qa.assignedAt;}
   render();renderQA();renderStuck();
   await sb.from('evals').update({clinician:name,status:e.status,assigned_by:e.assignedBy,qa:e.qa}).eq('id',id);
+  if(ctReady&&(e.qa.visitDate||e.qa.ctShiftId))await ctSync(id);
 }
 async function mkDone(id){const e=evals.find(e=>e.id===id);if(!e)return;e.status='complete';render();renderQA();renderHistory();await sb.from('evals').update({status:'complete'}).eq('id',id);}
-async function rmEval(id){evals=evals.filter(e=>e.id!==id);render();await sb.from('evals').delete().eq('id',id);}
+async function rmEval(id){
+  const e0=evals.find(e=>e.id===id);const sid=e0&&e0.qa&&e0.qa.ctShiftId;
+  evals=evals.filter(e=>e.id!==id);render();
+  await sb.from('evals').delete().eq('id',id);
+  if(ctReady&&sid){try{await ctApi('remove',{shift_id:sid});}catch(_){flash('⚠ Delete that visit from the Connecteam calendar by hand');}}
+}
 async function clrDone(){if(!confirm('Remove all completed evals?'))return;const ids=evals.filter(e=>e.status==='complete').map(e=>e.id);evals=evals.filter(e=>e.status!=='complete');render();if(ids.length)await sb.from('evals').delete().in('id',ids);}
 async function clrAll(){if(!confirm('Clear ALL evals?'))return;evals=[];render();await sb.from('evals').delete().neq('id','');}
 
