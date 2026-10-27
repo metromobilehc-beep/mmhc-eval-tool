@@ -400,6 +400,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <div id="ctStatus" style="font-size:11px;min-height:14px;margin-bottom:6px;line-height:1.5;"></div>
         <button class="btn btn-o" onclick="checkCt()">Check connection</button>
         <button class="btn btn-o" style="margin-top:4px" onclick="rawCt()">Show raw reply from Connecteam</button>
+        <button class="btn btn-o" style="margin-top:4px" onclick="webhookLog()">Show recent availability webhook events</button>
         <div style="display:flex;gap:6px;margin-top:4px"><select id="ctRawWho" style="flex:1"></select><button class="btn btn-o" style="width:auto;margin:0" onclick="rawUser()">Show raw availability</button></div>
         <pre id="ctRaw" style="display:none;white-space:pre-wrap;word-break:break-all;font-size:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;margin-top:6px;max-height:240px;overflow:auto"></pre>
         <button class="btn btn-o" style="margin-top:4px" onclick="loadCtUsers()">Link clinicians to Connecteam users</button>
@@ -1151,6 +1152,13 @@ async function ctSync(id){
   }
   render();renderQA();renderStuck();
 }
+async function webhookLog(){
+  const el=document.getElementById('ctRaw');el.style.display='block';el.textContent='Loading...';
+  const r=await sb.from('ct_webhook_log').select('event,payload,created_at').order('created_at',{ascending:false}).limit(8);
+  if(r.error){el.textContent='Error: '+r.error.message+' (has the ct_availability SQL been run?)';return;}
+  const rows=r.data||[];
+  el.textContent=rows.length?rows.map(x=>new Date(x.created_at).toLocaleString()+'  '+(x.event||'?')+'\n'+String(x.payload||'').slice(0,700)).join('\n\n'):'No webhook events received yet. In Connecteam: Settings > Integrations > Webhooks.';
+}
 async function rawUser(){
   const el=document.getElementById('ctRaw'),sel=document.getElementById('ctRawWho');
   if(!sel.value){el.style.display='block';el.textContent='Pick a linked clinician first.';return;}
@@ -1378,7 +1386,7 @@ function renderAvail(){
     let det='';
     if(avSel&&avSel.name===c.name){
       const d=u.days[days[avSel.di]]||{shifts:0,offMin:0,blocks:[]};
-      const lab={shift:'Scheduled',unavailable:'Unavailable',timeoff:'Time off'};
+      const lab={shift:'Scheduled',unavailable:'Unavailable',timeoff:'Time off',available:'Available'};
       det='<div style="font-size:11px;margin-top:6px;line-height:1.6"><b>'+esc(avLabel(days[avSel.di],true))+'</b>: '+(avOff(d)?'off all day':dayLoad(c,days[avSel.di],d)+' of '+capFor(c,d)+' evals'+(d.cap!=null?' (per their note)':'')+(d.offMin>0?', unavailable '+avHrs(d.offMin):''))+(d.blocks.length?'<br>'+d.blocks.map(b=>esc(lab[b.kind]||b.kind)+' '+avT(b.start)+' to '+avT(b.end)+(b.note?' — “'+esc(b.note)+'”':'')).join('<br>'):'<br>Nothing on the calendar')+'</div>';
     }
     return '<div class="av-card"><div style="display:flex;justify-content:space-between;font-size:12px"><b>'+esc(c.name)+'</b><span style="color:var(--muted)">'+esc(c.role||'')+'</span></div><div class="av-row">'+chips+'</div>'+det+'</div>';
@@ -1431,7 +1439,7 @@ function renderCal(){
     const u=calData&&calData.users&&calData.users[c.name];
     return '<tr><td><b>'+esc(c.name)+'</b><div style="font-size:12px;color:#b9d3c9">'+esc(c.role||'')+(!u&&ctReady&&!calBusy&&!calErr?' · not linked':'')+'</div><label style="font-size:11px;color:#b9d3c9;display:block;margin-top:4px">Max/day <input type="number" min="1" max="10" value="'+maxFor(c)+'" data-name="'+esc(c.name)+'" onchange="setMaxEvals(this.dataset.name,this.value)" style="width:44px;padding:2px 4px;font-size:12px"></label></td>'+days.map(d=>{
       const x=u&&u.days[d];let top='';
-      if(x){const n=dayLoad(c,d,x),mx=capFor(c,x);top=avOff(x)?'<div class="cal-n cal-off">Off all day</div>':'<div class="cal-n'+(n>=mx?' cal-off':'')+'">'+(n>=mx?'Full ':'')+n+' of '+mx+(x.cap!=null?' (note)':'')+(x.offMin>0?' · unavailable '+avHrs(x.offMin):'')+'</div>';}
+      if(x){const n=dayLoad(c,d,x),mx=capFor(c,x);top=avOff(x)?'<div class="cal-n cal-off">Off all day</div>':'<div class="cal-n'+(n>=mx?' cal-off':'')+'">'+(n>=mx?'Full ':'')+n+' of '+mx+(x.cap!=null?' (note)':'')+(x.offMin>0?' · unavailable '+avHrs(x.offMin):'')+'</div>'+((x.available||[]).length?'<div class="cal-n" style="color:var(--accent)">✓ Available'+(x.available.some(a=>a.note)?': '+esc(x.available.filter(a=>a.note).map(a=>a.note).join('; ')):'')+'</div>':'');}
       const evs=(byCell[c.name+'|'+d]||[]).map(e=>{
         const q=e.qa||{},cls=q.ct?'':' noct';
         return '<div class="cal-ev'+cls+(q.seen?' seen':'')+'" title="'+esc((e.discipline||'')+' eval')+'"><b>'+esc(e.agency||'')+'</b> · '+esc(e.location||'')+(q.visitTime?' · '+esc(avT(q.visitTime)):'')+(q.seen?' ✓':'')+(q.ct?'':'<br>not in Connecteam')+'</div>';
