@@ -74,6 +74,9 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);}
 .attn-r small{color:var(--muted);white-space:nowrap;}
 .attn-ok{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:8px 14px;margin-bottom:12px;font-size:13px;color:var(--accent);}
 .card.hl{outline:2px solid var(--accent);outline-offset:2px;}
+.cal-ev[draggable=true]{cursor:grab;}
+.cal-ev.dragging{opacity:.4;}
+td.cal-drop{outline:2px dashed var(--accent);outline-offset:-3px;background:var(--ov);}
 .fr{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
 .fb{padding:4px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;}
 .fb.on{background:var(--accent);color:var(--on-accent);border-color:var(--accent);}
@@ -1694,15 +1697,45 @@ function renderCal(){
       else if(x){const n=dayLoad(c,d,x),mx=capFor(c,x);top=avOff(x)?'<div class="cal-n cal-off">Off all day</div>':'<div class="cal-n'+(n>=mx?' cal-off':'')+'">'+(n>=mx?'Full ':'')+n+' of '+mx+(x.cap!=null?' (note)':'')+(x.offMin>0?' · unavailable '+avHrs(x.offMin):'')+'</div>'+((x.available||[]).length?'<div class="cal-n" style="color:var(--accent)">✓ Available'+(x.available.some(a=>a.note)?': '+esc(x.available.filter(a=>a.note).map(a=>a.note).join('; ')):'')+'</div>':'');}
       const evs=(byCell[c.name+'|'+d]||[]).map(e=>{
         const q=e.qa||{},cls=q.ct?'':' noct';
-        return '<div class="cal-ev'+cls+(q.seen?' seen':'')+'" title="'+esc((e.discipline||'')+' eval')+'"><b>'+esc(e.agency||'')+'</b> · '+esc(e.location||'')+(q.visitTime?' · '+esc(avT(q.visitTime)):'')+(q.seen?' ✓':'')+(q.ct?'':'<br>not in Connecteam')+'</div>';
+        return '<div class="cal-ev'+cls+(q.seen?' seen':'')+'" draggable="'+(q.seen?'false':'true')+'" ondragstart="calDrag(event,\''+esc(e.id)+'\')" ondragend="calDragEnd()" title="'+esc((e.discipline||'')+' eval')+' · drag to another day or clinician to move it"><b>'+esc(e.agency||'')+'</b> · '+esc(e.location||'')+(q.visitTime?' · '+esc(avT(q.visitTime)):'')+(q.seen?' ✓':'')+(q.ct?'':'<br>not in Connecteam')+'</div>';
       }).join('');
       const pev=(byPta[c.name+'|'+d]||[]).map(e=>'<div class="cal-ev'+((e.qa&&e.qa.ctPtaShiftId)?'':' noct')+'" title="Evaluation planned this day"><b>Eval planned</b> · '+esc(e.location||'')+(e.clinician?' · with '+esc(e.clinician):'')+((e.qa&&e.qa.ctPtaShiftId)?'':'<br>not in Connecteam')+'</div>').join('');
-      return '<td class="'+(d===today?'today':'')+'">'+top+evs+pev+'</td>';
+      return '<td class="'+(d===today?'today':'')+'" data-n="'+esc(c.name)+'" data-d="'+d+'" ondragover="calOver(event,this)" ondragleave="calLeave(this)" ondrop="calDropEv(event,this)">'+top+evs+pev+'</td>';
     }).join('')+'</tr>';
   }).join('')+'</tbody></table></div>';
   body.innerHTML=h;
 }
 
+// ── DRAG AND DROP: move an eval to another day (and clinician) on the Calendar ──
+let dragEvId=null;
+function calDrag(ev,id){dragEvId=id;try{ev.dataTransfer.setData('text/plain',id);ev.dataTransfer.effectAllowed='move';}catch(_){}ev.target.classList&&ev.target.classList.add('dragging');}
+function calDragEnd(){dragEvId=null;document.querySelectorAll('.dragging').forEach(x=>x.classList.remove('dragging'));document.querySelectorAll('td.cal-drop').forEach(x=>x.classList.remove('cal-drop'));}
+function calOver(ev,td){if(!dragEvId)return;ev.preventDefault();td.classList.add('cal-drop');}
+function calLeave(td){td.classList.remove('cal-drop');}
+function calDropEv(ev,td){ev.preventDefault();td.classList.remove('cal-drop');const id=dragEvId||(ev.dataTransfer&&ev.dataTransfer.getData('text/plain'));dragEvId=null;moveEval(id,td.dataset.n,td.dataset.d);}
+// the rows are clinicians; an eval's discipline should match the role
+const DISC_ROLE={PT:'PT',OT:'OT',SLP:'SLP'};
+async function moveEval(id,name,date){
+  const e=evals.find(x=>x.id===id);if(!e||!name||!date)return;
+  const c=clins.find(x=>x.name===name);
+  if(!c||isAsst(c)){flash('Drop it on an evaluator\'s row (PT, OT or SLP), not a PTA or COTA');return;}
+  const same=e.clinician===name&&e.qa&&e.qa.visitDate===date;if(same)return;
+  if(e.qa&&e.qa.seen){flash('This eval is already marked seen, so it can\'t be moved');return;}
+  const u=calData&&calData.users&&calData.users[name],x=u&&u.days&&u.days[date];
+  if(x&&avOff(x)&&!confirm(name+' is marked off on '+date+'. Move it there anyway?'))return;
+  if(x&&!avOff(x)){const n=dayLoad(c,date,x),mx=capFor(c,x);if(n>=mx&&!(e.clinician===name)&&!confirm(name+' is already full on '+date+' ('+n+' of '+mx+'). Move it there anyway?'))return;}
+  const need=DISC_ROLE[e.discipline];if(need&&c.role&&c.role!==need&&!confirm('This is a '+e.discipline+' eval but '+name+' is a '+c.role+'. Move it anyway?'))return;
+  if(!e.qa)e.qa={};
+  const clinChanged=e.clinician!==name;
+  if(clinChanged){e.clinician=name;e.status='assigned';e.assignedBy=userName||'';e.qa.assignedAt=new Date().toISOString();}
+  e.qa.visitDate=date;e.qa.visitSetAt=new Date().toISOString();e.qa.ct=false;e.qa.ctAt='';
+  render();renderQA();renderStuck();
+  const {error}=await sb.from('evals').update({clinician:e.clinician,status:e.status,assigned_by:e.assignedBy,qa:e.qa}).eq('id',id);
+  if(error){flash('✕ Not saved: '+error.message);return;}
+  flash('✓ Moved to '+avLabel(date,true)+(clinChanged?' · '+name:''));
+  if(ctReady){await ctSync(id);if(clinChanged)await ctMessage(id,'assigned');primeAsst();}
+  renderCal();
+}
 // ── LAYOUT HELPERS ──
 function localISO(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function toggleSide(){const on=document.body.classList.toggle('show-side');document.getElementById('menuBtn').textContent=on?'✕ Close':'☰ Tools';}
