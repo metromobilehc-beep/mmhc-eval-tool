@@ -762,7 +762,7 @@ function renderHistory(){
         <div style="display:flex;gap:4px;flex-direction:column;align-items:flex-end">
           ${isArchived(e)?`<span style="font-size:9px;font-weight:700;text-transform:uppercase;color:var(--muted)">Archived${e.qa.archivedFrom?' · was '+e.qa.archivedFrom:''}</span><button onclick="restoreEval('${e.id}')" style="font-size:10px;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">↩ Restore</button>`:''}
           ${!isArchived(e)&&e.status==='complete'?`<button onclick="reopenEval('${e.id}')" style="font-size:10px;color:var(--accent);background:none;border:1px solid var(--accent);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">↩ Back to board</button>`:''}
-          <button onclick="rmEval('${e.id}')" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ Remove</button>
+          <button onclick="delEval('${e.id}')" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:2px 7px;cursor:pointer;font-family:inherit;white-space:nowrap;">✕ Remove</button>
         </div>
       </div>
       ${checks?`<div style="font-size:11px;color:var(--accent);margin-top:6px;">${checks}</div>`:''}
@@ -1766,8 +1766,11 @@ async function dropEval(id){
 function delEval(id){if(confirm('Delete this eval permanently? Use "Dropped" instead to keep a record of it.'))rmEval(id);}
 async function rmEval(id){
   const e0=evals.find(e=>e.id===id);const sid=e0&&e0.qa&&e0.qa.ctShiftId;const psid=e0&&e0.qa&&e0.qa.ctPtaShiftId;
-  evals=evals.filter(e=>e.id!==id);render();
-  await sb.from('evals').delete().eq('id',id);
+  const keep=evals;
+  evals=evals.filter(e=>e.id!==id);render();renderQA();renderStuck();renderHistory();
+  const {error:delErr}=await sb.from('evals').delete().eq('id',id);
+  if(delErr){evals=keep;render();renderQA();renderStuck();renderHistory();flash('✕ Not deleted: '+delErr.message);alert('Not deleted: '+delErr.message+'\n\nPaste this message to Claude.');return;}
+  flash('✓ Deleted');
   if(ctReady&&(sid||psid)){try{await ctApi('remove',{shift_id:sid||'',shift_ids:[psid||'']});}catch(_){flash('⚠ Delete that visit from the Connecteam calendar by hand');}}
 }
 async function clrDone(){if(!confirm('Permanently remove everything in History (completed and archived)?'))return;const ids=evals.filter(inHistory).map(e=>e.id);evals=evals.filter(e=>!inHistory(e));render();if(ids.length)await sb.from('evals').delete().in('id',ids);}
