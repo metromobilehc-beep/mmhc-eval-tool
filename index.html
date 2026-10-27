@@ -198,6 +198,18 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
 </style>
 </head>
 <body>
+<div id="dupModal" class="modal hidden">
+  <div class="modal-box">
+    <div class="auth-title" style="text-align:left">⚠ Looks like a duplicate</div>
+    <div id="dupSummary" class="modal-sum"></div>
+    <div id="dupList" class="modal-pre"></div>
+    <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:8px">
+      <button class="btn btn-g" id="dupNew" style="flex:1" onclick="dupAnswer('new')">Add only new</button>
+      <button class="btn btn-o" style="flex:1" onclick="dupAnswer('all')">Add all anyway</button>
+      <button class="btn btn-o" style="flex:1" onclick="dupAnswer('cancel')">Cancel</button>
+    </div>
+  </div>
+</div>
 <div id="clrModal" class="modal hidden">
   <div class="modal-box">
     <div class="auth-title" style="text-align:left">🧹 Clear the board</div>
@@ -978,10 +990,55 @@ function parseText(text,ag,wd,p){
   return out;
 }
 
+// ── DUPLICATE CHECK ──
+// Same agency + same location (+ same ZIP when both have one) + same discipline. If both have a patient ID and they differ, it is a different patient.
+const dupN=x=>String(x==null?'':x).toLowerCase().replace(/[^a-z0-9]/g,'');
+function isDup(a,b){
+  if(dupN(a.agency)!==dupN(b.agency))return false;
+  if(!dupN(a.location)||dupN(a.location)!==dupN(b.location))return false;
+  if(a.zip&&b.zip&&dupN(a.zip)!==dupN(b.zip))return false;
+  if(dupN(a.discipline)!==dupN(b.discipline))return false;
+  if(dupN(a.patient)&&dupN(b.patient)&&dupN(a.patient)!==dupN(b.patient))return false;
+  return true;
+}
+// returns [{item, match, where}] for items that repeat something on the board, in History (last 14 days), or earlier in the same paste
+function findDups(items,pool){
+  const out=[],cut=Date.now()-14*86400000;
+  const rel=(pool||[]).filter(e=>{
+    const hist=e.status==='complete'||(e.qa&&e.qa.archived);
+    if(!hist)return true;
+    const t=Date.parse(e.dateAdded||'');return !isNaN(t)&&t>=cut;
+  });
+  items.forEach((it,i)=>{
+    let m=rel.find(e=>isDup(it,e)),where='';
+    if(m)where=(m.status==='complete'||(m.qa&&m.qa.archived))?'in History':'on the board ('+(m.clinician?'assigned to '+m.clinician:'pending')+')';
+    else{m=items.slice(0,i).find(e=>isDup(it,e));if(m)where='earlier in this same paste';}
+    if(m)out.push({item:it,match:m,where});
+  });
+  return out;
+}
+let dupResolve=null;
+function dupAnswer(a){document.getElementById('dupModal').classList.add('hidden');if(dupResolve){const r=dupResolve;dupResolve=null;r(a);}}
+// resolves to the list of items to add, or null if cancelled
+function dupGate(items){
+  const dups=findDups(items,evals);
+  if(!dups.length)return Promise.resolve(items);
+  const set=new Set(dups.map(d=>d.item));
+  document.getElementById('dupSummary').textContent=dups.length+' of '+items.length+' look like evals you already have (same agency, place and discipline). Nothing is added until you choose.';
+  document.getElementById('dupList').innerHTML=dups.map(d=>'<div style="margin-bottom:5px"><b>'+esc(d.item.location)+(d.item.zip?' '+esc(d.item.zip):'')+'</b> · '+esc(d.item.agency||'')+' · '+esc(d.item.discipline||'')+(d.item.patient?' · '+esc(d.item.patient):'')+'<br><span style="color:var(--muted)">already '+esc(d.where)+'</span></div>').join('');
+  const nNew=items.length-set.size;
+  const b=document.getElementById('dupNew');b.textContent=nNew?'Add only new ('+nNew+')':'Add none';
+  document.getElementById('dupModal').classList.remove('hidden');
+  return new Promise(res=>{dupResolve=a=>res(a==='all'?items:a==='new'?items.filter(x=>!set.has(x)):null);});
+}
 async function parseAdd(){
   const text=document.getElementById('rt').value.trim();if(!text){flash('⚠️ Nothing to parse');return;}
   const ag=document.getElementById('ag').value,wd=document.getElementById('wd').value;
-  const items=parseText(text,ag,wd,pri);if(!items.length){flash('⚠️ Could not parse');return;}
+  let items=parseText(text,ag,wd,pri);if(!items.length){flash('⚠️ Could not parse');return;}
+  const keepItems=await dupGate(items);
+  if(keepItems===null){flash('Nothing added');return;}
+  if(!keepItems.length){document.getElementById('rt').value='';flash('Nothing new to add (all were duplicates)');return;}
+  items=keepItems;
   document.getElementById('parseBtn').disabled=true;
   saving=true;
   evals=[...items,...evals];render();document.getElementById('rt').value='';
@@ -1004,6 +1061,8 @@ async function parseAdd(){
 async function addOne(){
   const loc=document.getElementById('sl').value.trim();if(!loc)return;
   const wd=document.getElementById('wd').value;
+  const ev0={location:loc,zip:document.getElementById('sz').value.trim(),discipline:singleDisc,agency:document.getElementById('ag').value,patient:document.getElementById('spt').value.trim()};
+  if(findDups([ev0],evals).length){const g=await dupGate([ev0]);if(g===null||!g.length){flash('Nothing added');return;}}
   const ev={id:String(Date.now()+Math.random()),location:loc,zip:document.getElementById('sz').value.trim(),discipline:singleDisc,agency:document.getElementById('ag').value,priority:pri,note:document.getElementById('sn').value.trim(),patient:document.getElementById('spt').value.trim(),status:'pending',clinician:'',addedBy:userName||'',assignedBy:'',dateAdded:wd,weekDate:wd,qa:{}};
   evals=[ev,...evals];render();['sl','sz','sn','spt'].forEach(id=>document.getElementById(id).value='');
   const {error:addErr}=await sb.from('evals').insert(evalToDB(ev));
@@ -1403,7 +1462,7 @@ async function restoreEval(id){
   await sb.from('evals').update({qa:e.qa}).eq('id',id);
   flash('✓ Restored to the board');
 }
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape')closeClearBoard();});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){closeClearBoard();if(dupResolve)dupAnswer('cancel');}});
 
 // ── AVAILABILITY CALENDAR (read from Connecteam through the connecteam-shift function) ──
 let avStart=null,avData=null,avSel=null,avSort=null,avBusy=false,avErr='',avRows=[];
@@ -1476,13 +1535,16 @@ function renderAvail(){
   h+=people.map((c,ri)=>{
     const u=avData.users[c.name];
     let chips=days.map((d,di)=>{const x=u.days[d];return '<button class="av-chip '+avCls(x,c,d)+(avSel&&avSel.name===c.name&&avSel.di===di?' av-sel':'')+'" onclick="avPick('+ri+','+di+')">'+avTxt(x,c,d)+'</button>';}).join('');
+    // the notes people typed on their prefer-to-work entries, by day, always visible
+    const pn=days.map(d=>{const x=u.days[d];const n=prefNote(x);return n?'<b>'+esc(avLabel(d))+'</b>: '+esc(n):'';}).filter(Boolean);
+    const notesLine=pn.length?'<div style="font-size:11px;color:var(--accent);margin-top:5px;line-height:1.5">📝 '+pn.join(' &nbsp;·&nbsp; ')+'</div>':'';
     let det='';
     if(avSel&&avSel.name===c.name){
       const d=u.days[days[avSel.di]]||{shifts:0,offMin:0,blocks:[]};
       const lab={shift:'Scheduled',unavailable:'Unavailable',timeoff:'Time off',available:'Available'};
-      det='<div style="font-size:11px;margin-top:6px;line-height:1.6"><b>'+esc(avLabel(days[avSel.di],true))+'</b>: '+(avOff(d)?'off all day':dayLoad(c,days[avSel.di],d)+' of '+capFor(c,d)+' evals'+(d.cap!=null?' (per their note)':'')+(d.offMin>0?', unavailable '+avHrs(d.offMin):''))+(d.blocks.length?'<br>'+d.blocks.map(b=>esc(lab[b.kind]||b.kind)+' '+avT(b.start)+' to '+avT(b.end)+(b.note?' — “'+esc(b.note)+'”':'')).join('<br>'):'<br>Nothing on the calendar')+'</div>';
+      det='<div style="font-size:11px;margin-top:6px;line-height:1.6"><b>'+esc(avLabel(days[avSel.di],true))+'</b>: '+(avOff(d)?'off all day':isAsst(c)?(hasPref(d)?'prefers to work'+(prefNote(d)?' — “'+esc(prefNote(d))+'”':''):'no preference set')+(d.offMin>0?', unavailable '+avHrs(d.offMin):''):dayLoad(c,days[avSel.di],d)+' of '+capFor(c,d)+' evals'+(d.cap!=null?' (per their note)':'')+(d.offMin>0?', unavailable '+avHrs(d.offMin):''))+(d.blocks.length?'<br>'+d.blocks.map(b=>esc(lab[b.kind]||b.kind)+' '+avT(b.start)+' to '+avT(b.end)+(b.note?' — “'+esc(b.note)+'”':'')).join('<br>'):'<br>Nothing on the calendar')+'</div>';
     }
-    return '<div class="av-card"><div style="display:flex;justify-content:space-between;font-size:12px"><b>'+esc(c.name)+'</b><span style="color:var(--muted)">'+esc(c.role||'')+'</span></div><div class="av-row">'+chips+'</div>'+det+'</div>';
+    return '<div class="av-card"><div style="display:flex;justify-content:space-between;font-size:12px"><b>'+esc(c.name)+'</b><span style="color:var(--muted)">'+esc(c.role||'')+'</span></div><div class="av-row">'+chips+'</div>'+notesLine+det+'</div>';
   }).join('');
   if(!people.length)h+='<div class="qa-empty">No clinicians linked to Connecteam yet. Link them in Settings.</div>';
   if(unlinked)h+='<div style="font-size:10px;color:var(--muted)">'+unlinked+' clinician'+(unlinked>1?'s are':' is')+' not linked to Connecteam and not shown.</div>';
