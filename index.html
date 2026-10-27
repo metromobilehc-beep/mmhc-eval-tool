@@ -143,6 +143,17 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 .opt input[type=radio],.opt input[type=checkbox]{width:15px;height:15px;margin-top:2px;accent-color:#fbbf24;flex-shrink:0;}
 .opt input[type=number]{width:56px;padding:2px 6px;display:inline-block;}
 .modal-pre{font-size:12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:10px;line-height:1.5;margin-top:4px;}
+.av-card{background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px;margin-bottom:6px;}
+.av-row{display:flex;gap:3px;margin-top:6px;}
+.av-chip{flex:1;min-width:0;padding:5px 0;border-radius:6px;text-align:center;font-size:10px;font-weight:700;border:1px solid var(--border);cursor:pointer;background:transparent;font-family:inherit;color:var(--muted);}
+.av-good{color:var(--accent);border-color:rgba(0,212,170,.45);}
+.av-mid{color:#fbbf24;border-color:rgba(251,191,36,.45);}
+.av-low{color:#fb923c;border-color:rgba(251,146,60,.45);}
+.av-none{color:var(--red);border-color:rgba(248,113,113,.45);}
+.av-sel{outline:2px solid #fbbf24;outline-offset:1px;}
+.av-days{display:flex;gap:3px;margin-bottom:8px;}
+.av-day{flex:1;min-width:0;padding:5px 0;border-radius:6px;font-size:10px;text-align:center;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit;line-height:1.3;}
+.av-day.on{border-color:#fbbf24;color:#fbbf24;font-weight:700;}
 .menu-btn{display:none;padding:6px 12px;border-radius:20px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
 @media(max-width:680px){
   header{padding:10px 12px;}
@@ -215,6 +226,7 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
       <button class="tab on" onclick="sw('paste',this)">📋 Paste</button>
       <button class="tab" onclick="sw('stuck',this)">🚨 Stuck <span id="stuckN"></span></button>
       <button class="tab" onclick="sw('qa',this)">✅ QA</button>
+      <button class="tab" onclick="sw('avail',this)">📅 Availability</button>
       <button class="tab" onclick="sw('cap',this)">👥 Capacity</button>
       <button class="tab" onclick="sw('tpl',this)">💬 Templates</button>
       <button class="tab" onclick="sw('hist',this)">📁 History</button>
@@ -289,6 +301,20 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 
     </div>
 
+    <div class="panel hidden" id="tp-avail">
+      <div class="lbl">Clinician availability (from Connecteam)</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px">How many shifts each clinician already has per day, plus unavailable time and approved time off. Tap a day to rank clinicians by fewest evals that day. Tap a box for the details.</div>
+      <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
+        <button class="btn btn-o" style="width:auto;padding:5px 12px;margin:0" onclick="avWeek(-1)">‹</button>
+        <div id="avRange" style="font-size:12px;font-weight:600;flex:1;text-align:center"></div>
+        <button class="btn btn-o" style="width:auto;padding:5px 12px;margin:0" onclick="avWeek(1)">›</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-bottom:8px">
+        <select id="avRole" onchange="renderAvail()" style="flex:1"><option value="">All roles</option><option>PT</option><option>PTA</option><option>OT</option><option>COTA</option><option>SLP</option></select>
+        <button class="btn btn-o" style="width:auto;padding:5px 12px;margin:0" onclick="loadAvail()">🔄</button>
+      </div>
+      <div id="avBody"></div>
+    </div>
     <div class="panel hidden" id="tp-cap">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
         <div class="lbl" style="margin-bottom:0">PTA / COTA Availability</div>
@@ -660,7 +686,7 @@ function evalToDB(e) {
 }
 
 // ── UI ──
-function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='qa')renderQA();if(name==='stuck')renderStuck();if(name==='hist')renderHistory();if(name==='cap')renderCapacity();}
+function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='qa')renderQA();if(name==='stuck')renderStuck();if(name==='hist')renderHistory();if(name==='cap')renderCapacity();if(name==='avail'){if(!avData&&!avBusy)loadAvail();else renderAvail();}}
 
 function renderHistory(){
   const list=document.getElementById('histList');if(!list)return;
@@ -1049,6 +1075,9 @@ async function toggleStaff(id,makeActive){
 
 // ── CONNECTEAM (shifts are created by the connecteam-shift Edge Function; the API key never touches this page) ──
 let ctReady=false, ctUsers=[];
+function ctNorm(x){return String(x==null?'':x).toLowerCase().replace(/[^a-z0-9]/g,'');}
+function ctJobFor(agency,jobs){const a=ctNorm(agency);if(!a)return null;const live=(jobs||[]).filter(j=>j&&!j.parentId);
+  return live.find(j=>ctNorm(j.title)===a)||live.find(j=>{const t=ctNorm(j.title);return t.length>=3&&(a.includes(t)||t.includes(a));})||null;}
 async function ctApi(action,payload){
   const {data,error}=await sb.functions.invoke('connecteam-shift',{body:{action,...(payload||{})}});
   if(error){
@@ -1098,7 +1127,14 @@ async function checkCt(){
     const mine=sch.find(x=>String(x.schedulerId)===String(st.schedulerId));
     ctReady=!!mine;
     el.style.color=ctReady?'var(--accent)':'var(--red)';
-    el.innerHTML=ctReady?'Connected. Visits go to <b>'+esc(mine.name)+'</b> ('+esc(mine.timezone||'')+').':'Scheduler ID '+esc(st.schedulerId)+' was not found in your account.'+(list?'<br>Your schedulers: '+list:(listErr?'<br>Could not load your schedulers: '+esc(listErr):'<br>Connecteam returned no schedulers for this API key.'));
+    let jobNote='';
+    if(ctReady){
+      try{const jr=await ctApi('list_jobs');const jobs=(jr&&jr.jobs)||[];
+        const miss=agencies.filter(a=>!ctJobFor(a,jobs));
+        jobNote=jobs.length?(miss.length?'<br>Agencies with no matching Connecteam Job (their shifts get the agency in the title): <b>'+miss.map(esc).join(', ')+'</b>':'<br>Every agency matches a Connecteam Job.'):'<br>No Connecteam Jobs found on this scheduler, so shift titles will carry the agency name.';}
+      catch(_){}
+    }
+    el.innerHTML=ctReady?'Connected. Visits go to <b>'+esc(mine.name)+'</b> ('+esc(mine.timezone||'')+').'+jobNote:'Scheduler ID '+esc(st.schedulerId)+' was not found in your account.'+(list?'<br>Your schedulers: '+list:(listErr?'<br>Could not load your schedulers: '+esc(listErr):'<br>Connecteam returned no schedulers for this API key.'));
   }catch(e){ctReady=false;el.style.color='var(--red)';el.textContent=e.message;}
 }
 async function loadCtUsers(){
@@ -1225,6 +1261,63 @@ async function restoreEval(id){
   flash('✓ Restored to the board');
 }
 document.addEventListener('keydown',ev=>{if(ev.key==='Escape')closeClearBoard();});
+
+// ── AVAILABILITY CALENDAR (read from Connecteam through the connecteam-shift function) ──
+let avStart=null,avData=null,avSel=null,avSort=null,avBusy=false,avErr='',avRows=[];
+function addDaysISO(iso,n){const p=iso.split('-').map(Number);return new Date(Date.UTC(p[0],p[1]-1,p[2]+n)).toISOString().slice(0,10);}
+function mondayISO(iso){const p=iso.split('-').map(Number);const dt=new Date(Date.UTC(p[0],p[1]-1,p[2]));dt.setUTCDate(dt.getUTCDate()-((dt.getUTCDay()+6)%7));return dt.toISOString().slice(0,10);}
+function avHrs(m){return m>=60?(Math.round(m/6)/10)+'h':(m>0?m+'m':'0');}
+function avOff(d){return !!d&&d.windowMin>0&&d.offMin>=d.windowMin;}
+function avLoad(d){return d?(d.shifts!=null?d.shifts:0):0;}
+function avCls(d){if(!d||avOff(d))return 'av-none';const n=avLoad(d);return n===0?'av-good':n<=2?'av-mid':'av-low';}
+function avTxt(d){if(!d)return '-';if(avOff(d))return 'Off';const n=avLoad(d);return (n===0?'Free':String(n))+(d.offMin>0?'*':'');}
+function avT(hm){const p=hm.split(':').map(Number);const h=p[0]%12||12;return h+(p[1]?':'+String(p[1]).padStart(2,'0'):'')+(p[0]<12?'a':'p');}
+function avLabel(iso,long){const p=iso.split('-').map(Number);const dt=new Date(Date.UTC(p[0],p[1]-1,p[2]));const dn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getUTCDay()];return long?dn+' '+(p[1])+'/'+p[2]:dn+' '+p[2];}
+function avWeek(n){avStart=addDaysISO(avStart||mondayISO(localISO()),n*7);avData=null;avSel=null;avSort=null;loadAvail();}
+async function loadAvail(){
+  if(!avStart)avStart=mondayISO(localISO());
+  if(!ctReady){renderAvail();return;}
+  const wk=avStart;avBusy=true;avErr='';renderAvail();
+  try{const r=await ctApi('availability',{start:wk,days:7});if(wk===avStart)avData=r;}
+  catch(e){if(wk===avStart){avErr=e.message;avData=null;}}
+  if(wk===avStart){avBusy=false;renderAvail();}
+}
+function avPickDay(i){avSort=(avSort===i)?null:i;renderAvail();}
+function avPick(ri,di){const r=avRows[ri];if(!r)return;avSel=(avSel&&avSel.name===r.name&&avSel.di===di)?null:{name:r.name,di:di};renderAvail();}
+function renderAvail(){
+  if(!avStart)avStart=mondayISO(localISO());
+  const body=document.getElementById('avBody');if(!body)return;
+  document.getElementById('avRange').textContent=avLabel(avStart,true)+' – '+avLabel(addDaysISO(avStart,6),true);
+  if(!ctReady){body.innerHTML='<div class="qa-empty">Connecteam is not connected yet. Open Settings and click Check connection first.</div>';return;}
+  if(avBusy){body.innerHTML='<div class="qa-empty">Loading from Connecteam...</div>';return;}
+  if(avErr){body.innerHTML='<div class="qa-empty" style="color:var(--red)">'+esc(avErr)+'</div>';return;}
+  if(!avData){body.innerHTML='<div class="qa-empty">Tap 🔄 to load this week.</div>';return;}
+  const days=avData.days||[],role=document.getElementById('avRole').value;
+  const people=clins.filter(c=>(!role||c.role===role)&&avData.users&&avData.users[c.name]);
+  const unlinked=clins.filter(c=>(!role||c.role===role)&&!(avData.users&&avData.users[c.name])).length;
+  const loadOn=(c,i)=>{const d=avData.users[c.name].days[days[i]];return !d||avOff(d)?999:avLoad(d);};
+  if(avSort!==null)people.sort((a,b)=>loadOn(a,avSort)-loadOn(b,avSort)||a.name.localeCompare(b.name));
+  else people.sort((a,b)=>a.name.localeCompare(b.name));
+  avRows=people;
+  let h='<div class="av-days">'+days.map((d,i)=>'<button class="av-day'+(avSort===i?' on':'')+'" onclick="avPickDay('+i+')">'+esc(avLabel(d).replace(' ','<br>')).replace('&lt;br&gt;','<br>')+'</button>').join('')+'</div>';
+  if(avSort!==null)h+='<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Fewest evals on <b>'+esc(avLabel(days[avSort],true))+'</b> first. Tap the day again to sort by name.</div>';
+  h+=people.map((c,ri)=>{
+    const u=avData.users[c.name];
+    let chips=days.map((d,di)=>{const x=u.days[d];return '<button class="av-chip '+avCls(x)+(avSel&&avSel.name===c.name&&avSel.di===di?' av-sel':'')+'" onclick="avPick('+ri+','+di+')">'+avTxt(x)+'</button>';}).join('');
+    let det='';
+    if(avSel&&avSel.name===c.name){
+      const d=u.days[days[avSel.di]]||{shifts:0,offMin:0,blocks:[]};
+      const lab={shift:'Scheduled',unavailable:'Unavailable',timeoff:'Time off'};
+      det='<div style="font-size:11px;margin-top:6px;line-height:1.6"><b>'+esc(avLabel(days[avSel.di],true))+'</b>: '+(avOff(d)?'off all day':avLoad(d)+' scheduled'+(d.offMin>0?', unavailable '+avHrs(d.offMin):''))+(d.blocks.length?'<br>'+d.blocks.map(b=>esc(lab[b.kind]||b.kind)+' '+avT(b.start)+' to '+avT(b.end)).join('<br>'):'<br>Nothing on the calendar')+'</div>';
+    }
+    return '<div class="av-card"><div style="display:flex;justify-content:space-between;font-size:12px"><b>'+esc(c.name)+'</b><span style="color:var(--muted)">'+esc(c.role||'')+'</span></div><div class="av-row">'+chips+'</div>'+det+'</div>';
+  }).join('');
+  if(!people.length)h+='<div class="qa-empty">No clinicians linked to Connecteam yet. Link them in Settings.</div>';
+  if(unlinked)h+='<div style="font-size:10px;color:var(--muted)">'+unlinked+' clinician'+(unlinked>1?'s are':' is')+' not linked to Connecteam and not shown.</div>';
+  if(avData.errors&&avData.errors.length)h+='<div style="font-size:10px;color:var(--red);margin-top:4px">Could not load: '+avData.errors.map(e=>esc(e.name)).join(', ')+'</div>';
+  h+='<div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5">Numbers are shifts already on that clinician\'s Connecteam calendar that day. * means part of the day is marked unavailable. Connecteam does not share "prefer to work" times.</div>';
+  body.innerHTML=h;
+}
 
 // ── LAYOUT HELPERS ──
 function localISO(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
@@ -1355,7 +1448,7 @@ function render(){
       </div>
       ${e.assignedBy?`<div style="font-size:10px;color:var(--muted)">Assigned by ${e.assignedBy}</div>`:''}
       <div style="margin-bottom:4px"><input class="csel" style="font-size:11px;padding:5px 7px;" placeholder="Patient initials / ID" value="${e.patient||''}" onchange="updPat('${e.id}',this.value)"></div>
-      ${e.status==='assigned'?`<div><div class="vis-cap"><span>📅 Visit date &amp; time</span>${e.qa&&e.qa.ctShiftId?'<span class="ct-ok">✓ Connecteam</span>':''}</div><div class="vis-in"><input type="date" value="${(e.qa&&e.qa.visitDate)||''}" onchange="setVisit('${e.id}','visitDate',this.value)"><input type="time" value="${(e.qa&&e.qa.visitTime)||''}" onchange="setVisit('${e.id}','visitTime',this.value)"></div></div>`:''}
+      ${e.status==='assigned'?`<div><div class="vis-cap"><span>📅 Visit date (time optional)</span>${e.qa&&e.qa.ctShiftId?'<span class="ct-ok">✓ Connecteam</span>':''}</div><div class="vis-in"><input type="date" value="${(e.qa&&e.qa.visitDate)||''}" onchange="setVisit('${e.id}','visitDate',this.value)"><input type="time" value="${(e.qa&&e.qa.visitTime)||''}" onchange="setVisit('${e.id}','visitTime',this.value)"></div></div>`:''}
       ${(()=>{const s=getSuggestedClinician(e.location,e.zip);return s?`<div style="font-size:10px;color:#fbbf24;margin-bottom:4px;">💡 ${s.name} available${s.region?' · '+s.region:''}</div>`:''})()}
       <div class="cact">
         <select class="csel" onchange="asgn('${e.id}',this.value)">
