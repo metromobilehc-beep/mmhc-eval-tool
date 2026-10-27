@@ -1197,11 +1197,19 @@ async function ctSync(id){
   try{
     const res=await ctApi('sync',{eval_id:id});
     if(res.qa)e.qa=res.qa;
-    if(res.warning==='no_ct_user')flash('⚠ '+(e.clinician||'Clinician')+' is not linked to Connecteam yet (Settings → Connecteam)');
-    else if(res.warning==='no_time')flash('⚠ Add a visit time to put this on the Connecteam calendar');
-    else if(res.action==='create'||res.action==='replace')flash('✓ Added to Connecteam calendar');
-    else if(res.action==='update')flash('✓ Connecteam shift updated');
-    else if(res.action==='delete')flash('✓ Removed from Connecteam calendar');
+    let m='';
+    if(res.warning==='no_ct_user')m='⚠ '+(e.clinician||'Clinician')+' is not linked to Connecteam yet (Settings → Connecteam)';
+    else if(res.warning==='no_time')m='⚠ Add a visit time to put this on the Connecteam calendar';
+    else if(res.action==='create'||res.action==='replace')m='✓ Added to Connecteam calendar';
+    else if(res.action==='update')m='✓ Connecteam shift updated';
+    else if(res.action==='delete')m='✓ Removed from Connecteam calendar';
+    const pr=res.pta||{};
+    if(pr.error)m+=(m?' · ':'')+'⚠ PTA marker failed: '+pr.error;
+    else if(pr.warning==='pta_no_ct_user')m+=(m?' · ':'')+'⚠ '+(e.ptaClinician||'PTA')+' is not linked to Connecteam yet';
+    else if(pr.action==='create'||pr.action==='replace')m+=(m?' · ':'')+'✓ '+(e.ptaClinician||'PTA')+' marked for that day';
+    else if(pr.action==='update')m+=(m?' · ':'')+'✓ PTA marker updated';
+    else if(pr.action==='delete')m+=(m?' · ':'')+'✓ PTA marker removed';
+    if(m)flash(m);
   }catch(err){
     if(!e.qa)e.qa={};
     e.qa.ctError=err.message;
@@ -1353,8 +1361,8 @@ async function runClearBoard(){
   try{
     if(rmShifts&&ctReady){
       for(const e of items){
-        if(e.qa&&e.qa.ctShiftId&&upcomingVisit(e)){
-          try{await ctApi('remove',{shift_id:e.qa.ctShiftId});e.qa.ctShiftId='';e.qa.ctUserId='';e.qa.ct=false;e.qa.ctAt='';}
+        if(e.qa&&(e.qa.ctShiftId||e.qa.ctPtaShiftId)&&upcomingVisit(e)){
+          try{await ctApi('remove',{shift_id:e.qa.ctShiftId||'',shift_ids:[e.qa.ctPtaShiftId||'']});e.qa.ctShiftId='';e.qa.ctUserId='';e.qa.ct=false;e.qa.ctAt='';e.qa.ctPtaShiftId='';e.qa.ctPtaUserId='';e.qa.ctPtaAt='';}
           catch(_){shiftFail++;}
         }
       }
@@ -1679,7 +1687,7 @@ function render(){
           <option value="">+ Assign PTA/COTA (optional)</option>
           ${clins.filter(c=>c.role==='PTA'||c.role==='COTA').map(c=>`<option value="${c.name}"${e.ptaClinician===c.name?' selected':''}>${c.name} (${c.role})</option>`).join('')}
         </select>
-        ${e.ptaClinician?`<div style="font-size:10px;color:var(--blue);margin-top:2px;">🤝 PTA: ${e.ptaClinician}</div>`:''}
+        ${e.ptaClinician?`<div style="font-size:10px;color:var(--blue);margin-top:2px;">🤝 PTA: ${e.ptaClinician}${e.qa&&e.qa.ctPtaShiftId?' · ✓ on their Connecteam calendar':(e.qa&&e.qa.visitDate?'':' · set the visit date to mark their day')}</div>`:''}
       </div>
     </div>`;
   }).join('');
@@ -1692,6 +1700,8 @@ async function asgnPTA(id,name){
   render();
   await sb.from('evals').update({pta_clinician:name}).eq('id',id);
   if(name) flash(`✓ PTA assigned: ${name}`);
+  // the PTA gets a same-day "eval planned" marker on their Connecteam calendar once there is a visit date
+  if(ctReady&&((e.qa&&e.qa.visitDate)||(e.qa&&e.qa.ctPtaShiftId)))await ctSync(id);
 }
 
 async function asgn(id,name){
@@ -1714,10 +1724,10 @@ async function mkDone(id){const e=evals.find(e=>e.id===id);if(!e)return;
   if(!confirm('Mark this eval done and move it to History?'))return;
   e.status='complete';render();renderQA();renderHistory();await sb.from('evals').update({status:'complete'}).eq('id',id);}
 async function rmEval(id){
-  const e0=evals.find(e=>e.id===id);const sid=e0&&e0.qa&&e0.qa.ctShiftId;
+  const e0=evals.find(e=>e.id===id);const sid=e0&&e0.qa&&e0.qa.ctShiftId;const psid=e0&&e0.qa&&e0.qa.ctPtaShiftId;
   evals=evals.filter(e=>e.id!==id);render();
   await sb.from('evals').delete().eq('id',id);
-  if(ctReady&&sid){try{await ctApi('remove',{shift_id:sid});}catch(_){flash('⚠ Delete that visit from the Connecteam calendar by hand');}}
+  if(ctReady&&(sid||psid)){try{await ctApi('remove',{shift_id:sid||'',shift_ids:[psid||'']});}catch(_){flash('⚠ Delete that visit from the Connecteam calendar by hand');}}
 }
 async function clrDone(){if(!confirm('Permanently remove everything in History (completed and archived)?'))return;const ids=evals.filter(inHistory).map(e=>e.id);evals=evals.filter(e=>!inHistory(e));render();if(ids.length)await sb.from('evals').delete().in('id',ids);}
 async function clrAll(){if(!confirm('Permanently delete ALL evals, including history? This cannot be undone.'))return;evals=[];render();await sb.from('evals').delete().neq('id','');}
