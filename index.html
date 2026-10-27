@@ -159,21 +159,23 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 .vsw button{padding:6px 16px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;}
 .vsw button.on{border-color:#fbbf24;color:#fbbf24;background:rgba(251,191,36,.08);}
 .cal-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
-.cal-bar button,.cal-bar select{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:12px;cursor:pointer;font-family:inherit;}
+.cal-bar button,.cal-bar select{padding:6px 14px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:13px;cursor:pointer;font-family:inherit;}
 .cal-bar button.on{border-color:#fbbf24;color:#fbbf24;}
 .cal-bar select{width:auto;}
+select{color-scheme:dark;}
+select option,select optgroup{background:#12352c;color:#eaf6f1;}
 .cal-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px;background:var(--surface);max-height:calc(100vh - 250px);}
 table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;table-layout:fixed;}
-.cal th,.cal td{border-bottom:1px solid var(--border);border-right:1px solid var(--border);padding:6px;vertical-align:top;font-size:11px;}
-.cal th{position:sticky;top:0;background:var(--surface);z-index:2;text-align:center;font-size:12px;}
-.cal th:first-child,.cal td:first-child{position:sticky;left:0;background:var(--surface);z-index:1;width:130px;text-align:left;}
+.cal th,.cal td{border-bottom:1px solid var(--border);border-right:1px solid var(--border);padding:8px;vertical-align:top;font-size:13px;}
+.cal th{position:sticky;top:0;background:var(--surface);z-index:2;text-align:center;font-size:13px;}
+.cal th:first-child,.cal td:first-child{position:sticky;left:0;background:var(--surface);z-index:1;width:150px;text-align:left;}
 .cal th:first-child{z-index:3;}
-.cal td{height:78px;}
+.cal td{height:72px;}
 .cal th.today{color:#fbbf24;}
 .cal td.today{background:rgba(251,191,36,.07);}
-.cal-n{font-size:10px;color:var(--muted);margin-bottom:2px;}
+.cal-n{font-size:12px;color:#b9d3c9;margin-bottom:3px;}
 .cal-off{color:var(--red);font-weight:700;}
-.cal-ev{border-radius:5px;padding:3px 5px;margin-top:3px;font-size:10px;line-height:1.3;border:1px solid rgba(0,212,170,.5);background:rgba(0,212,170,.08);}
+.cal-ev{border-radius:6px;padding:4px 6px;margin-top:4px;font-size:12px;line-height:1.35;color:#eaf6f1;border:1px solid rgba(0,212,170,.5);background:rgba(0,212,170,.08);}
 .cal-ev.noct{border:1px dashed #fbbf24;background:rgba(251,191,36,.08);}
 .cal-ev.seen{opacity:.55;}
 .menu-btn{display:none;padding:6px 12px;border-radius:20px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
@@ -325,7 +327,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
 
     <div class="panel hidden" id="tp-avail">
       <div class="lbl">Clinician availability (from Connecteam)</div>
-      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px">How many shifts each clinician already has per day, plus unavailable time and approved time off. Tap a day to rank clinicians by fewest evals that day. Tap a box for the details.</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px">Shifts already on each clinician's calendar out of their daily eval limit (set it on the Calendar view), plus unavailable time and approved time off. Tap a day to rank clinicians by who has the most room that day. Tap a box for the details.</div>
       <div style="display:flex;gap:6px;align-items:center;margin-bottom:8px">
         <button class="btn btn-o" style="width:auto;padding:5px 12px;margin:0" onclick="avWeek(-1)">‹</button>
         <div id="avRange" style="font-size:12px;font-weight:600;flex:1;text-align:center"></div>
@@ -467,7 +469,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <button onclick="loadCal()">🔄</button>
       </div>
       <div id="calBody"></div>
-      <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.6">Boxes show evals from this tool placed on the visit day: <span style="color:var(--accent)">solid green</span> = on the clinician's Connecteam calendar, <span style="color:#fbbf24">dashed amber</span> = not in Connecteam yet. "N shifts" is everything already on their Connecteam calendar that day, including these. Connecteam does not share "prefer to work" times.</div>
+      <div style="font-size:12px;color:#b9d3c9;margin-top:10px;line-height:1.6">Boxes show evals from this tool placed on the visit day: <span style="color:var(--accent)">solid green</span> = on the clinician's Connecteam calendar, <span style="color:#fbbf24">dashed amber</span> = not in Connecteam yet. "2 of 3" is evals booked out of that clinician's daily limit (Max/day box, default 3): everything already on their Connecteam calendar plus evals here not in Connecteam yet. Connecteam does not share "prefer to work" times.</div>
     </div>
   </div>
 </div>
@@ -690,7 +692,7 @@ async function loadAll() {
       sb.from('agencies').select('*').order('name')
     ]);
     if (evR.data) evals = evR.data.map(dbToEval);
-    if (clR.data && clR.data.length) clins = clR.data.map(r=>({name:r.name,role:r.role,phone:r.phone||'',email:r.email||'',ctUserId:r.connecteam_user_id||null}));
+    if (clR.data && clR.data.length) clins = clR.data.map(r=>({name:r.name,role:r.role,phone:r.phone||'',email:r.email||'',ctUserId:r.connecteam_user_id||null,maxEvals:r.max_evals==null?null:Number(r.max_evals)}));
     if (agR.data && agR.data.length) agencies = agR.data.map(r=>r.name);
     render(); renderClins(); renderAgencies(); renderQA(); renderCapacity(); renderStuck();
     setSyncStatus('live', `Live · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
@@ -1307,9 +1309,22 @@ function addDaysISO(iso,n){const p=iso.split('-').map(Number);return new Date(Da
 function mondayISO(iso){const p=iso.split('-').map(Number);const dt=new Date(Date.UTC(p[0],p[1]-1,p[2]));dt.setUTCDate(dt.getUTCDate()-((dt.getUTCDay()+6)%7));return dt.toISOString().slice(0,10);}
 function avHrs(m){return m>=60?(Math.round(m/6)/10)+'h':(m>0?m+'m':'0');}
 function avOff(d){return !!d&&d.windowMin>0&&d.offMin>=d.windowMin;}
+const DEFAULT_MAX_EVALS=3;
+function maxFor(c){return (c&&c.maxEvals>0)?c.maxEvals:DEFAULT_MAX_EVALS;}
 function avLoad(d){return d?(d.shifts!=null?d.shifts:0):0;}
-function avCls(d){if(!d||avOff(d))return 'av-none';const n=avLoad(d);return n===0?'av-good':n<=2?'av-mid':'av-low';}
-function avTxt(d){if(!d)return '-';if(avOff(d))return 'Off';const n=avLoad(d);return (n===0?'Free':String(n))+(d.offMin>0?'*':'');}
+// evals placed on this clinician/day in the tool that are not on their Connecteam calendar yet (so they still count)
+function unsyncedOn(name,date){return evals.filter(e=>e.status==='assigned'&&!isArchived(e)&&e.clinician===name&&e.qa&&e.qa.visitDate===date&&!e.qa.ct).length;}
+function dayLoad(c,date,d){return avLoad(d)+unsyncedOn(c.name,date);}
+function avCls(d,c,date){if(!d||avOff(d))return 'av-none';const left=maxFor(c)-dayLoad(c,date,d);return left<=0?'av-none':left===1?'av-low':'av-good';}
+function avTxt(d,c,date){if(!d)return '-';if(avOff(d))return 'Off';const n=dayLoad(c,date,d);return n+'/'+maxFor(c)+(d.offMin>0?'*':'');}
+async function setMaxEvals(name,val){
+  const n=Math.max(1,Math.min(10,parseInt(val,10)||DEFAULT_MAX_EVALS));
+  const c=clins.find(x=>x.name===name);if(!c)return;
+  c.maxEvals=n;
+  if(typeof renderCal==='function')renderCal();if(typeof renderAvail==='function')renderAvail();
+  const r=await sb.from('clinicians').update({max_evals:n}).eq('name',name);
+  flash(r&&r.error?'⚠ Could not save the limit (run the max_evals SQL first)':'✓ '+name+': up to '+n+' evals a day');
+}
 function avT(hm){const p=hm.split(':').map(Number);const h=p[0]%12||12;return h+(p[1]?':'+String(p[1]).padStart(2,'0'):'')+(p[0]<12?'a':'p');}
 function avLabel(iso,long){const p=iso.split('-').map(Number);const dt=new Date(Date.UTC(p[0],p[1]-1,p[2]));const dn=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][dt.getUTCDay()];return long?dn+' '+(p[1])+'/'+p[2]:dn+' '+p[2];}
 function avWeek(n){avStart=addDaysISO(avStart||mondayISO(localISO()),n*7);avData=null;avSel=null;avSort=null;loadAvail();}
@@ -1334,27 +1349,27 @@ function renderAvail(){
   const days=avData.days||[],role=document.getElementById('avRole').value;
   const people=clins.filter(c=>(!role||c.role===role)&&avData.users&&avData.users[c.name]);
   const unlinked=clins.filter(c=>(!role||c.role===role)&&!(avData.users&&avData.users[c.name])).length;
-  const loadOn=(c,i)=>{const d=avData.users[c.name].days[days[i]];return !d||avOff(d)?999:avLoad(d);};
+  const loadOn=(c,i)=>{const d=avData.users[c.name].days[days[i]];return !d||avOff(d)?999:dayLoad(c,days[i],d)-maxFor(c);};
   if(avSort!==null)people.sort((a,b)=>loadOn(a,avSort)-loadOn(b,avSort)||a.name.localeCompare(b.name));
   else people.sort((a,b)=>a.name.localeCompare(b.name));
   avRows=people;
   let h='<div class="av-days">'+days.map((d,i)=>'<button class="av-day'+(avSort===i?' on':'')+'" onclick="avPickDay('+i+')">'+esc(avLabel(d).replace(' ','<br>')).replace('&lt;br&gt;','<br>')+'</button>').join('')+'</div>';
-  if(avSort!==null)h+='<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Fewest evals on <b>'+esc(avLabel(days[avSort],true))+'</b> first. Tap the day again to sort by name.</div>';
+  if(avSort!==null)h+='<div style="font-size:11px;color:var(--muted);margin-bottom:6px">Most room on <b>'+esc(avLabel(days[avSort],true))+'</b> first. Tap the day again to sort by name.</div>';
   h+=people.map((c,ri)=>{
     const u=avData.users[c.name];
-    let chips=days.map((d,di)=>{const x=u.days[d];return '<button class="av-chip '+avCls(x)+(avSel&&avSel.name===c.name&&avSel.di===di?' av-sel':'')+'" onclick="avPick('+ri+','+di+')">'+avTxt(x)+'</button>';}).join('');
+    let chips=days.map((d,di)=>{const x=u.days[d];return '<button class="av-chip '+avCls(x,c,d)+(avSel&&avSel.name===c.name&&avSel.di===di?' av-sel':'')+'" onclick="avPick('+ri+','+di+')">'+avTxt(x,c,d)+'</button>';}).join('');
     let det='';
     if(avSel&&avSel.name===c.name){
       const d=u.days[days[avSel.di]]||{shifts:0,offMin:0,blocks:[]};
       const lab={shift:'Scheduled',unavailable:'Unavailable',timeoff:'Time off'};
-      det='<div style="font-size:11px;margin-top:6px;line-height:1.6"><b>'+esc(avLabel(days[avSel.di],true))+'</b>: '+(avOff(d)?'off all day':avLoad(d)+' scheduled'+(d.offMin>0?', unavailable '+avHrs(d.offMin):''))+(d.blocks.length?'<br>'+d.blocks.map(b=>esc(lab[b.kind]||b.kind)+' '+avT(b.start)+' to '+avT(b.end)).join('<br>'):'<br>Nothing on the calendar')+'</div>';
+      det='<div style="font-size:11px;margin-top:6px;line-height:1.6"><b>'+esc(avLabel(days[avSel.di],true))+'</b>: '+(avOff(d)?'off all day':dayLoad(c,days[avSel.di],d)+' of '+maxFor(c)+' evals'+(d.offMin>0?', unavailable '+avHrs(d.offMin):''))+(d.blocks.length?'<br>'+d.blocks.map(b=>esc(lab[b.kind]||b.kind)+' '+avT(b.start)+' to '+avT(b.end)).join('<br>'):'<br>Nothing on the calendar')+'</div>';
     }
     return '<div class="av-card"><div style="display:flex;justify-content:space-between;font-size:12px"><b>'+esc(c.name)+'</b><span style="color:var(--muted)">'+esc(c.role||'')+'</span></div><div class="av-row">'+chips+'</div>'+det+'</div>';
   }).join('');
   if(!people.length)h+='<div class="qa-empty">No clinicians linked to Connecteam yet. Link them in Settings.</div>';
   if(unlinked)h+='<div style="font-size:10px;color:var(--muted)">'+unlinked+' clinician'+(unlinked>1?'s are':' is')+' not linked to Connecteam and not shown.</div>';
   if(avData.errors&&avData.errors.length)h+='<div style="font-size:10px;color:var(--red);margin-top:4px">Could not load: '+avData.errors.map(e=>esc(e.name)).join(', ')+'</div>';
-  h+='<div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5">Numbers are shifts already on that clinician\'s Connecteam calendar that day. * means part of the day is marked unavailable. Connecteam does not share "prefer to work" times.</div>';
+  h+='<div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.5">Each box is evals booked out of that clinician\'s daily limit. Red = full or off, amber = one spot left. * means part of the day is marked unavailable. Connecteam does not share "prefer to work" times.</div>';
   body.innerHTML=h;
 }
 
@@ -1397,9 +1412,9 @@ function renderCal(){
   h+='<div class="cal-wrap"><table class="cal"><thead><tr><th>Clinician</th>'+days.map(d=>'<th class="'+(d===today?'today':'')+'">'+esc(avLabel(d,true))+'</th>').join('')+'</tr></thead><tbody>';
   h+=people.map(c=>{
     const u=calData&&calData.users&&calData.users[c.name];
-    return '<tr><td><b>'+esc(c.name)+'</b><div style="font-size:10px;color:var(--muted)">'+esc(c.role||'')+(!u&&ctReady&&!calBusy&&!calErr?' · not linked':'')+'</div></td>'+days.map(d=>{
+    return '<tr><td><b>'+esc(c.name)+'</b><div style="font-size:12px;color:#b9d3c9">'+esc(c.role||'')+(!u&&ctReady&&!calBusy&&!calErr?' · not linked':'')+'</div><label style="font-size:11px;color:#b9d3c9;display:block;margin-top:4px">Max/day <input type="number" min="1" max="10" value="'+maxFor(c)+'" data-name="'+esc(c.name)+'" onchange="setMaxEvals(this.dataset.name,this.value)" style="width:44px;padding:2px 4px;font-size:12px"></label></td>'+days.map(d=>{
       const x=u&&u.days[d];let top='';
-      if(x){top=avOff(x)?'<div class="cal-n cal-off">Off all day</div>':'<div class="cal-n">'+(avLoad(x)?avLoad(x)+' shift'+(avLoad(x)>1?'s':''):'Free')+(x.offMin>0?' · unavailable '+avHrs(x.offMin):'')+'</div>';}
+      if(x){const n=dayLoad(c,d,x),mx=maxFor(c);top=avOff(x)?'<div class="cal-n cal-off">Off all day</div>':'<div class="cal-n'+(n>=mx?' cal-off':'')+'">'+(n>=mx?'Full ':'')+n+' of '+mx+(x.offMin>0?' · unavailable '+avHrs(x.offMin):'')+'</div>';}
       const evs=(byCell[c.name+'|'+d]||[]).map(e=>{
         const q=e.qa||{},cls=q.ct?'':' noct';
         return '<div class="cal-ev'+cls+(q.seen?' seen':'')+'" title="'+esc((e.discipline||'')+' eval')+'"><b>'+esc(e.agency||'')+'</b> · '+esc(e.location||'')+(q.visitTime?' · '+esc(avT(q.visitTime)):'')+(q.seen?' ✓':'')+(q.ct?'':'<br>not in Connecteam')+'</div>';
