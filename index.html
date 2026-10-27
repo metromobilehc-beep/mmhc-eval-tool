@@ -434,6 +434,8 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <div id="ctStatus" style="font-size:11px;min-height:14px;margin-bottom:6px;line-height:1.5;"></div>
         <button class="btn btn-o" onclick="checkCt()">Check connection</button>
         <label style="display:flex;gap:6px;align-items:center;font-size:12px;margin:8px 0 4px"><input type="checkbox" id="autoMsg" style="width:auto" onchange="setAutoMsg(this.checked)"> Message the clinician in Connecteam when I assign an eval</label>
+        <button class="btn btn-o" style="margin-top:4px" onclick="findSender()">Find the Metro Evals sender ID</button>
+        <div id="ctSender" style="font-size:12px;margin-top:6px;line-height:1.6"></div>
         <button class="btn btn-o" style="margin-top:4px" onclick="loadCtUsers()">Link clinicians to Connecteam users</button>
         <div id="ctMap" style="margin-top:8px"></div>
         <details style="margin-top:8px"><summary style="font-size:11px;color:var(--muted);cursor:pointer">Troubleshooting (rarely needed)</summary>
@@ -1288,6 +1290,16 @@ async function ctMessage(id,kind,force){
     else if(r&&r.warning==='no_ct_user')flash('⚠ '+r.to+' is not linked to Connecteam, so no message was sent');
     else if(r&&r.warning==='already_sent'&&force)flash('Already messaged '+r.to);
   }catch(err){flash('⚠ Could not send the message: '+err.message);}
+}
+async function findSender(){
+  const box=document.getElementById('ctSender');box.style.color='var(--muted)';box.textContent='Asking Connecteam...';
+  try{
+    const r=await ctApi('list_publishers');
+    if(r.publishers&&r.publishers.length){
+      box.style.color='var(--text)';
+      box.innerHTML='Copy the number for <b>Metro Evals</b> into the secret <code>EVAL_CONNECTEAM_SENDER_ID</code>:<br>'+r.publishers.map(p=>'<b>'+esc(p.name||'(no name)')+'</b> &rarr; <code>'+esc(p.id)+'</code>').join('<br>');
+    }else{box.style.color='var(--red)';box.textContent='Connecteam answered '+r.status+' but listed no publishers. '+(r.body?String(r.body).slice(0,300):'Create the Metro Evals publisher under Settings > Feed settings > Custom publishers first.');}
+  }catch(e){box.style.color='var(--red)';box.textContent=e.message;}
 }
 async function ctSync(id){
   const e=evals.find(x=>x.id===id);if(!e)return;
