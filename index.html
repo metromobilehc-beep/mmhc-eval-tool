@@ -154,6 +154,28 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
 .av-days{display:flex;gap:3px;margin-bottom:8px;}
 .av-day{flex:1;min-width:0;padding:5px 0;border-radius:6px;font-size:10px;text-align:center;border:1px solid var(--border);background:transparent;color:var(--muted);cursor:pointer;font-family:inherit;line-height:1.3;}
 .av-day.on{border-color:#fbbf24;color:#fbbf24;font-weight:700;}
+@keyframes calspin{to{transform:rotate(360deg)}}
+.vsw{display:flex;gap:6px;flex-shrink:0;}
+.vsw button{padding:6px 16px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--muted);font-weight:700;font-size:12px;cursor:pointer;font-family:inherit;}
+.vsw button.on{border-color:#fbbf24;color:#fbbf24;background:rgba(251,191,36,.08);}
+.cal-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+.cal-bar button,.cal-bar select{padding:5px 12px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text);font-size:12px;cursor:pointer;font-family:inherit;}
+.cal-bar button.on{border-color:#fbbf24;color:#fbbf24;}
+.cal-bar select{width:auto;}
+.cal-wrap{overflow:auto;border:1px solid var(--border);border-radius:10px;background:var(--surface);max-height:calc(100vh - 250px);}
+table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;table-layout:fixed;}
+.cal th,.cal td{border-bottom:1px solid var(--border);border-right:1px solid var(--border);padding:6px;vertical-align:top;font-size:11px;}
+.cal th{position:sticky;top:0;background:var(--surface);z-index:2;text-align:center;font-size:12px;}
+.cal th:first-child,.cal td:first-child{position:sticky;left:0;background:var(--surface);z-index:1;width:130px;text-align:left;}
+.cal th:first-child{z-index:3;}
+.cal td{height:78px;}
+.cal th.today{color:#fbbf24;}
+.cal td.today{background:rgba(251,191,36,.07);}
+.cal-n{font-size:10px;color:var(--muted);margin-bottom:2px;}
+.cal-off{color:var(--red);font-weight:700;}
+.cal-ev{border-radius:5px;padding:3px 5px;margin-top:3px;font-size:10px;line-height:1.3;border:1px solid rgba(0,212,170,.5);background:rgba(0,212,170,.08);}
+.cal-ev.noct{border:1px dashed #fbbf24;background:rgba(251,191,36,.08);}
+.cal-ev.seen{opacity:.55;}
 .menu-btn{display:none;padding:6px 12px;border-radius:20px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
 @media(max-width:680px){
   header{padding:10px 12px;}
@@ -226,7 +248,7 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
       <button class="tab on" onclick="sw('paste',this)">📋 Paste</button>
       <button class="tab" onclick="sw('stuck',this)">🚨 Stuck <span id="stuckN"></span></button>
       <button class="tab" onclick="sw('qa',this)">✅ QA</button>
-      <button class="tab" onclick="sw('avail',this)">📅 Availability</button>
+      <button class="tab" onclick="sw('avail',this)">🟢 Who's free</button>
       <button class="tab" onclick="sw('cap',this)">👥 Capacity</button>
       <button class="tab" onclick="sw('tpl',this)">💬 Templates</button>
       <button class="tab" onclick="sw('hist',this)">📁 History</button>
@@ -412,6 +434,8 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
   </div>
 
   <div class="board">
+    <div class="vsw"><button id="vbBoard" class="on" onclick="setView('board')">📋 Eval Board</button><button id="vbCal" onclick="setView('cal')">📅 Calendar</button></div>
+    <div id="boardView" style="display:contents">
     <div class="bh">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
         <div class="bt">Weekly Eval Board</div>
@@ -430,6 +454,21 @@ input:focus,select:focus,textarea:focus{border-color:#fbbf24;}
       </div>
     </div>
     <div class="grid" id="grid"><div class="empty"><div class="ei">⏳</div><div class="et">Loading...</div></div></div>
+    </div>
+    <div id="calView" style="display:none">
+      <div class="cal-bar">
+        <button onclick="calShift(-1)">‹</button>
+        <div id="calRange" style="font-weight:700;font-size:14px;min-width:150px;text-align:center"></div>
+        <button onclick="calShift(1)">›</button>
+        <button onclick="calToday()">Today</button>
+        <button id="calB1" class="on" onclick="calSpan(7)">1 week</button>
+        <button id="calB2" onclick="calSpan(14)">2 weeks</button>
+        <select id="calRole" onchange="renderCal()"><option value="">All roles</option><option>PT</option><option>PTA</option><option>OT</option><option>COTA</option><option>SLP</option></select>
+        <button onclick="loadCal()">🔄</button>
+      </div>
+      <div id="calBody"></div>
+      <div style="font-size:10px;color:var(--muted);margin-top:8px;line-height:1.6">Boxes show evals from this tool placed on the visit day: <span style="color:var(--accent)">solid green</span> = on the clinician's Connecteam calendar, <span style="color:#fbbf24">dashed amber</span> = not in Connecteam yet. "N shifts" is everything already on their Connecteam calendar that day, including these. Connecteam does not share "prefer to work" times.</div>
+    </div>
   </div>
 </div>
 <div class="flash" id="fl"></div>
@@ -1319,6 +1358,58 @@ function renderAvail(){
   body.innerHTML=h;
 }
 
+// ── BIG CALENDAR VIEW ──
+let calOn=false,calStart=null,calDays=7,calData=null,calBusy=false,calErr='';
+function setView(v){
+  calOn=(v==='cal');
+  document.getElementById('boardView').style.display=calOn?'none':'contents';
+  document.getElementById('calView').style.display=calOn?'block':'none';
+  document.getElementById('vbBoard').classList.toggle('on',!calOn);
+  document.getElementById('vbCal').classList.toggle('on',calOn);
+  if(calOn){if(!calData&&!calBusy)loadCal();else renderCal();}
+}
+function calShift(n){calStart=addDaysISO(calStart||mondayISO(localISO()),n*calDays);calData=null;loadCal();}
+function calToday(){calStart=mondayISO(localISO());calData=null;loadCal();}
+function calSpan(n){calDays=n;calData=null;document.getElementById('calB1').classList.toggle('on',n===7);document.getElementById('calB2').classList.toggle('on',n===14);loadCal();}
+async function loadCal(){
+  if(!calStart)calStart=mondayISO(localISO());
+  if(!ctReady){renderCal();return;}
+  const key=calStart+'/'+calDays;calBusy=true;calErr='';renderCal();
+  try{const r=await ctApi('availability',{start:calStart,days:calDays});if(key===calStart+'/'+calDays)calData=r;}
+  catch(e){if(key===calStart+'/'+calDays){calErr=e.message;calData=null;}}
+  if(key===calStart+'/'+calDays){calBusy=false;renderCal();}
+}
+function renderCal(){
+  if(!calStart)calStart=mondayISO(localISO());
+  const body=document.getElementById('calBody');if(!body)return;
+  const days=Array.from({length:calDays},(_,i)=>addDaysISO(calStart,i));
+  document.getElementById('calRange').textContent=avLabel(days[0],true)+' – '+avLabel(days[days.length-1],true);
+  const role=document.getElementById('calRole').value,today=localISO();
+  const byCell={};
+  evals.filter(e=>e.status==='assigned'&&!isArchived(e)&&e.clinician&&e.qa&&e.qa.visitDate&&e.qa.visitDate>=days[0]&&e.qa.visitDate<=days[days.length-1])
+    .forEach(e=>{const k=e.clinician+'|'+e.qa.visitDate;(byCell[k]=byCell[k]||[]).push(e);});
+  let note='';
+  if(!ctReady)note='Connecteam is not connected, so only evals from this tool are shown. Open Settings and click Check connection.';
+  else if(calBusy)note='Loading Connecteam shifts...';
+  else if(calErr)note='Could not load Connecteam shifts: '+calErr;
+  let h=note?'<div style="font-size:12px;color:'+(calErr?'var(--red)':'var(--muted)')+';margin-bottom:8px">'+esc(note)+'</div>':'';
+  const people=clins.filter(c=>!role||c.role===role).slice().sort((a,b)=>a.name.localeCompare(b.name));
+  h+='<div class="cal-wrap"><table class="cal"><thead><tr><th>Clinician</th>'+days.map(d=>'<th class="'+(d===today?'today':'')+'">'+esc(avLabel(d,true))+'</th>').join('')+'</tr></thead><tbody>';
+  h+=people.map(c=>{
+    const u=calData&&calData.users&&calData.users[c.name];
+    return '<tr><td><b>'+esc(c.name)+'</b><div style="font-size:10px;color:var(--muted)">'+esc(c.role||'')+(!u&&ctReady&&!calBusy&&!calErr?' · not linked':'')+'</div></td>'+days.map(d=>{
+      const x=u&&u.days[d];let top='';
+      if(x){top=avOff(x)?'<div class="cal-n cal-off">Off all day</div>':'<div class="cal-n">'+(avLoad(x)?avLoad(x)+' shift'+(avLoad(x)>1?'s':''):'Free')+(x.offMin>0?' · unavailable '+avHrs(x.offMin):'')+'</div>';}
+      const evs=(byCell[c.name+'|'+d]||[]).map(e=>{
+        const q=e.qa||{},cls=q.ct?'':' noct';
+        return '<div class="cal-ev'+cls+(q.seen?' seen':'')+'" title="'+esc((e.discipline||'')+' eval')+'"><b>'+esc(e.agency||'')+'</b> · '+esc(e.location||'')+(q.visitTime?' · '+esc(avT(q.visitTime)):'')+(q.seen?' ✓':'')+(q.ct?'':'<br>not in Connecteam')+'</div>';
+      }).join('');
+      return '<td class="'+(d===today?'today':'')+'">'+top+evs+'</td>';
+    }).join('')+'</tr>';
+  }).join('')+'</tbody></table></div>';
+  body.innerHTML=h;
+}
+
 // ── LAYOUT HELPERS ──
 function localISO(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
 function toggleSide(){const on=document.body.classList.toggle('show-side');document.getElementById('menuBtn').textContent=on?'✕ Close':'☰ Tools';}
@@ -1405,6 +1496,7 @@ function sf(f,el){fil=f;document.querySelectorAll('.fb').forEach(b=>b.classList.
 function age(d){if(!d)return 0;const str=String(d).trim();const parsed=str.includes('T')?new Date(str):new Date(str+'T12:00:00');if(isNaN(parsed.getTime()))return 0;return Math.max(0,Math.floor((Date.now()-parsed.getTime())/86400000));}
 
 function render(){
+  if(typeof calOn!=='undefined'&&calOn)renderCal();
   const monthSel=document.getElementById('monthFilter');
   const selectedMonth=monthSel?monthSel.value:'';
   const months=[...new Set(evals.map(e=>String(e.dateAdded||'').substring(0,7)).filter(d=>d&&d.length>=7))].sort().reverse();
