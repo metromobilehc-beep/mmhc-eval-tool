@@ -706,6 +706,7 @@ async function loadAll() {
       sb.from('clinicians').select('*').order('name'),
       sb.from('agencies').select('*').order('name')
     ]);
+    if (evR.error) { flash('✕ Could not load evals: '+evR.error.message); }
     if (evR.data) evals = evR.data.map(dbToEval);
     if (clR.data && clR.data.length) clins = clR.data.map(r=>({name:r.name,role:r.role,phone:r.phone||'',email:r.email||'',ctUserId:r.connecteam_user_id||null,maxEvals:r.max_evals==null?null:Number(r.max_evals)}));
     if (agR.data && agR.data.length) agencies = agR.data.map(r=>r.name);
@@ -984,16 +985,17 @@ async function parseAdd(){
   saving=true;
   evals=[...items,...evals];render();document.getElementById('rt').value='';
   setSyncStatus('syncing',`Saving ${items.length} evals...`);
-  let saved=0;
+  let saved=0,firstErr='';
   for(const ev of items){
     const {error}=await sb.from('evals').insert(evalToDB(ev));
-    if(!error){saved++;}else{console.error('insert error:',error);}
+    if(!error){saved++;}else{console.error('insert error:',error);if(!firstErr)firstErr=error.message||String(error);}
     setSyncStatus('syncing',`Saving ${saved}/${items.length}...`);
   }
   saving=false;
   document.getElementById('parseBtn').disabled=false;
   setSyncStatus('live',`Live · ${new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'})}`);
-  flash(`✓ Added ${saved} eval${saved>1?'s':''} to shared board`);
+  if(firstErr){flash('✕ '+(items.length-saved)+' of '+items.length+' NOT saved: '+firstErr);alert('Not saved to the database: '+firstErr+'\n\nIf you refresh, the missing evals will disappear. Paste this message to Claude.');}
+  else flash(`✓ Added ${saved} eval${saved>1?'s':''} to shared board`);
   closeSidePhone();
   await loadAll();
 }
@@ -1003,8 +1005,9 @@ async function addOne(){
   const wd=document.getElementById('wd').value;
   const ev={id:String(Date.now()+Math.random()),location:loc,zip:document.getElementById('sz').value.trim(),discipline:singleDisc,agency:document.getElementById('ag').value,priority:pri,note:document.getElementById('sn').value.trim(),patient:document.getElementById('spt').value.trim(),status:'pending',clinician:'',addedBy:userName||'',assignedBy:'',dateAdded:wd,weekDate:wd,qa:{}};
   evals=[ev,...evals];render();['sl','sz','sn','spt'].forEach(id=>document.getElementById(id).value='');
-  await sb.from('evals').insert(evalToDB(ev));
-  flash('✓ Eval added to shared board');
+  const {error:addErr}=await sb.from('evals').insert(evalToDB(ev));
+  if(addErr){flash('✕ NOT saved: '+addErr.message);alert('Not saved to the database: '+addErr.message+'\n\nIf you refresh, this eval will disappear. Paste this message to Claude.');}
+  else flash('✓ Eval added to shared board');
   closeSidePhone();
 }
 
