@@ -767,6 +767,7 @@ function renderHistory(){
       </div>
       ${checks?`<div style="font-size:11px;color:var(--accent);margin-top:6px;">${checks}</div>`:''}
       ${qa.seenDate?`<div style="font-size:10px;color:var(--muted);margin-top:2px;">Seen: ${qa.seenDate}</div>`:''}
+      ${qa.cancelReason?`<div style="font-size:11px;color:var(--red);margin-top:4px;">⊘ Dropped: ${esc(qa.cancelReason)}</div>`:''}
       ${qa.notes?`<div style="font-size:11px;color:var(--muted);font-style:italic;margin-top:4px;">${qa.notes}</div>`:''}
       <div style="font-size:10px;color:var(--muted);margin-top:4px;">${e.dateAdded}${e.addedBy?' · Added by '+e.addedBy:''}${e.assignedBy?' · Assigned by '+e.assignedBy:''}</div>
     </div>`;
@@ -1701,7 +1702,8 @@ function render(){
         ${e.status==='complete'
           ?`<button class="cbtn del" onclick="rmEval('${e.id}')">✕ Delete</button>`
           :`<button class="cbtn done" onclick="mkDone('${e.id}')">✓ Done</button>
-            <button class="cbtn del" onclick="rmEval('${e.id}')">✕ Cancel</button>`}
+            <button class="cbtn" title="Agency cancelled or the eval was missed. Keeps the record in History and clears the Connecteam shifts." onclick="dropEval('${e.id}')">⊘ Dropped</button>
+            <button class="cbtn del" title="Delete permanently (for mistakes and duplicates)" onclick="delEval('${e.id}')">🗑 Delete</button>`}
       </div>
       <div style="margin-top:2px;">
         <select class="csel" style="font-size:10px;color:var(--muted);" onchange="asgnPTA('${e.id}',this.value)">
@@ -1744,6 +1746,24 @@ async function mkDone(id){const e=evals.find(e=>e.id===id);if(!e)return;
   if(Date.now()-lastAsgnAt<2500)return; // a tap on the assign list can land on this button
   if(!confirm('Mark this eval done and move it to History?'))return;
   e.status='complete';render();renderQA();renderHistory();await sb.from('evals').update({status:'complete'}).eq('id',id);}
+// Agency cancelled / eval missed: keep the record in History with the reason, take the visit off Connecteam
+async function dropEval(id){
+  const e=evals.find(x=>x.id===id);if(!e)return;
+  const why=prompt('Why is this eval being dropped?\n(for example: agency cancelled, patient declined, missed)','Agency cancelled');
+  if(why===null)return;
+  if(!e.qa)e.qa={};
+  const sid=e.qa.ctShiftId,psid=e.qa.ctPtaShiftId;
+  e.qa.archived=true;e.qa.archivedAt=new Date().toISOString();e.qa.archivedBy=userName||'';e.qa.archivedFrom=e.status;e.qa.cancelReason=why.trim()||'Dropped';
+  render();renderQA();renderStuck();renderHistory();
+  let failed=false;
+  if(ctReady&&(sid||psid)){
+    try{await ctApi('remove',{shift_id:sid||'',shift_ids:[psid||'']});e.qa.ctShiftId='';e.qa.ctUserId='';e.qa.ct=false;e.qa.ctAt='';e.qa.ctPtaShiftId='';e.qa.ctPtaUserId='';e.qa.ctPtaAt='';}
+    catch(_){failed=true;}
+  }else if(sid||psid)failed=true;
+  const {error}=await sb.from('evals').update({qa:e.qa}).eq('id',id);
+  flash(error?'✕ Not saved: '+error.message:failed?'⚠ Moved to History, but delete the visit from Connecteam by hand':'✓ Moved to History'+((sid||psid)?' and removed from Connecteam':''));
+}
+function delEval(id){if(confirm('Delete this eval permanently? Use "Dropped" instead to keep a record of it.'))rmEval(id);}
 async function rmEval(id){
   const e0=evals.find(e=>e.id===id);const sid=e0&&e0.qa&&e0.qa.ctShiftId;const psid=e0&&e0.qa&&e0.qa.ctPtaShiftId;
   evals=evals.filter(e=>e.id!==id);render();
