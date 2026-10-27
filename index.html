@@ -400,6 +400,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <div id="ctStatus" style="font-size:11px;min-height:14px;margin-bottom:6px;line-height:1.5;"></div>
         <button class="btn btn-o" onclick="checkCt()">Check connection</button>
         <button class="btn btn-o" style="margin-top:4px" onclick="rawCt()">Show raw reply from Connecteam</button>
+        <div style="display:flex;gap:6px;margin-top:4px"><select id="ctRawWho" style="flex:1"></select><button class="btn btn-o" style="width:auto;margin:0" onclick="rawUser()">Show raw availability</button></div>
         <pre id="ctRaw" style="display:none;white-space:pre-wrap;word-break:break-all;font-size:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;margin-top:6px;max-height:240px;overflow:auto"></pre>
         <button class="btn btn-o" style="margin-top:4px" onclick="loadCtUsers()">Link clinicians to Connecteam users</button>
         <div id="ctMap" style="margin-top:8px"></div>
@@ -1147,12 +1148,22 @@ async function ctSync(id){
   }
   render();renderQA();renderStuck();
 }
+async function rawUser(){
+  const el=document.getElementById('ctRaw'),sel=document.getElementById('ctRawWho');
+  if(!sel.value){el.style.display='block';el.textContent='Pick a linked clinician first.';return;}
+  el.style.display='block';el.textContent='Asking Connecteam...';
+  try{const r=await ctApi('debug_user',{name:sel.value,start:mondayISO(localISO())});el.textContent='HTTP '+r.status+'\n'+r.body;}
+  catch(e){el.textContent='Error: '+e.message;}
+}
+function fillRawWho(){const sel=document.getElementById('ctRawWho');if(!sel)return;
+  sel.innerHTML='<option value="">Clinician...</option>'+clins.filter(c=>c.ctUserId).map(c=>'<option value="'+esc(c.name)+'">'+esc(c.name)+'</option>').join('');}
 async function rawCt(){
   const el=document.getElementById('ctRaw');el.style.display='block';el.textContent='Asking Connecteam...';
   try{const r=await ctApi('debug_schedulers');el.textContent='HTTP '+r.status+'\n'+r.body;}
   catch(e){el.textContent='Error: '+e.message;}
 }
 async function checkCt(){
+  fillRawWho();
   const el=document.getElementById('ctStatus');
   el.style.color='var(--muted)';el.textContent='Checking...';
   try{
@@ -1315,8 +1326,10 @@ function avLoad(d){return d?(d.shifts!=null?d.shifts:0):0;}
 // evals placed on this clinician/day in the tool that are not on their Connecteam calendar yet (so they still count)
 function unsyncedOn(name,date){return evals.filter(e=>e.status==='assigned'&&!isArchived(e)&&e.clinician===name&&e.qa&&e.qa.visitDate===date&&!e.qa.ct).length;}
 function dayLoad(c,date,d){return avLoad(d)+unsyncedOn(c.name,date);}
-function avCls(d,c,date){if(!d||avOff(d))return 'av-none';const left=maxFor(c)-dayLoad(c,date,d);return left<=0?'av-none':left===1?'av-low':'av-good';}
-function avTxt(d,c,date){if(!d)return '-';if(avOff(d))return 'Off';const n=dayLoad(c,date,d);return n+'/'+maxFor(c)+(d.offMin>0?'*':'');}
+// the day's limit: a note like "2 evals" on their Connecteam availability wins over the clinician's default
+function capFor(c,d){return (d&&d.cap!=null)?d.cap:maxFor(c);}
+function avCls(d,c,date){if(!d||avOff(d))return 'av-none';const left=capFor(c,d)-dayLoad(c,date,d);return left<=0?'av-none':left===1?'av-low':'av-good';}
+function avTxt(d,c,date){if(!d)return '-';if(avOff(d))return 'Off';const n=dayLoad(c,date,d);return n+'/'+capFor(c,d)+(d.offMin>0?'*':'');}
 async function setMaxEvals(name,val){
   const n=Math.max(1,Math.min(10,parseInt(val,10)||DEFAULT_MAX_EVALS));
   const c=clins.find(x=>x.name===name);if(!c)return;
@@ -1349,7 +1362,7 @@ function renderAvail(){
   const days=avData.days||[],role=document.getElementById('avRole').value;
   const people=clins.filter(c=>(!role||c.role===role)&&avData.users&&avData.users[c.name]);
   const unlinked=clins.filter(c=>(!role||c.role===role)&&!(avData.users&&avData.users[c.name])).length;
-  const loadOn=(c,i)=>{const d=avData.users[c.name].days[days[i]];return !d||avOff(d)?999:dayLoad(c,days[i],d)-maxFor(c);};
+  const loadOn=(c,i)=>{const d=avData.users[c.name].days[days[i]];return !d||avOff(d)?999:dayLoad(c,days[i],d)-capFor(c,d);};
   if(avSort!==null)people.sort((a,b)=>loadOn(a,avSort)-loadOn(b,avSort)||a.name.localeCompare(b.name));
   else people.sort((a,b)=>a.name.localeCompare(b.name));
   avRows=people;
@@ -1362,7 +1375,7 @@ function renderAvail(){
     if(avSel&&avSel.name===c.name){
       const d=u.days[days[avSel.di]]||{shifts:0,offMin:0,blocks:[]};
       const lab={shift:'Scheduled',unavailable:'Unavailable',timeoff:'Time off'};
-      det='<div style="font-size:11px;margin-top:6px;line-height:1.6"><b>'+esc(avLabel(days[avSel.di],true))+'</b>: '+(avOff(d)?'off all day':dayLoad(c,days[avSel.di],d)+' of '+maxFor(c)+' evals'+(d.offMin>0?', unavailable '+avHrs(d.offMin):''))+(d.blocks.length?'<br>'+d.blocks.map(b=>esc(lab[b.kind]||b.kind)+' '+avT(b.start)+' to '+avT(b.end)).join('<br>'):'<br>Nothing on the calendar')+'</div>';
+      det='<div style="font-size:11px;margin-top:6px;line-height:1.6"><b>'+esc(avLabel(days[avSel.di],true))+'</b>: '+(avOff(d)?'off all day':dayLoad(c,days[avSel.di],d)+' of '+capFor(c,d)+' evals'+(d.cap!=null?' (per their note)':'')+(d.offMin>0?', unavailable '+avHrs(d.offMin):''))+(d.blocks.length?'<br>'+d.blocks.map(b=>esc(lab[b.kind]||b.kind)+' '+avT(b.start)+' to '+avT(b.end)+(b.note?' — “'+esc(b.note)+'”':'')).join('<br>'):'<br>Nothing on the calendar')+'</div>';
     }
     return '<div class="av-card"><div style="display:flex;justify-content:space-between;font-size:12px"><b>'+esc(c.name)+'</b><span style="color:var(--muted)">'+esc(c.role||'')+'</span></div><div class="av-row">'+chips+'</div>'+det+'</div>';
   }).join('');
@@ -1414,7 +1427,7 @@ function renderCal(){
     const u=calData&&calData.users&&calData.users[c.name];
     return '<tr><td><b>'+esc(c.name)+'</b><div style="font-size:12px;color:#b9d3c9">'+esc(c.role||'')+(!u&&ctReady&&!calBusy&&!calErr?' · not linked':'')+'</div><label style="font-size:11px;color:#b9d3c9;display:block;margin-top:4px">Max/day <input type="number" min="1" max="10" value="'+maxFor(c)+'" data-name="'+esc(c.name)+'" onchange="setMaxEvals(this.dataset.name,this.value)" style="width:44px;padding:2px 4px;font-size:12px"></label></td>'+days.map(d=>{
       const x=u&&u.days[d];let top='';
-      if(x){const n=dayLoad(c,d,x),mx=maxFor(c);top=avOff(x)?'<div class="cal-n cal-off">Off all day</div>':'<div class="cal-n'+(n>=mx?' cal-off':'')+'">'+(n>=mx?'Full ':'')+n+' of '+mx+(x.offMin>0?' · unavailable '+avHrs(x.offMin):'')+'</div>';}
+      if(x){const n=dayLoad(c,d,x),mx=capFor(c,x);top=avOff(x)?'<div class="cal-n cal-off">Off all day</div>':'<div class="cal-n'+(n>=mx?' cal-off':'')+'">'+(n>=mx?'Full ':'')+n+' of '+mx+(x.cap!=null?' (note)':'')+(x.offMin>0?' · unavailable '+avHrs(x.offMin):'')+'</div>';}
       const evs=(byCell[c.name+'|'+d]||[]).map(e=>{
         const q=e.qa||{},cls=q.ct?'':' noct';
         return '<div class="cal-ev'+cls+(q.seen?' seen':'')+'" title="'+esc((e.discipline||'')+' eval')+'"><b>'+esc(e.agency||'')+'</b> · '+esc(e.location||'')+(q.visitTime?' · '+esc(avT(q.visitTime)):'')+(q.seen?' ✓':'')+(q.ct?'':'<br>not in Connecteam')+'</div>';
