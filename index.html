@@ -1965,7 +1965,7 @@ function render(){
     const opts=clins.map(c=>`<option value="${c.name}"${e.clinician===c.name?' selected':''}>${c.name} (${c.role})</option>`).join('');
     return head+`<div class="card s${e.status[0]} p${e.priority[0]}" id="card-${esc(e.id)}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
-        <div class="cloc">${e.location}${e.zip?`<span class="czip">${e.zip}</span>`:''}</div>
+        <div class="cloc">${e.location}${e.zip?`<span class="czip">${e.zip}</span>`:''}<a href="#" title="Edit the name / zip" style="font-size:11px;color:var(--muted);margin-left:6px;text-decoration:none" onclick="editEval('${e.id}');return false">✎</a></div>
         <div class="br"><span class="badge d${e.discipline}">${e.discipline}</span>${e.agency?`<span class="badge bag">${e.agency}</span>`:''}</div>
       </div>
       <div class="agtype" style="display:flex;gap:4px;margin:2px 0 4px">
@@ -2011,6 +2011,20 @@ function render(){
   }).join('');
 }
 
+async function editEval(id){
+  const e=evals.find(x=>x.id===id);if(!e)return;
+  const cur=[e.location,e.zip].filter(Boolean).join(' ');
+  const v=prompt('Edit the eval name (place and optional 5-digit zip):',cur);
+  if(v===null)return;
+  const t=v.trim();if(!t){flash('Name can not be empty');return;}
+  const m=t.match(/\b\d{5}\b/);
+  const zip=m?m[0]:'',loc=t.replace(/\b\d{5}\b/,'').replace(/[,\s]+$/,'').replace(/\s+/g,' ').trim();
+  if(!loc){flash('Add a place name too');return;}
+  e.location=loc;e.zip=zip;render();renderQA();renderStuck();
+  const {error}=await sb.from('evals').update({location:loc,zip}).eq('id',id);
+  if(error){flash('✕ Not saved: '+error.message);return;}
+  flash(e.qa&&e.qa.ctShiftId?'Saved. The Connecteam shift keeps the old name until the date or clinician changes.':'✓ Name updated');
+}
 async function setAgency(id,val){
   const e=evals.find(e=>e.id===id);if(!e)return;
   e.agency=val;render();renderQA();renderStuck();
