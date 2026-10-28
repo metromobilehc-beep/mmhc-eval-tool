@@ -1591,20 +1591,30 @@ async function primeAsst(){
     render();
   }finally{asstBusy=false;}
 }
-function asstTag(name,date){
-  const d=asstDay(name,date);if(!d)return '';
-  if(avOff(d))return ' · OFF that day';
-  const sh=d.shifts>0?' · '+d.shifts+' shift'+(d.shifts>1?'s':'')+' already':'';
-  if(hasPref(d))return ' · ✓ prefers to work'+(prefNote(d)?' ('+prefNote(d)+')':'')+sh;
-  return sh;
+// PTA/COTA picker works at the WEEK level: does this person have room that week? (same-day off is not shown here)
+function asstWeek(name,date){
+  if(!date)return null;
+  const m=new Date(mondayISO(date)+'T12:00:00'),days=[];
+  for(let i=0;i<5;i++){const x=new Date(m.getTime()+i*86400000);days.push({iso:x.getFullYear()+'-'+String(x.getMonth()+1).padStart(2,'0')+'-'+String(x.getDate()).padStart(2,'0'),wd:['Mon','Tue','Wed','Thu','Fri'][i]});}
+  const info=days.map(x=>({wd:x.wd,d:asstDay(name,x.iso)}));
+  const known=info.filter(x=>x.d);
+  if(!known.length)return null;
+  const off=known.filter(x=>avOff(x.d)).length;
+  const pref=known.filter(x=>!avOff(x.d)&&hasPref(x.d));
+  return {known:known.length,off,open:known.length-off,pref,notes:[...new Set(pref.map(x=>prefNote(x.d)).filter(Boolean))],shifts:known.reduce((n,x)=>n+(x.d.shifts||0),0)};
 }
-// sort order for the PTA/COTA picker: prefers to work, then open, then unknown, then off
+function asstTag(name,date){
+  const w=asstWeek(name,date);if(!w)return '';
+  if(w.open===0)return ' · no room that week';
+  if(w.pref.length)return ' · ✓ prefers to work '+w.pref.map(x=>x.wd).join(', ')+(w.notes.length?' ('+w.notes.join('; ')+')':'');
+  return ' · room that week';
+}
+// sort order for the PTA/COTA picker: prefers to work that week, then has room, then unknown, then no room
 function asstRank(name,date){
-  if(!date)return 2;
-  const d=asstDay(name,date);
-  if(!d)return 2;
-  if(avOff(d))return 3;
-  return hasPref(d)?0:1;
+  const w=asstWeek(name,date);
+  if(!w)return 2;
+  if(w.open===0)return 3;
+  return w.pref.length?0:1;
 }
 function avCls(d,c,date){if(isAsst(c))return (!d||avOff(d))?'av-none':hasPref(d)?'av-good':'av-low';if(!d||avOff(d))return 'av-none';const left=capFor(c,d)-dayLoad(c,date,d);return left<=0?'av-none':left===1?'av-low':'av-good';}
 function avTxt(d,c,date){if(!d)return '-';if(avOff(d))return 'Off';if(isAsst(c))return hasPref(d)?'✓ Pref':'Open';const n=dayLoad(c,date,d);return n+'/'+capFor(c,d)+(d.offMin>0?'*':'');}
@@ -2001,8 +2011,8 @@ async function updPat(id,val){const e=evals.find(e=>e.id===id);if(!e)return;e.pa
 async function asgnPTA(id,name){
   const e=evals.find(e=>e.id===id);if(!e)return;
   if(name&&e.qa&&e.qa.visitDate){
-    const ad=asstDay(name,e.qa.visitDate);
-    if(ad&&avOff(ad)&&!confirm(name+' is marked off on '+e.qa.visitDate+' in Connecteam.\n\nAssign them anyway?')){render();return;}
+    const aw=asstWeek(name,e.qa.visitDate);
+    if(aw&&aw.open===0&&!confirm(name+' is marked off all week of '+e.qa.visitDate+' in Connecteam.\n\nAssign them anyway?')){render();return;}
   }
   e.ptaClinician=name;
   render();
