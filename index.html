@@ -1907,7 +1907,10 @@ async function setVisit(id,field,val){
   if(field==='visitDate'){e.qa.visitSetAt=val?new Date().toISOString():'';e.qa.ct=false;e.qa.ctAt='';}
   render();renderQA();renderStuck();
   await sb.from('evals').update({qa:e.qa}).eq('id',id);
-  if(ctReady&&e.clinician)await ctSync(id); // no shift until someone is assigned; assigning sends it
+  // Quiet edits: changing only the visit type does not touch an existing shift (Connecteam would re-notify the clinician).
+  const quiet=field==='visitType'&&e.qa.ctShiftId;
+  if(quiet)flash('Saved. The Connecteam shift keeps its old wording until the date or clinician changes.');
+  else if(ctReady&&e.clinician)await ctSync(id); // no shift until someone is assigned; assigning sends it
   if(field==='visitDate'&&val)primeAsst();
 }
 
@@ -2003,10 +2006,10 @@ async function setAgency(id,val){
   e.agency=val;render();renderQA();renderStuck();
   const {error}=await sb.from('evals').update({agency:val}).eq('id',id);
   if(error){flash('✕ Agency not saved: '+error.message);return;}
-  if(ctReady&&e.clinician&&e.qa&&(e.qa.visitDate||e.qa.ctShiftId))await ctSync(id);
+  if(ctReady&&e.clinician&&e.qa&&e.qa.visitDate&&!e.qa.ctShiftId)await ctSync(id); // quiet: an existing shift is not re-sent just for an agency change
 }
 async function updPat(id,val){const e=evals.find(e=>e.id===id);if(!e)return;e.patient=val;await sb.from('evals').update({patient:val}).eq('id',id);
-  if(ctReady&&e.clinician&&e.qa&&(e.qa.ctShiftId||e.qa.ctPtaShiftId))await ctSync(id); // the last name shows on the schedule
+  // quiet: an existing shift is not re-sent just for a name change; the name goes out with the next date or clinician change
 }
 async function asgnPTA(id,name){
   const e=evals.find(e=>e.id===id);if(!e)return;
