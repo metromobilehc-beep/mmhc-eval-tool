@@ -345,11 +345,11 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
 
     <div class="panel hidden" id="tp-tpl">
       <div class="lbl">1. Pick an eval</div>
-      <select id="tplEval" class="csel" style="margin-bottom:8px" onchange="tplFill()"></select>
+      <select id="tplEval" class="csel" style="margin-bottom:8px;flex:none" onchange="tplFill()"></select>
       <div class="lbl">2. Pick a message</div>
-      <div id="tplList"></div>
+      <div id="tplList" style="max-height:230px;overflow-y:auto;flex:none"></div>
       <div class="lbl" style="margin-top:8px">3. Check it, then send</div>
-      <textarea id="tplOut" style="height:110px" maxlength="1000" placeholder="The message appears here. You can edit it before sending."></textarea>
+      <textarea id="tplOut" style="height:120px;min-height:120px;flex:none;resize:vertical" maxlength="1000" placeholder="The message appears here. You can edit it before sending."></textarea>
       <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
         <select id="tplTo" class="csel" style="flex:1;min-width:120px"></select>
         <button class="btn" id="tplSend" style="width:auto;padding:6px 12px;margin:0" onclick="tplSend()">✉ Send in Connecteam</button>
