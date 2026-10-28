@@ -1344,7 +1344,6 @@ async function ctSync(id){
     if(res.qa)e.qa=res.qa;
     let m='';
     if(res.warning==='no_ct_user')m='⚠ '+(e.clinician||'Clinician')+' is not linked to Connecteam yet (Settings → Connecteam)';
-    else if(res.warning==='no_time')m='⚠ Add a visit time to put this on the Connecteam calendar';
     else if(res.action==='create'||res.action==='replace')m='✓ Added to Connecteam calendar';
     else if(res.action==='update')m='✓ Connecteam shift updated';
     else if(res.action==='delete')m='✓ Removed from Connecteam calendar';
@@ -1917,9 +1916,9 @@ function sf(f,el){fil=f;document.querySelectorAll('.fb').forEach(b=>b.classList.
 function age(d){if(!d)return 0;const str=String(d).trim();const parsed=str.includes('T')?new Date(str):new Date(str+'T12:00:00');if(isNaN(parsed.getTime()))return 0;return Math.max(0,Math.floor((Date.now()-parsed.getTime())/86400000));}
 
 // A card you just assigned stays in the Pending section so it does not jump away while you set the date and time.
-// It moves down to Assigned once date AND time are set, when you press "Move to Assigned", after 20 minutes, or on refresh.
+// It moves down to Assigned once the visit date is set, when you press "Move to Assigned", after 20 minutes, or on refresh.
 const hold={};
-function isHeld(e){const t=hold[e.id];if(!t||e.status!=='assigned')return false;if(Date.now()-t>20*60000){delete hold[e.id];return false;}const q=e.qa||{};return !(q.visitDate&&q.visitTime);}
+function isHeld(e){const t=hold[e.id];if(!t||e.status!=='assigned')return false;if(Date.now()-t>20*60000){delete hold[e.id];return false;}const q=e.qa||{};return !q.visitDate;}
 function releaseHold(id){delete hold[id];render();}
 function render(){
   if(typeof calOn!=='undefined'&&calOn)renderCal();
@@ -1968,7 +1967,7 @@ function render(){
         ${(()=>{const sr=stuckReasons(e);return sr.length?`<span class="stuckchip">⚠ ${sr[0].k} · ${sr[0].d}d</span>`:''})()}
       </div>
       ${e.qa&&e.qa.ctError?`<div style="font-size:10px;color:#e0584a;margin:2px 0;line-height:1.35">Connecteam said: ${esc(String(e.qa.ctError).slice(0,200))} <a href="#" onclick="ctSync('${e.id}');return false">Retry</a></div>`:''}
-      ${isHeld(e)?`<div style="font-size:11px;color:var(--accent);margin:2px 0">Just assigned: set the visit date and time below. <a href="#" onclick="releaseHold('${e.id}');return false">Move to Assigned</a></div>`:''}
+      ${isHeld(e)?`<div style="font-size:11px;color:var(--accent);margin:2px 0">Just assigned: set the visit date below. <a href="#" onclick="releaseHold('${e.id}');return false">Move to Assigned</a></div>`:''}
       ${e.note?`<div class="cnote">${e.note}</div>`:''}
       <div class="cmeta">
         <span class="cdate">${e.dateAdded}${e.addedBy?' · '+e.addedBy:''}</span>
