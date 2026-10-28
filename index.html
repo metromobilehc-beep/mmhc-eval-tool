@@ -1906,6 +1906,11 @@ async function setVisit(id,field,val){
 function sf(f,el){fil=f;document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));el.classList.add('on');render();}
 function age(d){if(!d)return 0;const str=String(d).trim();const parsed=str.includes('T')?new Date(str):new Date(str+'T12:00:00');if(isNaN(parsed.getTime()))return 0;return Math.max(0,Math.floor((Date.now()-parsed.getTime())/86400000));}
 
+// A card you just assigned stays in the Pending section so it does not jump away while you set the date and time.
+// It moves down to Assigned once date AND time are set, when you press "Move to Assigned", after 20 minutes, or on refresh.
+const hold={};
+function isHeld(e){const t=hold[e.id];if(!t||e.status!=='assigned')return false;if(Date.now()-t>20*60000){delete hold[e.id];return false;}const q=e.qa||{};return !(q.visitDate&&q.visitTime);}
+function releaseHold(id){delete hold[id];render();}
 function render(){
   if(typeof calOn!=='undefined'&&calOn)renderCal();
   const monthSel=document.getElementById('monthFilter');
@@ -1921,18 +1926,22 @@ function render(){
   else if(fil==='urgent')list=list.filter(e=>e.priority==='urgent'||e.priority==='asap');
   else if(fil==='stuck')list=list.filter(e=>stuckReasons(e).length>0);
   if(selectedMonth)list=list.filter(e=>String(e.dateAdded||'').startsWith(selectedMonth));
-  const so={pending:0,assigned:1,complete:2},po={urgent:0,asap:1,normal:2};
-  list.sort((a,b)=>so[a.status]!==so[b.status]?so[a.status]-so[b.status]:(po[a.priority]||2)-(po[b.priority]||2));
+  const so=e=>(e.status==='pending'||isHeld(e))?0:1,po={urgent:0,asap:1,normal:2};
+  list.sort((a,b)=>so(a)!==so(b)?so(a)-so(b):(po[a.priority]||2)-(po[b.priority]||2));
   document.getElementById('sP').textContent=evals.filter(e=>e.status==='pending'&&!isArchived(e)).length;
   document.getElementById('sA').textContent=evals.filter(e=>e.status==='assigned'&&!isArchived(e)).length;
   document.getElementById('sC').textContent=evals.filter(e=>e.status==='complete').length;
   updateStuckCount();renderAttn();
   const g=document.getElementById('grid');
   if(!list.length){g.innerHTML='<div class="empty"><div class="ei">📋</div><div class="et">No evals on the board</div><div style="font-size:13px;line-height:1.5">Paste a referral list using the panel on the left.</div></div>';return;}
+  let lastSec=-1;
+  const secHead=(n,t,c)=>`<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:${n?'18px':'0'} 0 2px;padding-top:${n?'12px':'0'};${n?'border-top:2px dashed var(--border);':''}font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">${t}<span class="badge">${c}</span></div>`;
+  const secCount=[list.filter(e=>so(e)===0).length,list.filter(e=>so(e)===1).length];
   g.innerHTML=list.map(e=>{
+    const sc=so(e);let head='';if(sc!==lastSec){head=secHead(sc,sc===0?'⏳ Pending · needs a clinician or scheduling':'✅ Assigned · scheduled',secCount[sc]);lastSec=sc;}
     const a=age(e.dateAdded),ac=a<=1?'af':a<=3?'aa':'ao',al=a===0?'Today':a===1?'1 day ago':`${a} days ago`;
     const opts=clins.map(c=>`<option value="${c.name}"${e.clinician===c.name?' selected':''}>${c.name} (${c.role})</option>`).join('');
-    return`<div class="card s${e.status[0]} p${e.priority[0]}" id="card-${esc(e.id)}">
+    return head+`<div class="card s${e.status[0]} p${e.priority[0]}" id="card-${esc(e.id)}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
         <div class="cloc">${e.location}${e.zip?`<span class="czip">${e.zip}</span>`:''}</div>
         <div class="br"><span class="badge d${e.discipline}">${e.discipline}</span>${e.agency?`<span class="badge bag">${e.agency}</span>`:''}</div>
@@ -1948,13 +1957,14 @@ function render(){
         ${e.clinician?`<span class="badge bcl">👤 ${e.clinician.split(' ')[0]}</span>`:''}
         ${(()=>{const sr=stuckReasons(e);return sr.length?`<span class="stuckchip">⚠ ${sr[0].k} · ${sr[0].d}d</span>`:''})()}
       </div>
+      ${isHeld(e)?`<div style="font-size:11px;color:var(--accent);margin:2px 0">Just assigned: set the visit date and time below. <a href="#" onclick="releaseHold('${e.id}');return false">Move to Assigned</a></div>`:''}
       ${e.note?`<div class="cnote">${e.note}</div>`:''}
       <div class="cmeta">
         <span class="cdate">${e.dateAdded}${e.addedBy?' · '+e.addedBy:''}</span>
         <span class="agebadge ${ac}">${al}</span>
       </div>
       ${e.assignedBy?`<div style="font-size:10px;color:var(--muted)">Assigned by ${e.assignedBy}</div>`:''}
-      <div style="margin-bottom:4px"><input class="csel" style="font-size:11px;padding:5px 7px;" placeholder="Patient initials / ID" value="${e.patient||''}" onchange="updPat('${e.id}',this.value)"></div>
+      <div style="margin-bottom:4px"><input class="csel" style="font-size:11px;padding:5px 7px;" placeholder="Patient last name (shows on schedule)" value="${e.patient||''}" onchange="updPat('${e.id}',this.value)"></div>
       ${e.status!=='complete'?`<div><div class="vis-cap"><span>📅 Visit date (time optional)</span>${e.qa&&e.qa.ctShiftId?'<span class="ct-ok">✓ Connecteam</span>':''}${e.status==='assigned'&&e.clinician?`<a href="#" style="font-size:10px;color:var(--muted);margin-left:6px" title="${e.qa&&e.qa.msgClin?'Messaged '+esc(e.qa.msgClin):'Not messaged yet'}" onclick="ctMessage('${e.id}','assigned',true);return false">✉ ${e.qa&&e.qa.msgClin===e.clinician?'again':'message'}</a>`:''}</div><div class="vis-in"><input type="date" value="${(e.qa&&e.qa.visitDate)||''}" onchange="setVisit('${e.id}','visitDate',this.value)"><input type="time" value="${(e.qa&&e.qa.visitTime)||''}" onchange="setVisit('${e.id}','visitTime',this.value)"></div></div>`:''}
       ${(()=>{const sd=e.qa&&e.qa.visitDate,s=getSuggestedClinician(e.location,e.zip,sd);const sdy=s&&sd?asstDay(s.name,sd):null;return s?`<div style="font-size:10px;color:var(--accent);margin-bottom:4px;">💡 ${s.name} available${s.region?' · '+s.region:''}${sdy&&hasPref(sdy)?' · ✓ prefers to work that day':''}</div>`:''})()}
       <div class="cact">
@@ -1985,7 +1995,9 @@ async function setAgency(id,val){
   if(error){flash('✕ Agency not saved: '+error.message);return;}
   if(ctReady&&e.clinician&&e.qa&&(e.qa.visitDate||e.qa.ctShiftId))await ctSync(id);
 }
-async function updPat(id,val){const e=evals.find(e=>e.id===id);if(!e)return;e.patient=val;await sb.from('evals').update({patient:val}).eq('id',id);}
+async function updPat(id,val){const e=evals.find(e=>e.id===id);if(!e)return;e.patient=val;await sb.from('evals').update({patient:val}).eq('id',id);
+  if(ctReady&&e.clinician&&e.qa&&(e.qa.ctShiftId||e.qa.ctPtaShiftId))await ctSync(id); // the last name shows on the schedule
+}
 async function asgnPTA(id,name){
   const e=evals.find(e=>e.id===id);if(!e)return;
   if(name&&e.qa&&e.qa.visitDate){
@@ -2005,6 +2017,7 @@ async function asgn(id,name){
   lastAsgnAt=Date.now();
   const e=evals.find(e=>e.id===id);if(!e)return;
   const changed=e.clinician!==name;
+  if(name&&e.status==='pending')hold[id]=Date.now();else if(!name)delete hold[id];
   e.clinician=name;e.status=name?'assigned':'pending';e.assignedBy=name?userName:'';
   if(!e.qa)e.qa={};
   if(name){
