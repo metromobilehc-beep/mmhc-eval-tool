@@ -344,17 +344,18 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
     </div>
 
     <div class="panel hidden" id="tp-tpl">
-      <div class="lbl">Tap to copy</div>
-      <div class="tpl" onclick="ct(this)"><div class="tpl-t">✅ Acknowledge Referral</div><div class="tpl-b">Thank you, we received your referral list. We will review availability and confirm assignments shortly.</div></div>
-      <div class="tpl" onclick="ct(this)"><div class="tpl-t">👤 Clinician Assigned</div><div class="tpl-b">Hi [CLINICIAN], you have been assigned an eval for [LOCATION]. Please confirm availability and contact the patient to schedule. Thank you!</div></div>
-      <div class="tpl" onclick="ct(this)"><div class="tpl-t">🔔 Follow-Up Unseen</div><div class="tpl-b">Hi [CLINICIAN], just following up — we have an eval still pending for [LOCATION]. Can you confirm when this will be seen? Please update ConnectTeam once scheduled.</div></div>
-      <div class="tpl" onclick="ct(this)"><div class="tpl-t">🚨 Urgent Eval Notice</div><div class="tpl-b">⚠️ URGENT: We have an eval in [LOCATION] that needs to be seen ASAP. This patient is PT only. Please respond with availability immediately.</div></div>
-      <div class="tpl" onclick="ct(this)"><div class="tpl-t">📋 SOC Reminder</div><div class="tpl-b">Hi [CLINICIAN], reminder you have a SOC scheduled tomorrow for [PATIENT] in [CITY]. Please ensure documentation is submitted within 24 hours.</div></div>
-      <div class="tpl" onclick="ct(this)"><div class="tpl-t">✔️ Eval Complete</div><div class="tpl-b">Hi [AGENCY], confirming the eval for [PATIENT] in [LOCATION] has been completed by [CLINICIAN]. Documentation submitted within 24 hours.</div></div>
-      <div><div class="lbl" style="margin-bottom:6px">Custom Message</div>
-        <textarea id="cu" style="height:80px" placeholder="Type a custom message..."></textarea>
-        <button class="btn btn-o" style="margin-top:6px" onclick="cc()">📋 Copy Custom</button>
+      <div class="lbl">1. Pick an eval</div>
+      <select id="tplEval" class="csel" style="margin-bottom:8px" onchange="tplFill()"></select>
+      <div class="lbl">2. Pick a message</div>
+      <div id="tplList"></div>
+      <div class="lbl" style="margin-top:8px">3. Check it, then send</div>
+      <textarea id="tplOut" style="height:110px" maxlength="1000" placeholder="The message appears here. You can edit it before sending."></textarea>
+      <div style="display:flex;gap:6px;align-items:center;margin-top:6px;flex-wrap:wrap">
+        <select id="tplTo" class="csel" style="flex:1;min-width:120px"></select>
+        <button class="btn" id="tplSend" style="width:auto;padding:6px 12px;margin:0" onclick="tplSend()">✉ Send in Connecteam</button>
+        <button class="btn btn-o" style="width:auto;padding:6px 12px;margin:0" onclick="tplCopy()">📋 Copy</button>
       </div>
+      <div id="tplNote" style="font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4">Sends from Metro Evals to the person's Connecteam chat. Agency messages are copy-only (agencies are not in Connecteam). Patient names are never filled in; only a last name if you entered one.</div>
     </div>
 
     <div class="panel hidden" id="tp-qa">
@@ -782,7 +783,7 @@ function evalToDB(e) {
 }
 
 // ── UI ──
-function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='qa')renderQA();if(name==='stuck')renderStuck();if(name==='hist')renderHistory();if(name==='cap')renderCapacity();if(name==='set'&&me&&me.is_super_admin){if(Date.now()-(window.__ctChecked||0)>60000){window.__ctChecked=Date.now();checkCt();}if(!ctUsers.length)loadCtUsers();}if(name==='avail'){if(!avData&&!avBusy)loadAvail();else renderAvail();}}
+function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='tpl')renderTpl();if(name==='qa')renderQA();if(name==='stuck')renderStuck();if(name==='hist')renderHistory();if(name==='cap')renderCapacity();if(name==='set'&&me&&me.is_super_admin){if(Date.now()-(window.__ctChecked||0)>60000){window.__ctChecked=Date.now();checkCt();}if(!ctUsers.length)loadCtUsers();}if(name==='avail'){if(!avData&&!avBusy)loadAvail();else renderAvail();}}
 
 function renderHistory(){
   const list=document.getElementById('histList');if(!list)return;
@@ -1041,6 +1042,8 @@ async function pickType(id,val){
   }
   await setVisit(id,'visitType',val);
 }
+const VSHORT={eval:'Eval',recert:'Recert',soc:'SOC',roc:'ROC',reeval:'Re-eval',dc:'D/C'};
+const vtShort=v=>String(v||'').startsWith('x:')?String(v).slice(2):(VSHORT[v]||'');
 function detectType(t){t=String(t||'');
   if(/re-?eval/i.test(t))return'reeval';
   if(/\bdischarge\b|\bD\/?C\b/i.test(t))return'dc';
@@ -1749,9 +1752,9 @@ function renderCal(){
       else if(x){const n=dayLoad(c,d,x),mx=capFor(c,x);top=avOff(x)?'<div class="cal-n cal-off">Off all day</div>':'<div class="cal-n'+(n>=mx?' cal-off':'')+'">'+(n>=mx?'Full ':'')+n+' of '+mx+(x.cap!=null?' (note)':'')+(x.offMin>0?' · unavailable '+avHrs(x.offMin):'')+'</div>'+((x.available||[]).length?'<div class="cal-n" style="color:var(--accent)">✓ Available'+(x.available.some(a=>a.note)?': '+esc(x.available.filter(a=>a.note).map(a=>a.note).join('; ')):'')+'</div>':'');}
       const evs=(byCell[c.name+'|'+d]||[]).map(e=>{
         const q=e.qa||{},cls=q.ct?'':' noct';
-        return '<div class="cal-ev'+cls+(q.seen?' seen':'')+'" draggable="'+(q.seen?'false':'true')+'" ondragstart="calDrag(event,\''+esc(e.id)+'\')" ondragend="calDragEnd()" title="'+esc((e.discipline||'')+' eval')+' · drag to another day or clinician to move it"><b>'+esc(e.agency||'')+'</b> · '+esc(e.location||'')+(q.visitTime?' · '+esc(avT(q.visitTime)):'')+(q.seen?' ✓':'')+(q.ct?'':'<br>not in Connecteam')+'</div>';
+        return '<div class="cal-ev'+cls+(q.seen?' seen':'')+'" draggable="'+(q.seen?'false':'true')+'" ondragstart="calDrag(event,\''+esc(e.id)+'\')" ondragend="calDragEnd()" title="'+esc((e.discipline||'')+' '+(vtLabel(q.visitType)||'eval'))+' · drag to another day or clinician to move it"><b>'+esc(e.agency||'')+'</b> · '+esc(e.location||'')+(vtShort(q.visitType)?' · <i>'+esc(vtShort(q.visitType))+'</i>':'')+(q.visitTime?' · '+esc(avT(q.visitTime)):'')+(q.seen?' ✓':'')+(q.ct?'':'<br>not in Connecteam')+'</div>';
       }).join('');
-      const pev=(byPta[c.name+'|'+d]||[]).map(e=>'<div class="cal-ev'+((e.qa&&e.qa.ctPtaShiftId)?'':' noct')+'" title="Evaluation planned this day"><b>Eval planned</b> · '+esc(e.location||'')+(e.clinician?' · with '+esc(e.clinician):'')+((e.qa&&e.qa.ctPtaShiftId)?'':'<br>not in Connecteam')+'</div>').join('');
+      const pev=(byPta[c.name+'|'+d]||[]).map(e=>'<div class="cal-ev'+((e.qa&&e.qa.ctPtaShiftId)?'':' noct')+'" title="Visit planned this day"><b>'+esc(vtShort(e.qa&&e.qa.visitType)||'Eval')+' planned</b> · '+esc(e.location||'')+(e.clinician?' · with '+esc(e.clinician):'')+((e.qa&&e.qa.ctPtaShiftId)?'':'<br>not in Connecteam')+'</div>').join('');
       return '<td class="'+(d===today?'today':'')+'" data-n="'+esc(c.name)+'" data-d="'+d+'" ondragover="calOver(event,this)" ondragleave="calLeave(this)" ondrop="calDropEv(event,this)">'+top+evs+pev+'</td>';
     }).join('')+'</tr>';
   }).join('')+'</tbody></table></div>';
@@ -2069,6 +2072,12 @@ async function asgn(id,name){
 let lastAsgnAt=0;
 async function mkDone(id){const e=evals.find(e=>e.id===id);if(!e)return;
   if(Date.now()-lastAsgnAt<2500)return; // a tap on the assign list can land on this button
+  // an identifier is required first, otherwise History fills with identical "Tulsa 74136" rows
+  if(!String(e.patient||'').trim()){
+    const v=(prompt('Add the patient last name or ID before this goes to History:','')||'').trim();
+    if(!v){flash('Not moved. Add the patient last name or ID first.');return;}
+    await updPat(id,v);
+  }
   if(!confirm('Mark this eval done and move it to History?'))return;
   e.status='complete';render();renderQA();renderHistory();await sb.from('evals').update({status:'complete'}).eq('id',id);}
 // Agency cancelled / eval missed: keep the record in History with the reason, take the visit off Connecteam
@@ -2144,7 +2153,8 @@ async function toggleQA(id,field,val){
   if(!e.qa)e.qa={};e.qa[field]=val;
   if(['seen','orders','pta','scheduled','sysScheduled','ct'].includes(field))e.qa[field+'At']=val?new Date().toISOString():'';
   // only finishing the last of seen + scheduled completes it, so an eval sent back to QA stays there while you edit its boxes
-  if(val&&(field==='seen'||field==='scheduled')&&e.qa.seen&&e.qa.scheduled&&e.status!=='complete'){e.status='complete';await sb.from('evals').update({status:'complete'}).eq('id',id);render();}
+  if(val&&(field==='seen'||field==='scheduled')&&e.qa.seen&&e.qa.scheduled&&e.status!=='complete'&&!String(e.patient||'').trim())flash('All steps are done. Add the patient last name or ID on the board card to move it to History.');
+  else if(val&&(field==='seen'||field==='scheduled')&&e.qa.seen&&e.qa.scheduled&&e.status!=='complete'){e.status='complete';await sb.from('evals').update({status:'complete'}).eq('id',id);render();}
   renderQA();renderStuck();render();
   await sb.from('evals').update({qa:e.qa}).eq('id',id);
 }
@@ -2250,6 +2260,66 @@ async function addAgency(){const n=document.getElementById('na').value.trim();if
 async function rmAgency(name){agencies=agencies.filter(a=>a!==name);renderAgencies();await sb.from('agencies').delete().eq('name',name);}
 
 // ── TEMPLATES ──
+// ── MESSENGER (Templates tab): pick an eval, pick a message, placeholders fill in, send in Connecteam or copy ──
+const TPLS=[
+ {k:'ack',t:'✅ Acknowledge referral',to:'agency',b:'Thank you, we received your referral for [LOCATION]. We will review availability and confirm shortly.'},
+ {k:'asg',t:'👤 Clinician assigned',to:'clin',b:'Hi [CLINICIAN], you have been assigned a [DISC] [TYPE] in [LOCATION] ([AGENCY]). Please contact the patient and confirm a date. Thank you!'},
+ {k:'fu',t:'🔔 Follow-up, not yet seen',to:'clin',b:'Hi [CLINICIAN], following up on the [TYPE] in [LOCATION]. Can you confirm when it will be seen? [DATE]'},
+ {k:'urg',t:'🚨 Urgent notice',to:'clin',b:'URGENT: a [DISC] [TYPE] in [LOCATION] needs to be seen ASAP. Please reply with your availability right away.'},
+ {k:'rem',t:'📋 Visit reminder',to:'clin',b:'Hi [CLINICIAN], reminder: [TYPE] in [LOCATION] [DATE]. Please submit documentation within 24 hours.'},
+ {k:'pta',t:'🤝 Heads up to PTA/COTA',to:'pta',b:'Hi [CLINICIAN], a [DISC] [TYPE] is planned [DATE] in [LOCATION]. Please look for new visits to follow it.'},
+ {k:'done',t:'✔️ Completed (to agency)',to:'agency',b:'Confirming the [TYPE] in [LOCATION] has been completed by [EVALUATOR]. Documentation will be submitted within 24 hours.'}
+];
+let tplCur=null;
+function tplLast(p){const t=String(p||'').trim();if(!t)return'';return t.includes(',')?t.split(',')[0].trim():t.split(/\s+/).pop();}
+function tplEvals(){return evals.filter(e=>e.status!=='complete'&&!isArchived(e));}
+function renderTpl(){
+  const sel=document.getElementById('tplEval');if(!sel)return;
+  const cur=sel.value;
+  sel.innerHTML='<option value="">— Pick an eval —</option>'+tplEvals().map(e=>'<option value="'+esc(e.id)+'"'+(e.id===cur?' selected':'')+'>'+esc([e.location,e.zip].filter(Boolean).join(' ')+' · '+e.discipline+(e.agency?' · '+e.agency:'')+(e.clinician?' · '+e.clinician.split(' ')[0]:' · unassigned'))+'</option>').join('');
+  document.getElementById('tplList').innerHTML=TPLS.map(t=>'<div class="tpl'+(tplCur===t.k?' on':'')+'" onclick="tplPick(\''+t.k+'\')"><div class="tpl-t">'+t.t+'</div><div class="tpl-b">'+esc(t.b)+'</div></div>').join('');
+  tplTargets();
+}
+function tplPick(k){tplCur=k;renderTpl();tplFill();}
+function tplTargets(){
+  const e=evals.find(x=>x.id===document.getElementById('tplEval').value),t=TPLS.find(x=>x.k===tplCur),to=document.getElementById('tplTo'),btn=document.getElementById('tplSend');
+  if(!to)return;
+  const opts=[];
+  if(e&&e.clinician)opts.push([e.clinician,'To '+e.clinician+' (evaluator)']);
+  if(e&&e.ptaClinician)opts.push([e.ptaClinician,'To '+e.ptaClinician+' (PTA/COTA)']);
+  to.innerHTML=opts.length?opts.map(o=>'<option value="'+esc(o[0])+'">'+esc(o[1])+'</option>').join(''):'<option value="">No one assigned</option>';
+  if(t&&t.to==='pta'&&e&&e.ptaClinician)to.value=e.ptaClinician;
+  const agency=t&&t.to==='agency';
+  to.disabled=agency||!opts.length;btn.disabled=agency||!opts.length||!ctReady;
+  btn.title=agency?'Agency messages are copy-only':!opts.length?'Assign a clinician first':!ctReady?'Connecteam is not connected':'';
+}
+function tplFill(){
+  const e=evals.find(x=>x.id===document.getElementById('tplEval').value),t=TPLS.find(x=>x.k===tplCur);
+  tplTargets();if(!t)return;
+  let txt=t.b;
+  if(e){
+    const q=e.qa||{},who=t.to==='pta'&&e.ptaClinician?e.ptaClinician:e.clinician,first=(who||'').split(' ')[0];
+    const dt=q.visitDate?new Date(q.visitDate+'T12:00:00').toLocaleDateString('en-US',{weekday:'short',month:'numeric',day:'numeric'}):'';
+    const rep={CLINICIAN:first||'[CLINICIAN]',EVALUATOR:e.clinician||'[EVALUATOR]',LOCATION:[e.location,e.zip].filter(Boolean).join(' '),CITY:e.location||'',AGENCY:e.agency||'[AGENCY]',DISC:e.discipline||'',TYPE:vtLabel(q.visitType).toLowerCase()||'eval',DATE:dt?(t.k==='fu'?'Visit date: '+dt+'.':'on '+dt):(t.k==='fu'?'':'(date to be confirmed)')};
+    if(!e.agency)txt=txt.replace(/\s*\(\[AGENCY\]\)/g,'');
+    txt=txt.replace(/\[([A-Z]+)\]/g,(m,k)=>k in rep?rep[k]:m).replace(/\s{2,}/g,' ').replace(/ \./g,'.').trim();
+  }
+  document.getElementById('tplOut').value=txt;
+}
+async function tplSend(){
+  const to=document.getElementById('tplTo').value,txt=document.getElementById('tplOut').value.trim();
+  if(!to||!txt){flash('Pick an eval and a message first');return;}
+  if(/\[[A-Z]+\]/.test(txt)&&!confirm('The message still has a [PLACEHOLDER] in it. Send anyway?'))return;
+  if(!confirm('Send this to '+to+' in Connecteam?\n\n'+txt))return;
+  try{
+    const r=await ctApi('send_text',{to_name:to,text:txt});
+    if(r&&r.sent)flash('✉ Sent to '+to);
+    else if(r&&r.warning==='no_ct_user')flash('⚠ '+to+' is not linked to Connecteam yet');
+    else if(r&&r.warning==='no_sender')flash('⚠ Messages are not set up yet (sender secret)');
+    else flash('Not sent');
+  }catch(err){flash('⚠ Could not send: '+err.message);}
+}
+function tplCopy(){const v=document.getElementById('tplOut').value;if(!v){flash('Pick a message first');return;}navigator.clipboard.writeText(v);flash('Copied ✓');}
 function ct(el){navigator.clipboard.writeText(el.querySelector('.tpl-b').textContent);flash('Copied ✓');}
 function cc(){navigator.clipboard.writeText(document.getElementById('cu').value);flash('Copied ✓');}
 function exportClinicians(){
