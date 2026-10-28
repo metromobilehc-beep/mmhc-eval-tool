@@ -253,7 +253,8 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
     <input id="authPw" type="password" placeholder="Password" autocomplete="current-password" onkeydown="if(event.key==='Enter')doSignIn()">
     <div id="authErr" class="auth-err"></div>
     <button class="btn btn-g" id="authBtn" onclick="doSignIn()">Sign in</button>
-    <div class="auth-foot"><a href="#" id="forgotLink" onclick="doForgot();return false" style="color:var(--accent)">Forgot password? Email me a reset link</a></div>
+    <div class="auth-foot"><a href="#" id="forgotLink" onclick="doForgot();return false" style="color:var(--accent)">Forgot password? Email me a reset link</a>
+      <div style="margin-top:6px"><a href="#" id="adminPwLink" onclick="doAdminPw();return false" style="color:var(--muted);font-size:12px">Admin: send a new password to my Connecteam chat</a></div></div>
     <div id="recBox" class="hidden">
       <div class="auth-sub" style="margin-top:10px">Choose a new password</div>
       <input id="recPw" type="password" placeholder="New password (10+ characters)" autocomplete="new-password">
@@ -1161,7 +1162,7 @@ async function initAuth(){
 let recovering=false;
 function showRecovery(){
   showGate();
-  ['authEmail','authPw','authBtn','forgotLink'].forEach(i=>document.getElementById(i).classList.add('hidden'));
+  ['authEmail','authPw','authBtn','forgotLink','adminPwLink'].forEach(i=>document.getElementById(i).classList.add('hidden'));
   document.getElementById('recBox').classList.remove('hidden');
   authMsg('');
 }
@@ -1172,6 +1173,15 @@ async function doForgot(){
   const {error}=await sb.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});
   // same message either way so nobody can use this to check who has an account
   authMsg(error&&/rate|seconds/i.test(error.message)?'Please wait a minute before asking again.':'If that email has a Metro login, a reset link is on its way.');
+}
+async function doAdminPw(){
+  const email=document.getElementById('authEmail').value.trim();
+  if(!email){authMsg('Type your email above first, then click the link again.');return;}
+  authMsg('Sending...');
+  try{
+    const {data,error}=await sb.functions.invoke('eval-admin-reset',{body:{email}});
+    authMsg(error?'Could not reach the reset service. Use the email reset link instead.':(data&&data.message)||'Done.');
+  }catch(_){authMsg('Could not reach the reset service. Use the email reset link instead.');}
 }
 async function doRecover(){
   const a=document.getElementById('recPw').value,b=document.getElementById('recPw2').value;
