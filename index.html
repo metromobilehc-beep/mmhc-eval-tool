@@ -566,10 +566,19 @@ function renderCapacity() {
   // Filter clinicians to PTA/COTA only, then merge with capacity records
   const ptaCota = clins.filter(c => c.role === 'PTA' || c.role === 'COTA');
   // Also include any manually added capacity entries not in main roster
-  const allNames = [...new Set([...ptaCota.map(c=>c.name), ...capacity.map(c=>c.name)])];
+  // Only people on the CURRENT roster as PTA/COTA are listed. Old capacity rows (someone who left, or changed role) go in a separate "not on roster" list.
+  const allNames = ptaCota.map(c=>c.name);
+  const rosterKey = n => String(n||'').trim().toLowerCase();
+  const onRoster = new Set(ptaCota.map(c=>rosterKey(c.name)));
+  const stale = capacity.filter(c=>!onRoster.has(rosterKey(c.name)));
+  const staleHtml = stale.length ? `<div style="margin-top:14px;border-top:1px dashed var(--border);padding-top:10px">
+      <div class="lbl">Not on the current roster (${stale.length})</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.4;margin-bottom:6px">These old capacity entries are ignored when suggesting a clinician. Remove them, or add the person back in Settings.</div>
+      ${stale.map(c=>`<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;font-size:12px;padding:4px 0"><span>${esc(c.name)}${c.region?` <span style="color:var(--muted)">· ${esc(c.region)}</span>`:''}</span><button class="cbtn del" style="flex:0 0 auto" onclick="rmCap('${esc(String(c.name).replace(/'/g,"\\'"))}')">Remove</button></div>`).join('')}
+    </div>` : '';
   
   if (!allNames.length) {
-    list.innerHTML = '<div class="qa-empty">No PTAs or COTAs in roster yet.<br>Add them in Settings first.</div>';
+    list.innerHTML = '<div class="qa-empty">No PTAs or COTAs in roster yet.<br>Add them in Settings first.</div>'+staleHtml;
     return;
   }
 
@@ -594,7 +603,12 @@ function renderCapacity() {
         style="font-size:11px;padding:5px 8px;" 
         onchange="updateCapRegion('${name}',this.value)">
     </div>`;
-  }).join('');
+  }).join('') + staleHtml;
+}
+async function rmCap(name){
+  capacity=capacity.filter(c=>c.name!==name);renderCapacity();
+  const {error}=await sb.from('capacity').delete().eq('name',name);
+  if(error)flash('✕ Not removed: '+error.message);else flash('✓ Removed '+name);
 }
 
 async function markAllAvailable(val) {
@@ -647,7 +661,8 @@ async function addCapClin() {
 }
 
 function getSuggestedClinician(location, zip, date) {
-  const available = capacity.filter(c=>c.available && c.region);
+  const rosterNames = new Set(clins.map(c=>String(c.name||'').trim().toLowerCase()));
+  const available = capacity.filter(c=>c.available && c.region && rosterNames.has(String(c.name||'').trim().toLowerCase()));
   if (!available.length) return null;
 
   const locLower = location.toLowerCase().trim();
