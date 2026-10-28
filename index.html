@@ -1967,6 +1967,7 @@ function render(){
         ${e.clinician?`<span class="badge bcl">👤 ${e.clinician.split(' ')[0]}</span>`:''}
         ${(()=>{const sr=stuckReasons(e);return sr.length?`<span class="stuckchip">⚠ ${sr[0].k} · ${sr[0].d}d</span>`:''})()}
       </div>
+      ${e.qa&&e.qa.ctError?`<div style="font-size:10px;color:#e0584a;margin:2px 0;line-height:1.35">Connecteam said: ${esc(String(e.qa.ctError).slice(0,200))} <a href="#" onclick="ctSync('${e.id}');return false">Retry</a></div>`:''}
       ${isHeld(e)?`<div style="font-size:11px;color:var(--accent);margin:2px 0">Just assigned: set the visit date and time below. <a href="#" onclick="releaseHold('${e.id}');return false">Move to Assigned</a></div>`:''}
       ${e.note?`<div class="cnote">${e.note}</div>`:''}
       <div class="cmeta">
