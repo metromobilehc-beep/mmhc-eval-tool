@@ -1026,7 +1026,20 @@ function parseText(text,ag,wd,p){
 // ── DUPLICATE CHECK ──
 // Visit types: stored in qa.visitType
 const VTYPES=[['eval','Evaluation'],['recert','Recertification'],['soc','Start of care'],['roc','Resumption of care'],['reeval','Re-evaluation'],['dc','Discharge']];
-const vtLabel=v=>(VTYPES.find(x=>x[0]===v)||['',''])[1];
+const vtLabel=v=>String(v||'').startsWith('x:')?String(v).slice(2):(VTYPES.find(x=>x[0]===v)||['',''])[1];
+// custom types ("x:Wheelchair") are typed in once, then offered on every card
+function vtOptions(cur){
+  const customs=[...new Set(evals.map(e=>e.qa&&e.qa.visitType).filter(v=>v&&String(v).startsWith('x:')))].sort();
+  return VTYPES.map(v=>[v[0],v[1]]).concat(customs.map(c=>[c,c.slice(2)]));
+}
+async function pickType(id,val){
+  if(val==='__other'){
+    const n=(prompt('Name this visit type (for example: Wheelchair, Nautilus):','')||'').trim().slice(0,30);
+    if(!n){render();return;}
+    val='x:'+n;
+  }
+  await setVisit(id,'visitType',val);
+}
 function detectType(t){t=String(t||'');
   if(/re-?eval/i.test(t))return'reeval';
   if(/\bdischarge\b|\bD\/?C\b/i.test(t))return'dc';
@@ -1926,7 +1939,7 @@ function render(){
       </div>
       <div class="agtype" style="display:flex;gap:4px;margin:2px 0 4px">
         <select class="csel${e.agency?'':' need'}" style="font-size:11px;padding:5px 7px;flex:1" title="Agency" onchange="setAgency('${e.id}',this.value)"><option value="">— Agency —</option>${(agencies.includes(e.agency)||!e.agency?agencies:[...agencies,e.agency]).map(a=>`<option value="${esc(a)}"${a===e.agency?' selected':''}>${esc(a)}</option>`).join('')}</select>
-        <select class="csel${(e.qa&&e.qa.visitType)?'':' need'}" style="font-size:11px;padding:5px 7px;flex:1" title="Visit type" onchange="setVisit('${e.id}','visitType',this.value)"><option value="">— Visit type —</option>${VTYPES.map(v=>`<option value="${v[0]}"${e.qa&&e.qa.visitType===v[0]?' selected':''}>${v[1]}</option>`).join('')}</select>
+        <select class="csel${(e.qa&&e.qa.visitType)?'':' need'}" style="font-size:11px;padding:5px 7px;flex:1" title="Visit type" onchange="pickType('${e.id}',this.value)"><option value="">— Visit type —</option>${vtOptions().map(v=>`<option value="${esc(v[0])}"${e.qa&&e.qa.visitType===v[0]?' selected':''}>${esc(v[1])}</option>`).join('')}<option value="__other">＋ Other (type a name)…</option></select>
       </div>
       <div class="br">
         ${e.priority==='urgent'?'<span class="badge burg">🚨 Urgent</span>':''}
