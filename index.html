@@ -132,6 +132,7 @@ td.cal-drop{outline:2px dashed var(--accent);outline-offset:-3px;background:var(
 .cact{display:flex;gap:6px;flex-wrap:wrap;}
 .cact .csel{flex:1 1 100%;min-width:0;}
 .cact .cbtn{flex:1;}
+.csel.need{border-color:var(--accent);}
 .csel{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:11px;padding:5px 7px;outline:none;cursor:pointer;}
 .cbtn{padding:5px 10px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;}
 .cbtn.done{color:var(--accent);border-color:var(--accent);}
@@ -295,7 +296,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
     </div>
 
     <div class="panel" id="tp-paste">
-      <div><div class="lbl">Agency</div><select id="ag"></select></div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.4">Paste locations only. Pick the agency and visit type on each eval card after it is added.</div>
       <div><div class="lbl">Paste Referral Text</div>
         <textarea id="rt" placeholder="Paste any format:&#10;&#10;Henryetta&#10;74107, Bristow, Ba 011&#10;&#10;or: Catoosa-PT&#10;Tulsa 74105-PT&#10;&#10;or: BIOS block format"></textarea>
       </div>
@@ -859,7 +860,7 @@ function parseText(text,ag,wd,p){
   const zipCity={'74101':'Tulsa','74102':'Tulsa','74103':'Tulsa','74104':'Tulsa','74105':'Tulsa','74106':'Tulsa','74107':'Tulsa','74108':'Tulsa','74110':'Tulsa','74112':'Tulsa','74114':'Tulsa','74115':'Tulsa','74116':'Tulsa','74117':'Tulsa','74119':'Tulsa','74120':'Tulsa','74126':'Tulsa','74127':'Tulsa','74128':'Tulsa','74129':'Tulsa','74130':'Tulsa','74131':'Tulsa','74132':'Tulsa','74133':'Tulsa','74134':'Tulsa','74135':'Tulsa','74136':'Tulsa','74137':'Tulsa','74141':'Tulsa','74145':'Tulsa','74146':'Tulsa','74011':'Broken Arrow','74012':'Broken Arrow','74013':'Broken Arrow','74014':'Broken Arrow','74055':'Owasso','74037':'Jenks','74008':'Bixby','74063':'Sand Springs','74066':'Sapulpa','74017':'Claremore','74018':'Claremore','74015':'Catoosa','74070':'Skiatook','74021':'Collinsville','74044':'Mannford','74053':'Oologah','74401':'Muskogee','74403':'Muskogee','74447':'Okmulgee','74437':'Henryetta','74010':'Bristow','74028':'Depew','74467':'Wagoner','74429':'Coweta','74033':'Glenpool','74003':'Bartlesville','74006':'Bartlesville','74056':'Pawhuska','74301':'Vinita','74023':'Cushing','74030':'Drumright','74361':'Pryor','74464':'Tahlequah','74421':'Beggs','74035':'Hominy'};
 
   function expandZip(z){if(!z)return'';z=String(z).trim().split('-')[0];if(z.length===5)return z;return'74'+z.padStart(3,'0');}
-  function mkE(loc,zip,d,note,patient,clin,date){return{id:String(Date.now()+Math.random()),location:loc,zip,discipline:d,agency:ag,priority:urg?'urgent':p,note:note||'',patient:patient||'',status:'pending',clinician:clin||'',ptaClinician:'',addedBy:userName||'',assignedBy:'',dateAdded:date||wd,weekDate:date||wd,qa:{}};}
+  function mkE(loc,zip,d,note,patient,clin,date){return{id:String(Date.now()+Math.random()),location:loc,zip,discipline:d,agency:'',priority:urg?'urgent':p,note:note||'',patient:patient||'',status:'pending',clinician:clin||'',ptaClinician:'',addedBy:userName||'',assignedBy:'',dateAdded:date||wd,weekDate:date||wd,qa:{visitType:detectType(note)}};}
   function cleanName(n){const m=n.match(/^([A-Z]+)\s*\(METRO\),\s*([A-Z]+)/i);if(m)return m[2][0].toUpperCase()+m[2].slice(1).toLowerCase()+' '+m[1][0].toUpperCase()+m[1].slice(1).toLowerCase();return n.trim();}
   function cleanPat(n){const m=n.match(/^([A-Z\-]+),\s*([A-Z]+)/i);if(m)return m[2][0].toUpperCase()+m[2].slice(1).toLowerCase()+' '+m[1][0].toUpperCase()+m[1].slice(1).toLowerCase();return n.trim();}
   function resolveCity(raw){const u=raw.trim().toUpperCase();return abbrMap[u]||cityNames.find(c=>c.toLowerCase()===raw.trim().toLowerCase())||raw.trim();}
@@ -900,7 +901,7 @@ function parseText(text,ag,wd,p){
         const zip=expandZip(b.zip||'');const d=b.vt?b.vt.split(/\s+/)[0].toUpperCase():disc();
         const vd=['PT','OT','SLP','PTA','COTA'].includes(d)?d:'PT';
         let evalDate=wd;if(b.date){const dp=b.date.match(/(\d{2})\/(\d{2})\/(\d{4})/);if(dp)evalDate=dp[3]+'-'+dp[1]+'-'+dp[2];}
-        out.push(mkE(city||(zipCity[zip]||'Unknown'),zip,vd,b.vt||'',b.pat?cleanPat(b.pat):'',cleanName(b.cr),evalDate));i=j;
+        {const be=mkE(city||(zipCity[zip]||'Unknown'),zip,vd,b.vt||'',b.pat?cleanPat(b.pat):'',cleanName(b.cr),evalDate);be.agency=(typeof agencies!=='undefined'&&agencies.find(a=>/^bios$/i.test(a)))||'';out.push(be);}i=j;
       }else{i++;}
     }
     return out;
@@ -979,7 +980,7 @@ function parseText(text,ag,wd,p){
   }
 
   // ── FORMAT D: SOC/patient prose (no commas) ──
-  if(/\b(SOC|eval)\b/i.test(text)&&lines.length<=8&&!text.includes(',')){
+  if(/\b(SOC|eval)\b/i.test(text)&&lines.length<=8&&!text.includes(",")&&lines.some(l=>l.trim().split(/\s+/).length>=5)){
     const found=cityNames.filter(c=>new RegExp('\\b'+c+'\\b','i').test(text));
     const vt=/\bSOC\b/i.test(text)?'SOC':'Eval';
     const nm=(text.match(/\b([A-Z][a-z]{3,}(?:swamy|shan|kumar|patel|singh)?)\b/g)||[])[0]||'';
@@ -998,6 +999,13 @@ function parseText(text,ag,wd,p){
   // ── FORMAT F: One item per line ──
   lines.forEach(line=>{
     const l=line.trim();if(!l)return;
+    // "SOC Tulsa 74105", "Bixby recert", "PT eval Owasso": pull out the visit type, discipline and zip, what is left is the place
+    const kty=detectType(l);
+    if(kty&&/[A-Za-z]{3,}/.test(l.replace(/\b(SOC|start\s+of\s+care|re-?cert(ification)?|eval(uation)?|PT|OT|SLP|PTA|COTA)\b/ig,''))){
+      const kd=(l.match(/\b(PT|OT|SLP|PTA|COTA)\b/i)||[])[1],kz=(l.match(/\b\d{5}\b/)||[])[0]||'';
+      const rest=l.replace(/\b(SOC|start\s+of\s+care|re-?cert(ification)?|eval(uation)?|PT|OT|SLP|PTA|COTA)\b/ig,' ').replace(/\b\d{5}\b/g,' ').replace(/[-\u2013,]/g,' ').replace(/\s+/g,' ').trim();
+      if(rest){out.push(mkE(resolveCity(rest),kz,kd?kd.toUpperCase():disc(),kty==='soc'?'SOC':kty==='recert'?'Recert':'Eval','','',wd));return;}
+    }
     const isZip=/^\d{3,5}$/.test(l);
     const isAbbr=/^[A-Za-z]{2,3}(\s+\d{1,3})?$/.test(l)&&!/^(PT|OT|SLP|PTA|COTA)$/i.test(l);
     if(isZip){const fz=expandZip(l);out.push(mkE(zipCity[fz]||'Tulsa',fz,disc(),'','','',wd));}
@@ -1016,10 +1024,19 @@ function parseText(text,ag,wd,p){
 }
 
 // ── DUPLICATE CHECK ──
+// Visit types: stored in qa.visitType
+const VTYPES=[['eval','Evaluation'],['recert','Recertification'],['soc','Start of care']];
+const vtLabel=v=>(VTYPES.find(x=>x[0]===v)||['',''])[1];
+function detectType(t){t=String(t||'');
+  if(/re-?cert|recertification/i.test(t))return'recert';
+  if(/\bSOC\b|start\s+of\s+care/i.test(t))return'soc';
+  if(/\beval(uation)?\b/i.test(t))return'eval';
+  return'';}
 // Same agency + same location (+ same ZIP when both have one) + same discipline. If both have a patient ID and they differ, it is a different patient.
 const dupN=x=>String(x==null?'':x).toLowerCase().replace(/[^a-z0-9]/g,'');
 function isDup(a,b){
-  if(dupN(a.agency)!==dupN(b.agency))return false;
+  if(dupN(a.agency)&&dupN(b.agency)&&dupN(a.agency)!==dupN(b.agency))return false;
+  const ta=a.qa&&a.qa.visitType,tb=b.qa&&b.qa.visitType;if(ta&&tb&&ta!==tb)return false;
   if(!dupN(a.location)||dupN(a.location)!==dupN(b.location))return false;
   if(a.zip&&b.zip&&dupN(a.zip)!==dupN(b.zip))return false;
   if(dupN(a.discipline)!==dupN(b.discipline))return false;
@@ -1058,7 +1075,7 @@ function dupGate(items){
 }
 async function parseAdd(){
   const text=document.getElementById('rt').value.trim();if(!text){flash('⚠️ Nothing to parse');return;}
-  const ag=document.getElementById('ag').value,wd=document.getElementById('wd').value;
+  const ag='',wd=document.getElementById('wd').value;
   let items=parseText(text,ag,wd,pri);if(!items.length){flash('⚠️ Could not parse');return;}
   const keepItems=await dupGate(items);
   if(keepItems===null){flash('Nothing added');return;}
@@ -1086,9 +1103,9 @@ async function parseAdd(){
 async function addOne(){
   const loc=document.getElementById('sl').value.trim();if(!loc)return;
   const wd=document.getElementById('wd').value;
-  const ev0={location:loc,zip:document.getElementById('sz').value.trim(),discipline:singleDisc,agency:document.getElementById('ag').value,patient:document.getElementById('spt').value.trim()};
+  const ev0={location:loc,zip:document.getElementById('sz').value.trim(),discipline:singleDisc,agency:'',patient:document.getElementById('spt').value.trim()};
   if(findDups([ev0],evals).length){const g=await dupGate([ev0]);if(g===null||!g.length){flash('Nothing added');return;}}
-  const ev={id:String(Date.now()+Math.random()),location:loc,zip:document.getElementById('sz').value.trim(),discipline:singleDisc,agency:document.getElementById('ag').value,priority:pri,note:document.getElementById('sn').value.trim(),patient:document.getElementById('spt').value.trim(),status:'pending',clinician:'',addedBy:userName||'',assignedBy:'',dateAdded:wd,weekDate:wd,qa:{}};
+  const ev={id:String(Date.now()+Math.random()),location:loc,zip:document.getElementById('sz').value.trim(),discipline:singleDisc,agency:'',priority:pri,note:document.getElementById('sn').value.trim(),patient:document.getElementById('spt').value.trim(),status:'pending',clinician:'',addedBy:userName||'',assignedBy:'',dateAdded:wd,weekDate:wd,qa:{visitType:detectType(document.getElementById('sn').value)}};
   evals=[ev,...evals];render();['sl','sz','sn','spt'].forEach(id=>document.getElementById(id).value='');
   const {error:addErr}=await sb.from('evals').insert(evalToDB(ev));
   if(addErr){flash('✕ NOT saved: '+addErr.message);alert('Not saved to the database: '+addErr.message+'\n\nIf you refresh, this eval will disappear. Paste this message to Claude.');}
@@ -1783,6 +1800,7 @@ function attentionGroups(){
   const today=localISO(),G=[
     {k:'sync',t:'🔴 Connecteam problem',rows:[]},
     {k:'passed',t:'📅 Visit date passed, not marked seen',rows:[]},
+    {k:'noInfo',t:'🏢 Needs an agency or visit type',rows:[]},
     {k:'noClin',t:'👤 Needs a clinician',rows:[]},
     {k:'noDate',t:'🗓 Needs a visit date',rows:[]},
     {k:'noOrders',t:'📝 Seen, orders not added',rows:[]},
@@ -1794,6 +1812,7 @@ function attentionGroups(){
     const q=e.qa||{},urgent=(e.priority==='urgent'||e.priority==='asap')?1:0;
     const add=(k,days,why)=>by[k].rows.push({e,days,urgent,why});
     if(q.ctError)add('sync',age(q.visitSetAt||q.assignedAt||e.dateAdded),String(q.ctError).slice(0,80));
+    if(!e.agency||!q.visitType)add('noInfo',age(e.dateAdded),[!e.agency?'agency':'',!q.visitType?'visit type':''].filter(Boolean).join(' + ')+' missing');
     if(e.status==='pending'){add('noClin',age(e.dateAdded));return;}
     if(!q.visitDate)add('noDate',age(q.assignedAt||e.dateAdded));
     else if(!q.seen&&q.visitDate<today)add('passed',age(q.visitDate));
@@ -1900,7 +1919,11 @@ function render(){
     return`<div class="card s${e.status[0]} p${e.priority[0]}" id="card-${esc(e.id)}">
       <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px">
         <div class="cloc">${e.location}${e.zip?`<span class="czip">${e.zip}</span>`:''}</div>
-        <div class="br"><span class="badge d${e.discipline}">${e.discipline}</span><span class="badge bag">${e.agency||''}</span></div>
+        <div class="br"><span class="badge d${e.discipline}">${e.discipline}</span>${e.agency?`<span class="badge bag">${e.agency}</span>`:''}</div>
+      </div>
+      <div class="agtype" style="display:flex;gap:4px;margin:2px 0 4px">
+        <select class="csel${e.agency?'':' need'}" style="font-size:11px;padding:5px 7px;flex:1" title="Agency" onchange="setAgency('${e.id}',this.value)"><option value="">— Agency —</option>${(agencies.includes(e.agency)||!e.agency?agencies:[...agencies,e.agency]).map(a=>`<option value="${esc(a)}"${a===e.agency?' selected':''}>${esc(a)}</option>`).join('')}</select>
+        <select class="csel${(e.qa&&e.qa.visitType)?'':' need'}" style="font-size:11px;padding:5px 7px;flex:1" title="Visit type" onchange="setVisit('${e.id}','visitType',this.value)"><option value="">— Visit type —</option>${VTYPES.map(v=>`<option value="${v[0]}"${e.qa&&e.qa.visitType===v[0]?' selected':''}>${v[1]}</option>`).join('')}</select>
       </div>
       <div class="br">
         ${e.priority==='urgent'?'<span class="badge burg">🚨 Urgent</span>':''}
@@ -1939,6 +1962,13 @@ function render(){
   }).join('');
 }
 
+async function setAgency(id,val){
+  const e=evals.find(e=>e.id===id);if(!e)return;
+  e.agency=val;render();renderQA();renderStuck();
+  const {error}=await sb.from('evals').update({agency:val}).eq('id',id);
+  if(error){flash('✕ Agency not saved: '+error.message);return;}
+  if(ctReady&&e.clinician&&e.qa&&(e.qa.visitDate||e.qa.ctShiftId))await ctSync(id);
+}
 async function updPat(id,val){const e=evals.find(e=>e.id===id);if(!e)return;e.patient=val;await sb.from('evals').update({patient:val}).eq('id',id);}
 async function asgnPTA(id,name){
   const e=evals.find(e=>e.id===id);if(!e)return;
@@ -2120,8 +2150,7 @@ async function rmClin(name){clins=clins.filter(c=>c.name!==name);renderClins();r
 
 // ── AGENCIES ──
 function renderAgencies(){
-  const sel=document.getElementById('ag');const cur=sel.value;
-  sel.innerHTML=agencies.map(a=>`<option value="${a}"${a===cur?' selected':''}>${a}</option>`).join('');
+  render();
   document.getElementById('agencyList').innerHTML=agencies.map(a=>`
     <div class="cr"><div style="display:flex;align-items:center"><div class="av" style="background:var(--avbg)">${a.substring(0,2).toUpperCase()}</div>
     <div style="font-size:12px;font-weight:600">${a}</div></div>
