@@ -61,6 +61,12 @@ button:disabled{opacity:.5;cursor:default}
       <div class="tools"><button type="button" onclick="doPaste()">Turn into rows</button></div>
     </div>
 
+    <div class="card">
+      <label>Email for our confirmation (optional)</label>
+      <input id="contactEmail" type="email" autocomplete="email" maxlength="120" placeholder="intake@youragency.com">
+      <div class="small" style="margin-top:4px">We will send a short “received” email here. Use a shared intake address, not a personal one.</div>
+    </div>
+
     <div class="hp"><label>Website</label><input id="website" tabindex="-1" autocomplete="off"></div>
 
     <button id="send" type="button" onclick="send()">Send referrals</button>
@@ -153,7 +159,9 @@ async function send(){
   if(!refs.length){show('err','Add at least one place first.');return;}
   if(PREVIEW){show('ok','Preview only: nothing was sent. '+refs.length+' row'+(refs.length>1?'s':'')+' would have gone to Metro.');return;}
   const b=document.getElementById('send');b.disabled=true;
-  const r=await api({action:'submit',referrals:refs,website:document.getElementById('website').value});
+  const ce=document.getElementById('contactEmail').value.trim();
+  try{localStorage.setItem('mmhcPartnerEmail:'+code,ce);}catch(_){}
+  const r=await api({action:'submit',referrals:refs,contact_email:ce,website:document.getElementById('website').value});
   b.disabled=false;
   if(r.j&&r.j.ok){
     document.getElementById('rows').innerHTML='';n=0;addRow();
@@ -167,6 +175,7 @@ async function send(){
   if(r.status!==200||!r.j.agency){document.getElementById('bad').style.display='block';return;}
   document.getElementById('title').textContent='Send a referral · '+r.j.agency;
   if(PREVIEW)document.getElementById('prev').style.display='block';
+  try{document.getElementById('contactEmail').value=localStorage.getItem('mmhcPartnerEmail:'+code)||'';}catch(_){}
   document.getElementById('main').style.display='block';addRow();
 })();
 </script>

@@ -2327,11 +2327,11 @@ function renderInbox(){
       <div style="display:flex;justify-content:space-between;gap:6px"><b>${esc(r.location)}${r.zip?' '+esc(r.zip):''}</b><span class="badge d${esc(r.discipline)}">${esc(r.discipline)}</span></div>
       <div style="font-size:11px;color:var(--muted);margin:2px 0">${esc(r.agency)} · ${esc(vtLabel(r.visit_type)||'type not given')}${r.urgent?' · <span style="color:var(--red)">🚨 urgent</span>':''}${r.patient?' · '+esc(r.patient):' · no patient ID'}</div>
       ${r.note?`<div style="font-size:11px;margin:2px 0">${esc(r.note)}</div>`:''}
-      <div style="font-size:10px;color:var(--muted)">${new Date(r.created_at).toLocaleString([],{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>
-      <div class="cact" style="margin-top:6px"><button class="cbtn done" onclick="acceptRef('${r.id}')">＋ Add to board</button><button class="cbtn" onclick="dismissRef('${r.id}')">Dismiss</button></div>
+      <div style="font-size:10px;color:var(--muted)">${new Date(r.created_at).toLocaleString([],{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'})}${r.contact_email?' · reply to '+esc(r.contact_email):''}</div>
+      <div class="cact" style="margin-top:6px"><button class="cbtn done" onclick="acceptRef('${r.id}')">＋ Add to board</button><button class="cbtn" onclick="ackRef('${r.id}')">${r.acked_at?'✓ Acknowledged (again)':'✉ Acknowledge'}</button><button class="cbtn" onclick="dismissRef('${r.id}')">Dismiss</button></div>
     </div>`).join(''):'<div class="qa-empty">No new referrals from partners.</div>';
   document.getElementById('inboxAll').style.display=inbox.length>1?'block':'none';
-  document.getElementById('inboxDone').innerHTML=inboxDoneRows.map(r=>esc(r.location)+' · '+esc(r.agency)+' · '+(r.status==='accepted'?'added to board':'dismissed')+(r.handled_by?' by '+esc(r.handled_by):'')).join('<br>')||'Nothing yet.';
+  document.getElementById('inboxDone').innerHTML=inboxDoneRows.map(r=>esc(r.location)+' · '+esc(r.agency)+' · '+(r.status==='accepted'?'added to board':'dismissed')+(r.handled_by?' by '+esc(r.handled_by):'')+(r.status==='accepted'?' · <a href="#" onclick="ackRef(\''+r.id+'\');return false">'+(r.acked_at?'✓ acknowledged':'✉ acknowledge')+'</a>':'')).join('<br>')||'Nothing yet.';
 }
 function refToEval(r){
   const wd=localISO();
@@ -2352,6 +2352,21 @@ async function takeRefs(rows){
     evals=[ev,...evals];
   }
   render();await loadInbox();renderInbox();flash('✓ Added to the board');
+}
+// One-click acknowledgement: opens a ready-to-send email in your mail app. Place, type and the agency's own ID only, never a name.
+function ackBody(r){
+  const line=[r.location+(r.zip?' '+r.zip:''),r.discipline+' '+(vtLabel(r.visit_type)||'referral'),r.patient?'ID '+r.patient:''].filter(Boolean).join(' · ');
+  return 'Hello,\n\nThis confirms Metro Mobile Health Care received your referral:\n\n'+line+(r.urgent?' (marked urgent)':'')+'\n\nWe are reviewing clinician availability and will confirm the assignment and visit date shortly. Please reply to this email if anything changes.\n\nThank you,\nMetro Mobile Health Care';
+}
+async function ackRef(id){
+  const r=inbox.find(x=>x.id===id)||inboxDoneRows.find(x=>x.id===id);if(!r)return;
+  const subj='Metro Mobile Health Care: referral received ('+r.location+')';
+  const to=r.contact_email||'';
+  window.open('mailto:'+encodeURIComponent(to).replace(/%40/g,'@')+'?subject='+encodeURIComponent(subj)+'&body='+encodeURIComponent(ackBody(r)),'_self');
+  if(!to)flash('No reply email was given for this referral: add the address in your mail app.');
+  const t=new Date().toISOString();
+  await sb.from('portal_referrals').update({acked_at:t}).eq('id',id);
+  r.acked_at=t;renderInbox();
 }
 async function acceptRef(id){const r=inbox.find(x=>x.id===id);if(r)await takeRefs([r]);}
 async function acceptAllRefs(){if(inbox.length&&confirm('Add all '+inbox.length+' referrals to the board?'))await takeRefs(inbox.slice());}
