@@ -219,6 +219,17 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
 </style>
 </head>
 <body>
+<div id="smartModal" class="modal hidden">
+  <div class="modal-box" style="max-width:620px;width:96%">
+    <div class="auth-title" style="text-align:left">✨ Check these referrals</div>
+    <div class="modal-sum">Pick the agency, confirm who is free and set the visit date. Confirm adds them to the board and, with a clinician and date, creates the Connecteam shift. Leave the date or clinician blank to just add the card.</div>
+    <div id="smartList" style="max-height:55vh;overflow:auto"></div>
+    <div style="display:flex;gap:6px;margin-top:8px">
+      <button class="btn btn-g" id="smartGo" style="flex:2" onclick="smartConfirm()">Confirm &amp; add</button>
+      <button class="btn btn-o" style="flex:1" onclick="smartClose()">Cancel</button>
+    </div>
+  </div>
+</div>
 <div id="dupModal" class="modal hidden">
   <div class="modal-box">
     <div class="auth-title" style="text-align:left">⚠ Looks like a duplicate</div>
@@ -333,7 +344,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         </div>
       </div>
       <button class="btn btn-g" id="parseBtn" onclick="parseAdd()">⚡ Parse &amp; Add to Board</button>
-      <button class="btn" id="smartBtn" onclick="smartPaste()" style="margin-top:6px;width:100%">✨ Smart paste (AI reads it, you approve in Inbox)</button>
+      <button class="btn" id="smartBtn" onclick="smartPaste()" style="margin-top:6px;width:100%">✨ Smart paste (AI reads it, you confirm)</button>
       <div style="font-size:10px;color:var(--muted);margin-top:3px">Paste places, zips and IDs only. Do not paste patient names, phone numbers or addresses.</div>
       <div class="hr"></div>
       <div><div class="lbl">Add Single Eval</div>
@@ -1615,7 +1626,7 @@ async function restoreEval(id){
   await sb.from('evals').update({qa:e.qa}).eq('id',id);
   flash('✓ Restored to the board');
 }
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){closeClearBoard();if(dupResolve)dupAnswer('cancel');}});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){closeClearBoard();if(dupResolve)dupAnswer('cancel');else smartClose();}});
 
 // ── AVAILABILITY CALENDAR (read from Connecteam through the connecteam-shift function) ──
 let avStart=null,avData=null,avSel=null,avSort=null,avBusy=false,avErr='',avRows=[];
@@ -2340,13 +2351,58 @@ async function smartPaste(){
     if(data&&data.error)throw new Error(data.error);
     const rows=(data&&data.referrals)||[];
     if(!rows.length){flash('No referrals found in that text');return;}
-    const ins=rows.map(r=>({agency:'',location:r.location,zip:r.zip||'',discipline:r.discipline||'PT',visit_type:r.visit_type||'',patient:r.patient||'',note:r.note||'',urgent:!!r.urgent}));
-    const {error:ie}=await sb.from('portal_referrals').insert(ins);
-    if(ie)throw new Error(ie.message);
-    ta.value='';await loadInbox();
-    flash('✓ '+rows.length+' referral'+(rows.length===1?'':'s')+' read: check the Inbox');
+    smartOpen(rows);
   }catch(e){flash('✕ Smart paste: '+e.message);}
-  finally{b.disabled=false;b.textContent='✨ Smart paste (AI reads it, you approve in Inbox)';}
+  finally{b.disabled=false;b.textContent='✨ Smart paste (AI reads it, you confirm)';}
+}
+let smartRows=[];
+function smartSuggest(r){const sg=getSuggestedClinician(r.location,r.zip,r.date||'');return sg?sg.name:'';}
+function smartOpen(rows){
+  smartRows=rows.map(r=>{const x={...r,on:true,agency:'',date:'',manual:false};x.clin=smartSuggest(x);return x;});
+  renderSmart();document.getElementById('smartModal').classList.remove('hidden');
+}
+function smartClose(){document.getElementById('smartModal').classList.add('hidden');}
+function renderSmart(){
+  const ag=agencies.map(a=>'<option>'+esc(a)+'</option>').join('');
+  const cl=clins.filter(c=>!isAsst(c));
+  document.getElementById('smartList').innerHTML=smartRows.map((r,i)=>{
+    const tag=r.clin&&r.date?asstTag(r.clin,r.date):'';
+    return `<div style="margin:6px 0;padding:8px;border:1px solid var(--border);border-radius:8px;opacity:${r.on?1:.5}">
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" ${r.on?'checked':''} onchange="smartRows[${i}].on=this.checked;renderSmart()"> <b>${esc(r.location)}${r.zip?' '+esc(r.zip):''}</b> <span class="badge d${esc(r.discipline)}">${esc(r.discipline)}</span> <span style="color:var(--muted);font-size:11px">${esc(vtLabel(r.visit_type)||'type not given')}${r.urgent?' · 🚨 urgent':''}${r.patient?' · '+esc(r.patient):''}</span></label>
+      ${r.note?`<div style="font-size:11px;color:var(--muted);margin:2px 0 0 22px">${esc(r.note)}</div>`:''}
+      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
+        <select style="flex:1;min-width:130px" onchange="smartRows[${i}].agency=this.value"><option value="">Agency…</option>${ag.replace('<option>'+esc(r.agency)+'</option>','<option selected>'+esc(r.agency)+'</option>')}</select>
+        <input type="date" value="${esc(r.date)}" style="flex:1;min-width:130px" onchange="smartDate(${i},this.value)">
+        <select style="flex:1;min-width:150px" onchange="smartRows[${i}].clin=this.value;smartRows[${i}].manual=true;renderSmart()"><option value="">— Clinician —</option>${cl.map(c=>'<option value="'+esc(c.name)+'"'+(r.clin===c.name?' selected':'')+'>'+esc(c.name)+' ('+esc(c.role)+')</option>').join('')}</select>
+      </div>
+      <div style="font-size:10px;color:var(--accent);margin:3px 0 0 2px">${r.clin?'💡 '+esc(r.clin)+(r.manual?' (your pick)':' looks free for this area')+esc(tag):'No one matched this area: add it unassigned or pick someone.'}</div>
+    </div>`;}).join('');
+}
+function smartDate(i,v){const r=smartRows[i];r.date=v;if(!r.manual)r.clin=smartSuggest(r);renderSmart();}
+async function smartConfirm(){
+  const picked=smartRows.filter(r=>r.on);
+  if(!picked.length){smartClose();return;}
+  const miss=picked.find(r=>r.clin&&r.date&&!r.agency);
+  if(miss){flash('Pick an agency for '+miss.location+' so its shift has the right Job');return;}
+  const wd=localISO(),clinOf={};
+  const items=picked.map(r=>{const id=String(Date.now()+Math.random());clinOf[id]=r.clin;
+    const qa={visitType:r.visit_type||''};if(r.date){qa.visitDate=r.date;qa.visitSetAt=new Date().toISOString();}
+    return {id,location:r.location,zip:r.zip||'',discipline:r.discipline||'PT',agency:r.agency||'',priority:r.urgent?'urgent':'normal',note:r.note||'',patient:r.patient||'',status:'pending',clinician:'',ptaClinician:'',addedBy:'Smart paste',assignedBy:'',dateAdded:wd,weekDate:wd,qa};});
+  const btn=document.getElementById('smartGo');btn.disabled=true;
+  try{
+    const keep=await dupGate(items);
+    if(keep===null)return;
+    let n=0,asg=0;
+    for(const ev of keep){
+      const {error}=await sb.from('evals').insert(evalToDB(ev));
+      if(error){flash('✕ Not added: '+error.message);continue;}
+      evals=[ev,...evals];n++;
+    }
+    render();
+    for(const ev of keep){const c=clinOf[ev.id];if(c&&evals.find(x=>x.id===ev.id)){await asgn(ev.id,c);asg++;}}
+    smartClose();document.getElementById('rt').value='';
+    flash('✓ '+n+' added'+(asg?', '+asg+' assigned':''));
+  }finally{btn.disabled=false;}
 }
 // ── PARTNER PORTAL: Inbox of referrals agencies sent, and the private link for each agency ──
 let inbox=[],inboxDoneRows=[],portalCodes={};
