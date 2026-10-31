@@ -291,6 +291,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
       <button class="tab" onclick="sw('qa',this)">✅ QA</button>
       <button class="tab" onclick="sw('avail',this)">🟢 Who's free</button>
       <button class="tab" onclick="sw('cap',this)">👥 Capacity</button>
+      <button class="tab" onclick="sw('inbox',this)">📥 Inbox<span id="inboxN" class="badge" style="margin-left:4px;display:none"></span></button>
       <button class="tab" onclick="sw('tpl',this)">💬 Templates</button>
       <button class="tab" onclick="sw('hist',this)">📁 History</button>
       <button class="tab" onclick="sw('set',this)">⚙️ Settings</button>
@@ -341,6 +342,15 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         </div>
         <button class="btn btn-o" onclick="addOne()">+ Add Eval</button>
       </div>
+    </div>
+
+    <div class="panel hidden" id="tp-inbox">
+      <div class="lbl">Partner referrals</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.5">Referrals agencies sent through their portal link. <b>Add to board</b> creates a pending eval with the agency and type already filled in. Duplicates are checked first.</div>
+      <div id="inboxList"></div>
+      <button class="btn btn-o" id="inboxAll" style="display:none" onclick="acceptAllRefs()">Add all to board</button>
+      <div class="lbl" style="margin-top:10px">Recently handled</div>
+      <div id="inboxDone" style="font-size:11px;color:var(--muted);line-height:1.6"></div>
     </div>
 
     <div class="panel hidden" id="tp-tpl">
@@ -461,6 +471,12 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <button class="btn btn-o" onclick="addAgency()">+ Add Agency</button>
         <button class="btn btn-o admin-only" style="margin-top:6px" onclick="agSyncOpen()">↔ Compare with Connecteam Jobs</button>
         <div id="agSync" style="margin-top:6px"></div>
+      </div>
+      <div class="hr"></div>
+      <div id="portalBox" class="admin-only hidden">
+        <div class="lbl">Partner portal links</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:6px">Each agency gets a private link where it can send referrals into your Inbox. Share a link only with that agency. <b>New link</b> replaces the old one, which stops working.</div>
+        <div id="portalList"></div>
       </div>
       <div class="hr"></div>
       <div>
@@ -734,6 +750,11 @@ async function startApp(){
     })
     .subscribe();
 
+  loadInbox();
+  sb.channel('portal-changes')
+    .on('postgres_changes', {event:'*', schema:'public', table:'portal_referrals'}, () => { loadInbox(); })
+    .subscribe();
+
   sb.channel('capacity-changes')
     .on('postgres_changes', {event:'*', schema:'public', table:'capacity'}, () => {
       loadCapacity();
@@ -798,7 +819,7 @@ function evalToDB(e) {
 }
 
 // ── UI ──
-function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='tpl')renderTpl();if(name==='qa')renderQA();if(name==='stuck')renderStuck();if(name==='hist')renderHistory();if(name==='cap')renderCapacity();if(name==='set'&&me&&me.is_super_admin){if(Date.now()-(window.__ctChecked||0)>60000){window.__ctChecked=Date.now();checkCt();}if(!ctUsers.length)loadCtUsers();}if(name==='avail'){if(!avData&&!avBusy)loadAvail();else renderAvail();}}
+function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='tpl')renderTpl();if(name==='inbox')loadInbox();if(name==='set'&&me&&me.is_super_admin)loadPortal();if(name==='qa')renderQA();if(name==='stuck')renderStuck();if(name==='hist')renderHistory();if(name==='cap')renderCapacity();if(name==='set'&&me&&me.is_super_admin){if(Date.now()-(window.__ctChecked||0)>60000){window.__ctChecked=Date.now();checkCt();}if(!ctUsers.length)loadCtUsers();}if(name==='avail'){if(!avData&&!avBusy)loadAvail();else renderAvail();}}
 
 function renderHistory(){
   const list=document.getElementById('histList');if(!list)return;
@@ -2287,6 +2308,82 @@ async function addAgency(){const n=document.getElementById('na').value.trim();if
 async function rmAgency(name){agencies=agencies.filter(a=>a!==name);renderAgencies();await sb.from('agencies').delete().eq('name',name);}
 
 // ── TEMPLATES ──
+// ── PARTNER PORTAL: Inbox of referrals agencies sent, and the private link for each agency ──
+let inbox=[],inboxDoneRows=[],portalCodes={};
+const VT_ORDER=['eval','recert','soc','roc','reeval','dc'];
+async function loadInbox(){
+  let data=null,error=null;
+  try{({data,error}=await sb.from('portal_referrals').select('*').order('created_at',{ascending:true}).limit(500));}catch(e){error=e;}
+  if(error){inbox=[];updInboxBadge();return;} // tables not created yet: Inbox just stays empty
+  inbox=(data||[]).filter(r=>r.status==='new');
+  inboxDoneRows=(data||[]).filter(r=>r.status!=='new').slice(-15).reverse();
+  updInboxBadge();
+  if(!document.getElementById('tp-inbox').classList.contains('hidden'))renderInbox();
+}
+function updInboxBadge(){const b=document.getElementById('inboxN');if(!b)return;b.textContent=inbox.length;b.style.display=inbox.length?'inline-block':'none';}
+function renderInbox(){
+  const el=document.getElementById('inboxList');if(!el)return;
+  el.innerHTML=inbox.length?inbox.map(r=>`<div class="qa-card" style="margin:8px 0;padding:10px;border:1px solid ${r.urgent?'var(--red)':'var(--border)'};border-radius:8px;background:var(--bg)">
+      <div style="display:flex;justify-content:space-between;gap:6px"><b>${esc(r.location)}${r.zip?' '+esc(r.zip):''}</b><span class="badge d${esc(r.discipline)}">${esc(r.discipline)}</span></div>
+      <div style="font-size:11px;color:var(--muted);margin:2px 0">${esc(r.agency)} · ${esc(vtLabel(r.visit_type)||'type not given')}${r.urgent?' · <span style="color:var(--red)">🚨 urgent</span>':''}${r.patient?' · '+esc(r.patient):' · no patient ID'}</div>
+      ${r.note?`<div style="font-size:11px;margin:2px 0">${esc(r.note)}</div>`:''}
+      <div style="font-size:10px;color:var(--muted)">${new Date(r.created_at).toLocaleString([],{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'})}</div>
+      <div class="cact" style="margin-top:6px"><button class="cbtn done" onclick="acceptRef('${r.id}')">＋ Add to board</button><button class="cbtn" onclick="dismissRef('${r.id}')">Dismiss</button></div>
+    </div>`).join(''):'<div class="qa-empty">No new referrals from partners.</div>';
+  document.getElementById('inboxAll').style.display=inbox.length>1?'block':'none';
+  document.getElementById('inboxDone').innerHTML=inboxDoneRows.map(r=>esc(r.location)+' · '+esc(r.agency)+' · '+(r.status==='accepted'?'added to board':'dismissed')+(r.handled_by?' by '+esc(r.handled_by):'')).join('<br>')||'Nothing yet.';
+}
+function refToEval(r){
+  const wd=localISO();
+  return {id:String(Date.now()+Math.random()),location:r.location,zip:r.zip||'',discipline:r.discipline||'PT',agency:r.agency,priority:r.urgent?'urgent':'normal',note:r.note||'',patient:r.patient||'',status:'pending',clinician:'',ptaClinician:'',addedBy:'Portal: '+r.agency,assignedBy:'',dateAdded:wd,weekDate:wd,qa:{visitType:r.visit_type||''}};
+}
+async function takeRefs(rows){
+  const items=rows.map(refToEval);
+  const keep=await dupGate(items);
+  if(keep===null){flash('Nothing added');return;}
+  const keepIds=new Set(keep.map(x=>x.id));
+  for(let i=0;i<rows.length;i++){
+    const r=rows[i],ev=items[i];
+    if(!keepIds.has(ev.id)){ // a duplicate you chose to skip: mark handled, not added
+      await sb.from('portal_referrals').update({status:'dismissed',handled_by:userName||''}).eq('id',r.id);continue;}
+    const {error}=await sb.from('evals').insert(evalToDB(ev));
+    if(error){flash('✕ Not added: '+error.message);continue;}
+    await sb.from('portal_referrals').update({status:'accepted',eval_id:ev.id,handled_by:userName||''}).eq('id',r.id);
+    evals=[ev,...evals];
+  }
+  render();await loadInbox();renderInbox();flash('✓ Added to the board');
+}
+async function acceptRef(id){const r=inbox.find(x=>x.id===id);if(r)await takeRefs([r]);}
+async function acceptAllRefs(){if(inbox.length&&confirm('Add all '+inbox.length+' referrals to the board?'))await takeRefs(inbox.slice());}
+async function dismissRef(id){
+  if(!confirm('Dismiss this referral without adding it?'))return;
+  await sb.from('portal_referrals').update({status:'dismissed',handled_by:userName||''}).eq('id',id);
+  await loadInbox();renderInbox();
+}
+// settings (admins): one private link per agency
+function portalBase(){return location.origin+location.pathname.replace(/[^/]*$/,'')+'partner.html';}
+async function loadPortal(){
+  const box=document.getElementById('portalList');if(!box)return;
+  const {data,error}=await sb.from('portal_codes').select('*');
+  if(error){box.innerHTML='<div style="font-size:11px;color:var(--red)">Portal tables are not set up yet (run partner_portal.sql).</div>';return;}
+  portalCodes=Object.fromEntries((data||[]).map(r=>[r.agency,r]));
+  box.innerHTML=agencies.map(a=>{const c=portalCodes[a];const link=c?portalBase()+'?c='+c.code:'';
+    return `<div style="padding:6px 0;border-bottom:1px solid var(--border)">
+      <div style="display:flex;justify-content:space-between;align-items:center;gap:6px"><b style="font-size:12px">${esc(a)}</b>
+      <span>${c?`<button class="cbtn" style="flex:0 0 auto" onclick="previewPortal('${esc(a).replace(/'/g,"\\'")}')">👁 Preview</button> <button class="cbtn" style="flex:0 0 auto" onclick="copyPortal('${esc(a).replace(/'/g,"\\'")}')">Copy link</button> <button class="cbtn" style="flex:0 0 auto" onclick="togglePortal('${esc(a).replace(/'/g,"\\'")}')">${c.active?'Turn off':'Turn on'}</button>`:''}
+      <button class="cbtn" style="flex:0 0 auto" onclick="newPortal('${esc(a).replace(/'/g,"\\'")}')">${c?'New link':'Create link'}</button></span></div>
+      ${c?`<div style="font-size:10px;color:${c.active?'var(--muted)':'var(--red)'};word-break:break-all">${c.active?'':'OFF · '}${esc(link)}</div>`:''}</div>`;}).join('');
+}
+function randCode(){const a=new Uint8Array(24);crypto.getRandomValues(a);return [...a].map(b=>'abcdefghijkmnpqrstuvwxyz23456789ABCDEFGHJKLMNPQRSTUVWXYZ'[b%56]).join('');}
+async function newPortal(a){
+  if(portalCodes[a]&&!confirm('Make a new link for '+a+'? Their old link will stop working.'))return;
+  const {error}=await sb.from('portal_codes').upsert({agency:a,code:randCode(),active:true});
+  if(error){flash('✕ '+error.message);return;}
+  await loadPortal();flash('✓ New link for '+a);
+}
+async function togglePortal(a){const c=portalCodes[a];if(!c)return;await sb.from('portal_codes').update({active:!c.active}).eq('agency',a);await loadPortal();}
+function previewPortal(a){const c=portalCodes[a];if(!c)return;window.open(portalBase()+'?c='+c.code+'&preview=1','_blank');}
+function copyPortal(a){const c=portalCodes[a];if(!c)return;navigator.clipboard.writeText(portalBase()+'?c='+c.code);flash('Link copied ✓ (send it only to '+a+')');}
 // ── MESSENGER (Templates tab): pick an eval, pick a message, placeholders fill in, send in Connecteam or copy ──
 const TPLS=[
  {k:'ack',t:'✅ Acknowledge referral',to:'agency',b:'Thank you, we received your referral for [LOCATION]. We will review availability and confirm shortly.'},

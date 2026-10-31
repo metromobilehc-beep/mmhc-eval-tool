@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Send a referral · Metro Mobile Health Care</title>
+<style>
+:root{--bg:#f1f5f3;--surface:#fff;--border:#cbd8d3;--text:#1c2b27;--muted:#5d716a;--accent:#1f7a5c;--on:#fff;--red:#b42318}
+@media (prefers-color-scheme:dark){:root{--bg:#141f1c;--surface:#1a2a26;--border:#2b4540;--text:#e8f0ed;--muted:#8fb0a6;--accent:#4fc59c;--on:#10201c;--red:#f19a9a}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--text);font:15px/1.45 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+.wrap{max-width:760px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:22px;margin:4px 0 2px}
+.sub{color:var(--muted);margin:0 0 16px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px;margin-bottom:12px}
+.warn{border-left:4px solid var(--accent);font-size:13px}
+label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin:0 0 3px;text-transform:uppercase;letter-spacing:.03em}
+input,select,textarea{width:100%;padding:9px 10px;border:1px solid var(--border);border-radius:7px;background:var(--bg);color:var(--text);font:inherit}
+textarea{min-height:70px;resize:vertical}
+.row{display:grid;grid-template-columns:2fr 1fr 1fr 1.4fr;gap:8px;margin-bottom:8px}
+.row2{display:grid;grid-template-columns:1.2fr 2.8fr auto;gap:8px;align-items:end}
+@media(max-width:620px){.row{grid-template-columns:1fr 1fr}.row2{grid-template-columns:1fr}}
+button{font:inherit;font-weight:600;border-radius:8px;padding:10px 16px;border:1px solid var(--accent);cursor:pointer;background:var(--accent);color:var(--on)}
+button.o{background:transparent;color:var(--accent)}
+button:disabled{opacity:.5;cursor:default}
+.x{background:transparent;border:1px solid var(--border);color:var(--muted);padding:6px 10px}
+.msg{padding:10px 12px;border-radius:8px;margin:10px 0;font-size:14px}
+.ok{background:rgba(31,122,92,.14);border:1px solid var(--accent)}
+.err{background:rgba(180,35,24,.1);border:1px solid var(--red);color:var(--red)}
+.chk{display:flex;gap:6px;align-items:center;font-size:13px;white-space:nowrap}
+.chk input{width:auto}
+.hp{position:absolute;left:-9999px;height:0;overflow:hidden}
+.tools{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+.small{font-size:12px;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="head">
+    <h1 id="title">Send a referral</h1>
+    <p class="sub">Metro Mobile Health Care</p>
+  </div>
+
+  <div id="bad" class="card err" style="display:none">This link is not valid. Please ask Metro for your current referral link.</div>
+
+  <div id="main" style="display:none">
+    <div class="card warn"><b>Privacy:</b> please use <b>initials or your own patient ID</b> only. Do not enter full names, dates of birth, phone numbers or street addresses. We only need the place and zip to match a clinician.</div>
+
+    <div id="rows"></div>
+    <div class="tools">
+      <button class="o" type="button" onclick="addRow()">+ Add another</button>
+      <button class="o" type="button" onclick="document.getElementById('paste').style.display='block'">Paste a list</button>
+      <button class="o" type="button" onclick="document.getElementById('csv').click()">Upload a spreadsheet (.csv)</button>
+      <input type="file" id="csv" accept=".csv,text/csv" style="display:none" onchange="readCsv(this)">
+    </div>
+
+    <div id="paste" class="card" style="display:none">
+      <label>One referral per line, for example “Owasso 74055 SOC” or “Bixby recert”</label>
+      <textarea id="pasteBox" placeholder="Tulsa 74105 eval&#10;Bixby 74008 SOC&#10;Catoosa recert"></textarea>
+      <div class="tools"><button type="button" onclick="doPaste()">Turn into rows</button></div>
+    </div>
+
+    <div class="hp"><label>Website</label><input id="website" tabindex="-1" autocomplete="off"></div>
+
+    <button id="send" type="button" onclick="send()">Send referrals</button>
+    <div id="result"></div>
+    <p class="small">Metro will review and confirm. For anything urgent, please also call the office.</p>
+  </div>
+</div>
+
+<script>
+const FN='https://pgprlrcbjmcivmvdethv.supabase.co/functions/v1/partner-referral';
+const code=new URLSearchParams(location.search).get('c')||'';
+const TYPES=[['','Type…'],['eval','Evaluation'],['recert','Recertification'],['soc','Start of care'],['roc','Resumption of care'],['reeval','Re-evaluation'],['dc','Discharge']];
+const DISC=['PT','OT','SLP','PTA','COTA'];
+const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let n=0;
+
+async function api(body){
+  const r=await fetch(FN,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({code,...body})});
+  let j={};try{j=await r.json();}catch(_){}
+  return {status:r.status,j};
+}
+function rowHtml(id,v){
+  v=v||{};
+  return `<div class="card" id="r${id}">
+    <div class="row">
+      <div><label>Place (city)</label><input data-f="location" value="${esc(v.location)}" placeholder="Tulsa" maxlength="60"></div>
+      <div><label>Zip</label><input data-f="zip" value="${esc(v.zip)}" inputmode="numeric" maxlength="10" placeholder="74105"></div>
+      <div><label>Discipline</label><select data-f="discipline">${DISC.map(d=>`<option${d===(v.discipline||'PT')?' selected':''}>${d}</option>`).join('')}</select></div>
+      <div><label>Visit type</label><select data-f="visit_type">${TYPES.map(t=>`<option value="${t[0]}"${t[0]===(v.visit_type||'')?' selected':''}>${t[1]}</option>`).join('')}</select></div>
+    </div>
+    <div class="row2">
+      <div><label>Patient initials / ID</label><input data-f="patient" value="${esc(v.patient)}" maxlength="40" placeholder="J.D. or your ID"></div>
+      <div><label>Note (optional)</label><input data-f="note" value="${esc(v.note)}" maxlength="300" placeholder="Anything we should know"></div>
+      <div style="display:flex;gap:8px;align-items:center"><label class="chk"><input type="checkbox" data-f="urgent"${v.urgent?' checked':''}> Urgent</label><button class="x" type="button" onclick="delRow(${id})" title="Remove">✕</button></div>
+    </div></div>`;
+}
+function addRow(v){n++;document.getElementById('rows').insertAdjacentHTML('beforeend',rowHtml(n,v));}
+function delRow(id){const e=document.getElementById('r'+id);if(e)e.remove();if(!document.querySelector('#rows .card'))addRow();}
+function collect(){
+  return [...document.querySelectorAll('#rows .card')].map(c=>{
+    const o={};c.querySelectorAll('[data-f]').forEach(i=>{o[i.dataset.f]=i.type==='checkbox'?i.checked:i.value.trim();});return o;
+  }).filter(o=>o.location);
+}
+function guess(line){
+  const l=line.trim();if(!l)return null;
+  const zip=(l.match(/\b\d{5}\b/)||[''])[0];
+  let vt='';
+  if(/re-?eval/i.test(l))vt='reeval';else if(/discharge|\bD\/?C\b/i.test(l))vt='dc';else if(/\bROC\b|resumption/i.test(l))vt='roc';
+  else if(/re-?cert/i.test(l))vt='recert';else if(/\bSOC\b|start\s+of\s+care/i.test(l))vt='soc';else if(/\beval(uation)?\b/i.test(l))vt='eval';
+  const dm=l.match(/\b(PT|OT|SLP|PTA|COTA)\b/i);
+  const loc=l.replace(/\b(SOC|ROC|DC|D\/C|discharge|resumption\s+of\s+care|start\s+of\s+care|re-?eval(uation)?|re-?cert(ification)?|eval(uation)?|PT|OT|SLP|PTA|COTA|urgent)\b/ig,' ').replace(/\b\d{5}\b/g,' ').replace(/[-–,]/g,' ').replace(/\s+/g,' ').trim();
+  return loc?{location:loc,zip,discipline:dm?dm[1].toUpperCase():'PT',visit_type:vt,urgent:/\burgent\b/i.test(l)}:null;
+}
+function doPaste(){
+  const items=document.getElementById('pasteBox').value.split(/\n+/).map(guess).filter(Boolean);
+  if(!items.length)return;
+  dropEmpty();items.slice(0,25).forEach(addRow);
+  document.getElementById('pasteBox').value='';document.getElementById('paste').style.display='none';
+}
+function dropEmpty(){document.querySelectorAll('#rows .card').forEach(c=>{const l=c.querySelector('[data-f=location]');if(!l.value.trim())c.remove();});}
+function parseCsvLine(s){const out=[];let cur='',q=false;for(let i=0;i<s.length;i++){const ch=s[i];if(q){if(ch==='"'&&s[i+1]==='"'){cur+='"';i++;}else if(ch==='"')q=false;else cur+=ch;}else if(ch==='"')q=true;else if(ch===','){out.push(cur);cur='';}else cur+=ch;}out.push(cur);return out;}
+function readCsv(inp){
+  const f=inp.files[0];if(!f)return;
+  const rd=new FileReader();
+  rd.onload=()=>{
+    const lines=String(rd.result).split(/\r?\n/).filter(x=>x.trim());
+    if(!lines.length)return;
+    const head=parseCsvLine(lines[0]).map(h=>h.trim().toLowerCase());
+    const has=head.some(h=>/location|city|place|zip|patient|type/.test(h));
+    const idx=k=>head.findIndex(h=>k.some(x=>h.includes(x)));
+    const iL=idx(['location','city','place']),iZ=idx(['zip']),iD=idx(['disc']),iT=idx(['type','visit']),iP=idx(['patient','id','initial']),iN=idx(['note','comment']),iU=idx(['urgent']);
+    const body=has?lines.slice(1):lines;
+    const items=body.map(l=>{
+      const c=parseCsvLine(l);
+      if(!has)return guess(c.join(' '));
+      const g=i=>i>=0?(c[i]||'').trim():'';
+      const t=guess(g(iT)||'')||{};
+      const loc=g(iL);if(!loc)return null;
+      const d=g(iD).toUpperCase();
+      return {location:loc,zip:g(iZ),discipline:DISC.includes(d)?d:'PT',visit_type:t.visit_type||'',patient:g(iP),note:g(iN),urgent:/^(y|yes|true|1|urgent)/i.test(g(iU))};
+    }).filter(Boolean).slice(0,25);
+    if(!items.length){show('err','No rows found in that file. Columns can be: location, zip, discipline, type, patient, note, urgent.');return;}
+    dropEmpty();items.forEach(addRow);inp.value='';
+    show('ok','Added '+items.length+' row'+(items.length>1?'s':'')+' from the file. Please check them, then press Send.');
+  };
+  rd.readAsText(f);
+}
+function show(cls,t){document.getElementById('result').innerHTML='<div class="msg '+cls+'">'+esc(t)+'</div>';}
+async function send(){
+  const refs=collect();
+  if(!refs.length){show('err','Add at least one place first.');return;}
+  const b=document.getElementById('send');b.disabled=true;
+  const r=await api({action:'submit',referrals:refs,website:document.getElementById('website').value});
+  b.disabled=false;
+  if(r.j&&r.j.ok){
+    document.getElementById('rows').innerHTML='';n=0;addRow();
+    show('ok','Thank you. We received '+r.j.saved+' referral'+(r.j.saved>1?'s':'')+'. Metro will review and confirm.');
+    window.scrollTo({top:0,behavior:'smooth'});
+  }else show('err',(r.j&&r.j.error)||'Could not send. Please try again or call the office.');
+}
+(async function(){
+  if(!code){document.getElementById('bad').style.display='block';return;}
+  const r=await api({action:'info'});
+  if(r.status!==200||!r.j.agency){document.getElementById('bad').style.display='block';return;}
+  document.getElementById('title').textContent='Send a referral · '+r.j.agency;
+  document.getElementById('main').style.display='block';addRow();
+})();
+</script>
+</body>
+</html>
