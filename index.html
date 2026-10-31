@@ -132,6 +132,12 @@ td.cal-drop{outline:2px dashed var(--accent);outline-offset:-3px;background:var(
 .cact{display:flex;gap:6px;flex-wrap:wrap;}
 .cact .csel{flex:1 1 100%;min-width:0;}
 .cact .cbtn{flex:1;}
+.set-sec>summary{cursor:pointer;list-style:none;font-size:12px;font-weight:700;color:var(--accent);display:flex;align-items:center;gap:6px;user-select:none}
+.set-sec>summary::-webkit-details-marker{display:none}
+.set-sec>summary::before{content:'▸';display:inline-block;transition:transform .15s;color:var(--muted)}
+.set-sec[open]>summary::before{transform:rotate(90deg)}
+.set-sec[open]>summary{margin-bottom:8px}
+.set-sec:not([open]){padding-top:9px;padding-bottom:9px}
 .csel.need{border-color:var(--accent);}
 .csel{flex:1;background:var(--bg);border:1px solid var(--border);border-radius:5px;color:var(--text);font-family:inherit;font-size:11px;padding:5px 7px;outline:none;cursor:pointer;}
 .cbtn{padding:5px 10px;border-radius:5px;border:1px solid var(--border);background:transparent;color:var(--muted);font-size:11px;font-weight:600;cursor:pointer;font-family:inherit;white-space:nowrap;}
@@ -424,17 +430,18 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
     </div>
 
     <div class="panel hidden" id="tp-set">
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:6px;">🔐 Your Login</div>
+      <div style="display:flex;justify-content:flex-end;gap:10px;font-size:11px"><a href="#" onclick="setSections(true);return false" style="color:var(--muted)">Expand all</a><a href="#" onclick="setSections(false);return false" style="color:var(--muted)">Collapse all</a></div>
+      <details class="set-sec" data-k="login" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <summary>🔐 Your Login</summary>
         <div id="acctInfo" style="font-size:12px;line-height:1.5;margin-bottom:8px;"></div>
         <input id="pwNew" type="password" placeholder="New password (10+ characters)" autocomplete="new-password" style="margin-bottom:5px;">
         <input id="pwNew2" type="password" placeholder="Confirm new password" autocomplete="new-password" style="margin-bottom:6px;">
         <div id="pwStatus" style="font-size:11px;min-height:14px;margin-bottom:6px;"></div>
         <button class="btn btn-o" onclick="changeMyPassword()">Change password</button>
         <button class="btn btn-r" style="margin-top:4px" onclick="doSignOut()">Sign out</button>
-      </div>
-      <div id="adminBox" class="hidden" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:4px;">👥 Team Logins</div>
+      </details>
+      <details id="adminBox" class="set-sec hidden" data-k="team" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <summary>👥 Team Logins</summary>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">One Metro login works here and in the quote tool. A new or reset login gets a temporary password, shown once.</div>
         <div id="staffList"></div>
         <input id="stName" placeholder="Full name" style="margin-top:8px;margin-bottom:5px;">
@@ -443,9 +450,9 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <div id="stStatus" style="font-size:11px;min-height:14px;margin-bottom:6px;"></div>
         <button class="btn btn-o" onclick="createStaff()">+ Create login</button>
         <div id="stCreds" class="hidden" style="margin-top:8px;padding:10px;border:1px solid var(--accent);border-radius:8px;font-size:12px;line-height:1.6;"></div>
-      </div>
-      <div id="ctBox" class="hidden" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:4px;">🗓 Connecteam Calendar</div>
+      </details>
+      <details id="ctBox" class="set-sec hidden" data-k="ct" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <summary>🗓 Connecteam Calendar</summary>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">When an assigned eval has a visit date and time, a shift is created for that clinician in Connecteam. Changing or clearing the visit, reassigning, or cancelling the eval updates or removes it. Shifts carry only discipline, city, zip and agency, never patient info.</div>
         <div id="ctStatus" style="font-size:11px;min-height:14px;margin-bottom:6px;line-height:1.5;"></div>
         <button class="btn btn-o" onclick="checkCt()">Check connection</button>
@@ -459,29 +466,28 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
           <div style="display:flex;gap:6px;margin-top:4px"><select id="ctRawWho" style="flex:1"></select><button class="btn btn-o" style="width:auto;margin:0" onclick="rawUser()">Show raw availability</button></div>
           <pre id="ctRaw" style="display:none;white-space:pre-wrap;word-break:break-all;font-size:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;margin-top:6px;max-height:240px;overflow:auto"></pre>
         </details>
-      </div>
-      <div style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
-        <div style="font-size:12px;font-weight:600;color:var(--accent);margin-bottom:4px;">📊 Live Shared Board</div>
+      </details>
+      <details class="set-sec" data-k="live" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <summary>📊 Live Shared Board</summary>
         <div style="font-size:11px;color:var(--muted);margin-bottom:8px;line-height:1.5">Real-time sync via Supabase. All devices see the same board instantly.</div>
         <button class="btn btn-o" onclick="loadAll()">🔄 Force Refresh</button>
-      </div>
-      <div><div class="lbl" style="margin-bottom:6px">Agencies</div>
+      </details>
+      <details class="set-sec" data-k="agencies" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <summary>🏢 Agencies</summary>
         <div id="agencyList"></div>
         <input id="na" placeholder="New agency name" style="margin-top:6px;margin-bottom:6px">
         <button class="btn btn-o" onclick="addAgency()">+ Add Agency</button>
         <button class="btn btn-o admin-only" style="margin-top:6px" onclick="agSyncOpen()">↔ Compare with Connecteam Jobs</button>
         <div id="agSync" style="margin-top:6px"></div>
-      </div>
-      <div class="hr"></div>
-      <div id="portalBox" class="admin-only hidden">
-        <div class="lbl">Partner portal links</div>
+      </details>
+      <details id="portalBox" class="set-sec admin-only hidden" data-k="portal" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <summary>🔗 Partner portal links</summary>
         <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:6px">Each agency gets a private link where it can send referrals into your Inbox. Share a link only with that agency. <b>New link</b> replaces the old one, which stops working.</div>
         <div id="portalList"></div>
-      </div>
-      <div class="hr"></div>
-      <div>
-        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:6px;">
-          <div class="lbl" style="margin-bottom:0">Clinician Roster</div>
+      </details>
+      <details class="set-sec" data-k="roster" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <summary>🧑‍⚕️ Clinician Roster</summary>
+        <div style="display:flex;align-items:center;justify-content:flex-end;margin-bottom:6px;">
           <button onclick="exportClinicians()" style="font-size:10px;color:var(--accent);background:none;border:1px solid rgba(0,212,170,0.3);border-radius:4px;padding:3px 8px;cursor:pointer;font-family:inherit;white-space:nowrap;">📥 Export</button>
         </div>
         <div id="clinList"></div>
@@ -492,10 +498,12 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <input id="nphone" placeholder="Phone (optional)" style="margin-top:5px">
         <input id="nemail" placeholder="Email (optional)" style="margin-top:5px;margin-bottom:8px">
         <button class="btn btn-o" onclick="addClin()">+ Add Clinician</button>
-      </div>
-      <div class="hr"></div>
-      <button class="btn btn-o admin-only hidden" onclick="clrDone()">🗑 Clear Completed Evals</button>
-      <button class="btn btn-r admin-only hidden" style="margin-top:4px" onclick="clrAll()">⚠️ Delete ALL evals (permanent)</button>
+      </details>
+      <details class="set-sec admin-only hidden" data-k="danger" style="background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:12px;">
+        <summary>⚠️ Clear data (admins)</summary>
+        <button class="btn btn-o" onclick="clrDone()">🗑 Clear Completed Evals</button>
+        <button class="btn btn-r" style="margin-top:4px" onclick="clrAll()">⚠️ Delete ALL evals (permanent)</button>
+      </details>
     </div>
   </div>
 
@@ -737,8 +745,18 @@ window.onload = async () => {
   await initAuth();
 };
 
+// Settings sections: collapsed by default, the ones you open stay open next time
+function initSettingsSections(){
+  document.querySelectorAll('#tp-set details.set-sec').forEach(d=>{
+    let on=false;try{on=localStorage.getItem('mmhcSet:'+d.dataset.k)==='1';}catch(_){}
+    d.open=on;
+    d.addEventListener('toggle',()=>{try{localStorage.setItem('mmhcSet:'+d.dataset.k,d.open?'1':'0');}catch(_){}});
+  });
+}
+function setSections(open){document.querySelectorAll('#tp-set details.set-sec').forEach(d=>{if(d.offsetParent!==null||d.open!==open)d.open=open;});}
 let rtStarted=false;
 async function startApp(){
+  initSettingsSections();
   await loadAll();
   await loadCapacity();
   ctApi('status').then(r=>{ctReady=!!(r&&r.configured);if(ctReady)primeAsst();}).catch(()=>{ctReady=false;});
