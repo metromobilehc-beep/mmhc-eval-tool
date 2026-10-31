@@ -2200,7 +2200,7 @@ function renderQA(){
     list.innerHTML='<div class="qa-empty">No assigned evals yet.<br>Assign clinicians on the board first.</div>';
   } else {
     list.innerHTML=assigned.map(e=>{
-      const qa=e.qa||{};const allDone=qa.seen&&qa.scheduled;
+      const qa=e.qa||{};const allDone=qa.seen&&qa.orders&&qa.sysScheduled;
       return`<div class="qa-card${allDone?' qa-done':''}">
         <div style="display:flex;justify-content:space-between;align-items:flex-start">
           <div><div class="qa-loc">${e.location}${e.zip?` <span style="font-family:monospace;font-size:11px;color:var(--muted)">${e.zip}</span>`:''}</div>
@@ -2392,16 +2392,21 @@ async function smartConfirm(){
   try{
     const keep=await dupGate(items);
     if(keep===null)return;
-    let n=0,asg=0;
+    let n=0,asg=0,firstErr='';
+    saving=true;
     for(const ev of keep){
       const {error}=await sb.from('evals').insert(evalToDB(ev));
-      if(error){flash('✕ Not added: '+error.message);continue;}
+      if(error){console.error('insert error:',error);if(!firstErr)firstErr=error.message||String(error);continue;}
       evals=[ev,...evals];n++;
     }
-    render();
+    saving=false;render();
+    if(firstErr){alert('Not saved to the database: '+firstErr+'\n\nSend this message to Claude.');}
     for(const ev of keep){const c=clinOf[ev.id];if(c&&evals.find(x=>x.id===ev.id)){await asgn(ev.id,c);asg++;}}
     smartClose();document.getElementById('rt').value='';
-    flash('✓ '+n+' added'+(asg?', '+asg+' assigned':''));
+    await loadAll(); // re-read from the database so the board shows exactly what was saved
+    const onBoard=keep.filter(ev=>evals.find(x=>x.id===ev.id)).length;
+    if(onBoard<n)alert(n+' saved but only '+onBoard+' showed up after reloading. Send this to Claude.');
+    else flash('✓ '+n+' added to the board'+(asg?', '+asg+' assigned':''));
   }finally{btn.disabled=false;}
 }
 // ── PARTNER PORTAL: Inbox of referrals agencies sent, and the private link for each agency ──
