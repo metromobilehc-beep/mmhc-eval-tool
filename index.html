@@ -333,6 +333,8 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         </div>
       </div>
       <button class="btn btn-g" id="parseBtn" onclick="parseAdd()">⚡ Parse &amp; Add to Board</button>
+      <button class="btn" id="smartBtn" onclick="smartPaste()" style="margin-top:6px;width:100%">✨ Smart paste (AI reads it, you approve in Inbox)</button>
+      <div style="font-size:10px;color:var(--muted);margin-top:3px">Paste places, zips and IDs only. Do not paste patient names, phone numbers or addresses.</div>
       <div class="hr"></div>
       <div><div class="lbl">Add Single Eval</div>
         <input id="sl" placeholder="Location / City" style="margin-bottom:5px">
@@ -2326,6 +2328,26 @@ async function addAgency(){const n=document.getElementById('na').value.trim();if
 async function rmAgency(name){agencies=agencies.filter(a=>a!==name);renderAgencies();await sb.from('agencies').delete().eq('name',name);}
 
 // ── TEMPLATES ──
+// ── SMART PASTE: AI reads messy text, rows land in the Inbox for approval (agency blank, chosen on the card) ──
+async function smartPaste(){
+  const ta=document.getElementById('rt'),txt=(ta.value||'').trim();
+  if(!txt){flash('Paste the referral text first');return;}
+  if(!confirm('The pasted text is sent to an AI service to be read.\n\nOnly continue if it has NO patient names, phone numbers or addresses (places, zips and IDs are fine).\n\nContinue?'))return;
+  const b=document.getElementById('smartBtn');b.disabled=true;b.textContent='Reading…';
+  try{
+    const {data,error}=await sb.functions.invoke('referral-intake',{body:{text:txt}});
+    if(error){let m=error.message||'Request failed';try{const j=await error.context.json();if(j&&j.error)m=j.error;}catch(_){}throw new Error(m);}
+    if(data&&data.error)throw new Error(data.error);
+    const rows=(data&&data.referrals)||[];
+    if(!rows.length){flash('No referrals found in that text');return;}
+    const ins=rows.map(r=>({agency:'',location:r.location,zip:r.zip||'',discipline:r.discipline||'PT',visit_type:r.visit_type||'',patient:r.patient||'',note:r.note||'',urgent:!!r.urgent}));
+    const {error:ie}=await sb.from('portal_referrals').insert(ins);
+    if(ie)throw new Error(ie.message);
+    ta.value='';await loadInbox();
+    flash('✓ '+rows.length+' referral'+(rows.length===1?'':'s')+' read: check the Inbox');
+  }catch(e){flash('✕ Smart paste: '+e.message);}
+  finally{b.disabled=false;b.textContent='✨ Smart paste (AI reads it, you approve in Inbox)';}
+}
 // ── PARTNER PORTAL: Inbox of referrals agencies sent, and the private link for each agency ──
 let inbox=[],inboxDoneRows=[],portalCodes={};
 const VT_ORDER=['eval','recert','soc','roc','reeval','dc'];
@@ -2343,17 +2365,17 @@ function renderInbox(){
   const el=document.getElementById('inboxList');if(!el)return;
   el.innerHTML=inbox.length?inbox.map(r=>`<div class="qa-card" style="margin:8px 0;padding:10px;border:1px solid ${r.urgent?'var(--red)':'var(--border)'};border-radius:8px;background:var(--bg)">
       <div style="display:flex;justify-content:space-between;gap:6px"><b>${esc(r.location)}${r.zip?' '+esc(r.zip):''}</b><span class="badge d${esc(r.discipline)}">${esc(r.discipline)}</span></div>
-      <div style="font-size:11px;color:var(--muted);margin:2px 0">${esc(r.agency)} · ${esc(vtLabel(r.visit_type)||'type not given')}${r.urgent?' · <span style="color:var(--red)">🚨 urgent</span>':''}${r.patient?' · '+esc(r.patient):' · no patient ID'}</div>
+      <div style="font-size:11px;color:var(--muted);margin:2px 0">${esc(r.agency||'Smart paste: pick agency after adding')} · ${esc(vtLabel(r.visit_type)||'type not given')}${r.urgent?' · <span style="color:var(--red)">🚨 urgent</span>':''}${r.patient?' · '+esc(r.patient):' · no patient ID'}</div>
       ${r.note?`<div style="font-size:11px;margin:2px 0">${esc(r.note)}</div>`:''}
       <div style="font-size:10px;color:var(--muted)">${new Date(r.created_at).toLocaleString([],{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'})}${r.contact_email?' · reply to '+esc(r.contact_email):''}</div>
       <div class="cact" style="margin-top:6px"><button class="cbtn done" onclick="acceptRef('${r.id}')">＋ Add to board</button><button class="cbtn" onclick="ackRef('${r.id}')">${r.acked_at?'✓ Acknowledged (again)':'✉ Acknowledge'}</button><button class="cbtn" onclick="dismissRef('${r.id}')">Dismiss</button></div>
     </div>`).join(''):'<div class="qa-empty">No new referrals from partners.</div>';
   document.getElementById('inboxAll').style.display=inbox.length>1?'block':'none';
-  document.getElementById('inboxDone').innerHTML=inboxDoneRows.map(r=>esc(r.location)+' · '+esc(r.agency)+' · '+(r.status==='accepted'?'added to board':'dismissed')+(r.handled_by?' by '+esc(r.handled_by):'')+(r.status==='accepted'?' · <a href="#" onclick="ackRef(\''+r.id+'\');return false">'+(r.acked_at?'✓ acknowledged':'✉ acknowledge')+'</a>':'')).join('<br>')||'Nothing yet.';
+  document.getElementById('inboxDone').innerHTML=inboxDoneRows.map(r=>esc(r.location)+' · '+esc(r.agency||'smart paste')+' · '+(r.status==='accepted'?'added to board':'dismissed')+(r.handled_by?' by '+esc(r.handled_by):'')+(r.status==='accepted'?' · <a href="#" onclick="ackRef(\''+r.id+'\');return false">'+(r.acked_at?'✓ acknowledged':'✉ acknowledge')+'</a>':'')).join('<br>')||'Nothing yet.';
 }
 function refToEval(r){
   const wd=localISO();
-  return {id:String(Date.now()+Math.random()),location:r.location,zip:r.zip||'',discipline:r.discipline||'PT',agency:r.agency,priority:r.urgent?'urgent':'normal',note:r.note||'',patient:r.patient||'',status:'pending',clinician:'',ptaClinician:'',addedBy:'Portal: '+r.agency,assignedBy:'',dateAdded:wd,weekDate:wd,qa:{visitType:r.visit_type||''}};
+  return {id:String(Date.now()+Math.random()),location:r.location,zip:r.zip||'',discipline:r.discipline||'PT',agency:r.agency,priority:r.urgent?'urgent':'normal',note:r.note||'',patient:r.patient||'',status:'pending',clinician:'',ptaClinician:'',addedBy:r.agency?'Portal: '+r.agency:'Smart paste',assignedBy:'',dateAdded:wd,weekDate:wd,qa:{visitType:r.visit_type||''}};
 }
 async function takeRefs(rows){
   const items=rows.map(refToEval);
