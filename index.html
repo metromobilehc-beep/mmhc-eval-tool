@@ -2368,7 +2368,7 @@ function renderSmart(){
   document.getElementById('smartList').innerHTML=smartRows.map((r,i)=>{
     const tag=r.clin&&r.date?asstTag(r.clin,r.date):'';
     return `<div style="margin:6px 0;padding:8px;border:1px solid var(--border);border-radius:8px;opacity:${r.on?1:.5}">
-      <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" ${r.on?'checked':''} onchange="smartRows[${i}].on=this.checked;renderSmart()"> <b>${esc(r.location)}${r.zip?' '+esc(r.zip):''}</b> <span class="badge d${esc(r.discipline)}">${esc(r.discipline)}</span> <span style="color:var(--muted);font-size:11px">${esc(vtLabel(r.visit_type)||'type not given')}${r.urgent?' · 🚨 urgent':''}${r.patient?' · '+esc(r.patient):''}</span></label>
+      <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" style="width:auto;flex:none;margin:0" ${r.on?'checked':''} onchange="smartRows[${i}].on=this.checked;renderSmart()"> <b>${esc(r.location)}${r.zip&&r.zip!==r.location?' '+esc(r.zip):''}</b> <span class="badge d${esc(r.discipline)}">${esc(r.discipline)}</span> <span style="color:var(--muted);font-size:11px">${esc(vtLabel(r.visit_type)||'type not given')}${r.urgent?' · 🚨 urgent':''}${r.patient?' · '+esc(r.patient):''}</span></label>
       ${r.note?`<div style="font-size:11px;color:var(--muted);margin:2px 0 0 22px">${esc(r.note)}</div>`:''}
       <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
         <select style="flex:1;min-width:130px" onchange="smartRows[${i}].agency=this.value"><option value="">Agency…</option>${ag.replace('<option>'+esc(r.agency)+'</option>','<option selected>'+esc(r.agency)+'</option>')}</select>
