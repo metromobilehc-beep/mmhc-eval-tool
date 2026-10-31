@@ -1378,7 +1378,7 @@ async function ctSync(id){
     const pr=res.pta||{};
     if(pr.error)m+=(m?' · ':'')+'⚠ PTA marker failed: '+pr.error;
     else if(pr.warning==='pta_no_ct_user')m+=(m?' · ':'')+'⚠ '+(e.ptaClinician||'PTA')+' is not linked to Connecteam yet';
-    else if(pr.action==='create'||pr.action==='replace')m+=(m?' · ':'')+'✓ '+(e.ptaClinician||'PTA')+' marked for that day';
+    else if(pr.action==='create'||pr.action==='replace')m+=(m?' · ':'')+'✓ '+(e.ptaClinician||'PTA')+' start day added';
     else if(pr.action==='update')m+=(m?' · ':'')+'✓ PTA marker updated';
     else if(pr.action==='delete')m+=(m?' · ':'')+'✓ PTA marker removed';
     if(m)flash(m);
@@ -1745,8 +1745,8 @@ function renderCal(){
   document.getElementById('calRange').textContent=avLabel(days[0],true)+' – '+avLabel(days[days.length-1],true);
   const role=document.getElementById('calRole').value,today=localISO();
   const byCell={},byPta={};
-  evals.filter(e=>e.status!=='complete'&&!isArchived(e)&&e.ptaClinician&&e.qa&&e.qa.visitDate&&e.qa.visitDate>=days[0]&&e.qa.visitDate<=days[days.length-1])
-    .forEach(e=>{const k=e.ptaClinician+'|'+e.qa.visitDate;(byPta[k]=byPta[k]||[]).push(e);});
+  evals.filter(e=>e.status!=='complete'&&!isArchived(e)&&e.ptaClinician&&e.qa&&e.qa.ptaDate&&e.qa.ptaDate>=days[0]&&e.qa.ptaDate<=days[days.length-1])
+    .forEach(e=>{const k=e.ptaClinician+'|'+e.qa.ptaDate;(byPta[k]=byPta[k]||[]).push(e);});
   evals.filter(e=>e.status==='assigned'&&!isArchived(e)&&e.clinician&&e.qa&&e.qa.visitDate&&e.qa.visitDate>=days[0]&&e.qa.visitDate<=days[days.length-1])
     .forEach(e=>{const k=e.clinician+'|'+e.qa.visitDate;(byCell[k]=byCell[k]||[]).push(e);});
   let note='';
@@ -1769,7 +1769,7 @@ function renderCal(){
         const q=e.qa||{},cls=q.ct?'':' noct';
         return '<div class="cal-ev'+cls+(q.seen?' seen':'')+'" draggable="'+(q.seen?'false':'true')+'" ondragstart="calDrag(event,\''+esc(e.id)+'\')" ondragend="calDragEnd()" title="'+esc((e.discipline||'')+' '+(vtLabel(q.visitType)||'eval'))+' · drag to another day or clinician to move it"><b>'+esc(e.agency||'')+'</b> · '+esc(e.location||'')+(vtShort(q.visitType)?' · <i>'+esc(vtShort(q.visitType))+'</i>':'')+(q.visitTime?' · '+esc(avT(q.visitTime)):'')+(q.seen?' ✓':'')+(q.ct?'':'<br>not in Connecteam')+'</div>';
       }).join('');
-      const pev=(byPta[c.name+'|'+d]||[]).map(e=>'<div class="cal-ev'+((e.qa&&e.qa.ctPtaShiftId)?'':' noct')+'" title="Visit planned this day"><b>'+esc(vtShort(e.qa&&e.qa.visitType)||'Eval')+' planned</b> · '+esc(e.location||'')+(e.clinician?' · with '+esc(e.clinician):'')+((e.qa&&e.qa.ctPtaShiftId)?'':'<br>not in Connecteam')+'</div>').join('');
+      const pev=(byPta[c.name+'|'+d]||[]).map(e=>'<div class="cal-ev'+((e.qa&&e.qa.ctPtaShiftId)?'':' noct')+'" title="PTA visits start this day"><b>PTA start</b> · '+esc(e.location||'')+(e.clinician?' · after '+esc(e.clinician)+(vtShort(e.qa&&e.qa.visitType)?' '+esc(vtShort(e.qa.visitType)):''):'')+((e.qa&&e.qa.ctPtaShiftId)?'':'<br>not in Connecteam')+'</div>').join('');
       return '<td class="'+(d===today?'today':'')+'" data-n="'+esc(c.name)+'" data-d="'+d+'" ondragover="calOver(event,this)" ondragleave="calLeave(this)" ondrop="calDropEv(event,this)">'+top+evs+pev+'</td>';
     }).join('')+'</tr>';
   }).join('')+'</tbody></table></div>';
@@ -1856,6 +1856,7 @@ function attentionGroups(){
     {k:'noInfo',t:'🏢 Needs an agency or visit type',rows:[]},
     {k:'noClin',t:'👤 Needs a clinician',rows:[]},
     {k:'noDate',t:'🗓 Needs a visit date',rows:[]},
+    {k:'noPta',t:'🤝 Seen, PTA start date not set',rows:[]},
     {k:'noOrders',t:'📝 Seen, orders not added',rows:[]},
     {k:'noSys',t:'🖥 Orders added, not scheduled in the agency system',rows:[]},
     {k:'today',t:'✅ Visits today',rows:[]}
@@ -1870,6 +1871,7 @@ function attentionGroups(){
     if(!q.visitDate)add('noDate',age(q.assignedAt||e.dateAdded));
     else if(!q.seen&&q.visitDate<today)add('passed',age(q.visitDate));
     else if(!q.seen&&q.visitDate===today)add('today',0);
+    if(q.seen&&e.ptaClinician&&!q.ptaDate)add('noPta',age(q.seenDate||q.seenAt||''),e.ptaClinician);
     if(q.seen&&!q.orders)add('noOrders',age(q.seenDate||q.seenAt||''));
     if(q.orders&&!q.sysScheduled)add('noSys',age(q.ordersAt||q.seenDate||q.seenAt||''));
   });
@@ -2023,7 +2025,7 @@ function render(){
           <option value="">+ Assign PTA/COTA (optional)</option>
           ${clins.filter(c=>c.role==='PTA'||c.role==='COTA').slice().sort((a,b)=>asstRank(a.name,e.qa&&e.qa.visitDate)-asstRank(b.name,e.qa&&e.qa.visitDate)||a.name.localeCompare(b.name)).map(c=>`<option value="${c.name}"${e.ptaClinician===c.name?' selected':''}>${c.name} (${c.role})${e.qa&&e.qa.visitDate?asstTag(c.name,e.qa.visitDate):''}</option>`).join('')}
         </select>
-        ${e.ptaClinician?`<div style="font-size:10px;color:var(--blue);margin-top:2px;">🤝 PTA: ${e.ptaClinician}${e.qa&&e.qa.ctPtaShiftId?' · ✓ on their Connecteam calendar':(e.qa&&e.qa.visitDate?'':' · set the visit date to mark their day')}${(()=>{const ad=e.qa&&e.qa.visitDate?asstDay(e.ptaClinician,e.qa.visitDate):null;return ad&&avOff(ad)?' · <span style="color:var(--red)">⚠ off that day</span>':'';})()}</div>`:''}
+        ${e.ptaClinician?`<div style="font-size:10px;color:var(--blue);margin-top:2px;">🤝 PTA: ${e.ptaClinician}${e.qa&&e.qa.ptaDate?(e.qa.ctPtaShiftId?' · starts '+esc(e.qa.ptaDate)+' ✓ on their Connecteam calendar':' · starts '+esc(e.qa.ptaDate)):' · start date is set after the eval is seen'}</div>`:''}
       </div>
     </div>`;
   }).join('');
@@ -2063,9 +2065,17 @@ async function asgnPTA(id,name){
   render();
   await sb.from('evals').update({pta_clinician:name}).eq('id',id);
   if(name) flash(`✓ PTA assigned: ${name}`);
-  // the PTA gets a same-day "eval planned" marker on their Connecteam calendar once there is a visit date
-  if(ctReady&&((e.qa&&e.qa.visitDate)||(e.qa&&e.qa.ctPtaShiftId)))await ctSync(id);
-  if(name)await ctMessage(id,'pta');
+  // No marker and no message yet: the PTA is scheduled on their own start date, set after the eval is seen (see setPtaDate).
+  if(name)flash(`✓ PTA assigned: ${name}. Set their start date in QA after the eval is seen.`);
+  if(ctReady&&e.qa&&(e.qa.ptaDate||e.qa.ctPtaShiftId)){await ctSync(id);if(name&&e.qa.ptaDate)await ctMessage(id,'pta',true);}
+}
+async function setPtaDate(id,val){
+  const e=evals.find(x=>x.id===id);if(!e)return;
+  if(!e.qa)e.qa={};
+  const had=e.qa.ptaDate;e.qa.ptaDate=val||'';
+  renderQA();render();renderStuck();
+  await sb.from('evals').update({qa:e.qa}).eq('id',id);
+  if(ctReady&&(val||e.qa.ctPtaShiftId)){await ctSync(id);if(val&&val!==had)await ctMessage(id,'pta',true);}
 }
 
 async function asgn(id,name){
@@ -2150,6 +2160,7 @@ function renderQA(){
         <div class="qa-checks">
           <div class="qa-check${qa.seen?' done':''}"><input type="checkbox" ${qa.seen?'checked':''} onchange="toggleQA('${e.id}','seen',this.checked)"><span>Patient seen</span><input type="date" class="qa-date" value="${qa.seenDate||''}" onchange="toggleQA('${e.id}','seenDate',this.value)"></div>
           <div class="qa-check${qa.orders?' done':''}"><input type="checkbox" ${qa.orders?'checked':''} onchange="toggleQA('${e.id}','orders',this.checked)"><span>Orders added</span></div>
+          ${e.ptaClinician?`<div class="qa-check${qa.ptaDate?' done':''}" style="${qa.seen&&!qa.ptaDate?'border-color:var(--accent)':''}"><span>🤝 PTA start (${esc(e.ptaClinician.split(' ')[0])})</span>${qa.seen?`<input type="date" class="qa-date" value="${esc(qa.ptaDate||'')}" onchange="setPtaDate('${e.id}',this.value)">${qa.ctPtaShiftId?'<span class="ct-ok">✓ Connecteam</span>':''}`:'<span style="font-size:10px;color:var(--muted);margin-left:6px">after the eval is seen</span>'}</div>`:''}
           <div class="qa-check${qa.pta?' done':''}"><input type="checkbox" ${qa.pta?'checked':''} onchange="toggleQA('${e.id}','pta',this.checked)"><span>PTA assigned</span></div>
           <div class="qa-check${qa.scheduled?' done':''}"><input type="checkbox" ${qa.scheduled?'checked':''} onchange="toggleQA('${e.id}','scheduled',this.checked)"><span>Follow-up scheduled</span></div>
           <div class="qa-check${qa.sysScheduled?' done':''}"><input type="checkbox" ${qa.sysScheduled?'checked':''} onchange="toggleQA('${e.id}','sysScheduled',this.checked)"><span>Scheduled in agency system</span></div>
@@ -2167,9 +2178,10 @@ async function toggleQA(id,field,val){
   const e=evals.find(e=>e.id===id);if(!e)return;
   if(!e.qa)e.qa={};e.qa[field]=val;
   if(['seen','orders','pta','scheduled','sysScheduled','ct'].includes(field))e.qa[field+'At']=val?new Date().toISOString():'';
-  // only finishing the last of seen + scheduled completes it, so an eval sent back to QA stays there while you edit its boxes
-  if(val&&(field==='seen'||field==='scheduled')&&e.qa.seen&&e.qa.scheduled&&e.status!=='complete'&&!String(e.patient||'').trim())flash('All steps are done. Add the patient last name or ID on the board card to move it to History.');
-  else if(val&&(field==='seen'||field==='scheduled')&&e.qa.seen&&e.qa.scheduled&&e.status!=='complete'){e.status='complete';await sb.from('evals').update({status:'complete'}).eq('id',id);render();}
+  // the last step of the cycle is "Scheduled in agency system": it completes only once seen + orders added + scheduled in the agency system are all ticked
+  const allDone=['seen','orders','sysScheduled'].includes(field)&&val&&e.qa.seen&&e.qa.orders&&e.qa.sysScheduled&&e.status!=='complete';
+  if(allDone&&!String(e.patient||'').trim())flash('All steps are done. Add the patient last name or ID on the board card to move it to History.');
+  else if(allDone){e.status='complete';await sb.from('evals').update({status:'complete'}).eq('id',id);render();}
   renderQA();renderStuck();render();
   await sb.from('evals').update({qa:e.qa}).eq('id',id);
 }
