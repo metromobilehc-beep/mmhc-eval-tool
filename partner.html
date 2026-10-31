@@ -41,6 +41,7 @@ button:disabled{opacity:.5;cursor:default}
     <p class="sub">Metro Mobile Health Care</p>
   </div>
 
+  <div id="prev" class="card" style="display:none;border-left:4px solid #e9b949;font-size:13px"><b>Preview.</b> This is what the agency sees. Nothing you enter here is sent or saved.</div>
   <div id="bad" class="card err" style="display:none">This link is not valid. Please ask Metro for your current referral link.</div>
 
   <div id="main" style="display:none">
@@ -55,8 +56,8 @@ button:disabled{opacity:.5;cursor:default}
     </div>
 
     <div id="paste" class="card" style="display:none">
-      <label>One referral per line, for example “Owasso 74055 SOC” or “Bixby recert”</label>
-      <textarea id="pasteBox" placeholder="Tulsa 74105 eval&#10;Bixby 74008 SOC&#10;Catoosa recert"></textarea>
+      <label>One referral per line, for example “Owasso 74055 SOC” or “Bixby ROC”</label>
+      <textarea id="pasteBox" placeholder="Tulsa 74105 eval&#10;Bixby 74008 SOC&#10;Catoosa ROC"></textarea>
       <div class="tools"><button type="button" onclick="doPaste()">Turn into rows</button></div>
     </div>
 
@@ -70,8 +71,8 @@ button:disabled{opacity:.5;cursor:default}
 
 <script>
 const FN='https://pgprlrcbjmcivmvdethv.supabase.co/functions/v1/partner-referral';
-const code=new URLSearchParams(location.search).get('c')||'';
-const TYPES=[['','Type…'],['eval','Evaluation'],['recert','Recertification'],['soc','Start of care'],['roc','Resumption of care'],['reeval','Re-evaluation'],['dc','Discharge']];
+const QS=new URLSearchParams(location.search),code=QS.get('c')||'',PREVIEW=QS.get('preview')==='1';
+const TYPES=[['','Type…'],['soc','Start of Care'],['eval','Evaluation'],['roc','Resumption of Care']];
 const DISC=['PT','OT','SLP','PTA','COTA'];
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let n=0;
@@ -107,8 +108,7 @@ function guess(line){
   const l=line.trim();if(!l)return null;
   const zip=(l.match(/\b\d{5}\b/)||[''])[0];
   let vt='';
-  if(/re-?eval/i.test(l))vt='reeval';else if(/discharge|\bD\/?C\b/i.test(l))vt='dc';else if(/\bROC\b|resumption/i.test(l))vt='roc';
-  else if(/re-?cert/i.test(l))vt='recert';else if(/\bSOC\b|start\s+of\s+care/i.test(l))vt='soc';else if(/\beval(uation)?\b/i.test(l))vt='eval';
+  if(/\bROC\b|resumption/i.test(l))vt='roc';else if(/\bSOC\b|start\s+of\s+care/i.test(l))vt='soc';else if(/\beval(uation)?\b/i.test(l))vt='eval';
   const dm=l.match(/\b(PT|OT|SLP|PTA|COTA)\b/i);
   const loc=l.replace(/\b(SOC|ROC|DC|D\/C|discharge|resumption\s+of\s+care|start\s+of\s+care|re-?eval(uation)?|re-?cert(ification)?|eval(uation)?|PT|OT|SLP|PTA|COTA|urgent)\b/ig,' ').replace(/\b\d{5}\b/g,' ').replace(/[-–,]/g,' ').replace(/\s+/g,' ').trim();
   return loc?{location:loc,zip,discipline:dm?dm[1].toUpperCase():'PT',visit_type:vt,urgent:/\burgent\b/i.test(l)}:null;
@@ -141,7 +141,7 @@ function readCsv(inp){
       const d=g(iD).toUpperCase();
       return {location:loc,zip:g(iZ),discipline:DISC.includes(d)?d:'PT',visit_type:t.visit_type||'',patient:g(iP),note:g(iN),urgent:/^(y|yes|true|1|urgent)/i.test(g(iU))};
     }).filter(Boolean).slice(0,25);
-    if(!items.length){show('err','No rows found in that file. Columns can be: location, zip, discipline, type, patient, note, urgent.');return;}
+    if(!items.length){show('err','No rows found in that file. Columns can be: location, zip, discipline, type (Start of Care, Evaluation or Resumption of Care), patient, note, urgent.');return;}
     dropEmpty();items.forEach(addRow);inp.value='';
     show('ok','Added '+items.length+' row'+(items.length>1?'s':'')+' from the file. Please check them, then press Send.');
   };
@@ -151,6 +151,7 @@ function show(cls,t){document.getElementById('result').innerHTML='<div class="ms
 async function send(){
   const refs=collect();
   if(!refs.length){show('err','Add at least one place first.');return;}
+  if(PREVIEW){show('ok','Preview only: nothing was sent. '+refs.length+' row'+(refs.length>1?'s':'')+' would have gone to Metro.');return;}
   const b=document.getElementById('send');b.disabled=true;
   const r=await api({action:'submit',referrals:refs,website:document.getElementById('website').value});
   b.disabled=false;
@@ -165,6 +166,7 @@ async function send(){
   const r=await api({action:'info'});
   if(r.status!==200||!r.j.agency){document.getElementById('bad').style.display='block';return;}
   document.getElementById('title').textContent='Send a referral · '+r.j.agency;
+  if(PREVIEW)document.getElementById('prev').style.display='block';
   document.getElementById('main').style.display='block';addRow();
 })();
 </script>
