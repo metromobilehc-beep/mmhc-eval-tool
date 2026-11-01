@@ -204,6 +204,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
 .cal-ev.noct{border:1px dashed var(--accent);background:rgba(251,191,36,.08);}
 .cal-ev.seen{opacity:.55;}
 .menu-btn{display:none;padding:6px 12px;border-radius:20px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+.mnav{display:none;}
 @media(max-width:680px){
   header{padding:10px 12px;}
   .layout{grid-template-columns:1fr;height:auto;}
@@ -215,6 +216,41 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
   .stat-n{font-size:16px;}
   .week-pill{font-size:10px;padding:4px 8px;}
   .board{padding:12px;}
+  /* phone layout: compact header, bottom navigation, bigger touch targets */
+  header{position:static;padding:8px 10px 6px;gap:4px 8px;}
+  .logo-sub,.week-pill,.vsw,.menu-btn{display:none!important;}
+  .mark{width:28px;height:28px;font-size:11px;}
+  .logo{flex:1;min-width:0;}
+  .logo-text{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+  .sync-status{font-size:10px;flex:none;}
+  #themeBtn{padding:3px 9px!important;font-size:11px!important;}
+  .stats{order:9;margin-top:2px;gap:4px;}
+  .stat-n{font-size:15px;}.stat-l{font-size:9px;}
+  body{padding-bottom:64px;}
+  body.show-side .sidebar{height:calc(100vh - 150px);height:calc(100dvh - 150px);}
+  .tabs{display:flex;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;}
+  .tabs::-webkit-scrollbar{display:none;}
+  .tab{flex:none;padding:12px 14px;font-size:11px;white-space:nowrap;}
+  .fr{flex-wrap:nowrap;overflow-x:auto;-webkit-overflow-scrolling:touch;scrollbar-width:none;padding-bottom:2px;}
+  .fr::-webkit-scrollbar{display:none;}
+  .fr .fb,.fr select{flex:none;white-space:nowrap;}
+  .fb{padding:8px 14px;font-size:12px;}
+  .board{padding:10px;gap:10px;}
+  .bh .bt{font-size:15px;}
+  .card{padding:10px;gap:6px;}
+  .csel,.cbtn{min-height:42px;font-size:14px;}
+  .cact .cbtn{padding:8px 6px;}
+  input,select,textarea{font-size:16px!important;} /* stops iPhone zooming in when a field is tapped */
+  .qa-check input[type=checkbox]{width:22px;height:22px;}
+  .qa-check input[type=date]{width:150px;flex:none;}
+  .qa-check{padding:6px 0;}
+  #attn .attn{max-height:34vh;padding:8px 10px;}
+  .attn-r{font-size:12px;padding:8px;}
+  .mnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:900;background:var(--surface);border-top:1px solid var(--border);padding:6px 8px calc(6px + env(safe-area-inset-bottom));gap:6px;}
+  .mnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 4px;border-radius:10px;border:1px solid transparent;background:none;color:var(--muted);font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;min-height:46px;}
+  .mnav button b{font-size:18px;line-height:1;}
+  .mnav button.on{color:var(--accent);border-color:var(--accent);background:rgba(251,191,36,.08);}
+  .mnav .mn-n{position:absolute;margin:-4px 0 0 22px;background:var(--red);color:#fff;border-radius:9px;font-size:10px;padding:1px 5px;font-family:monospace;}
 }
 </style>
 </head>
@@ -313,6 +349,11 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
   </div>
 </header>
 
+<nav class="mnav" id="mnav">
+  <button id="mnBoard" class="on" onclick="mobNav('board')"><b>📋</b>Board</button>
+  <button id="mnCal" onclick="mobNav('cal')"><b>📅</b>Calendar</button>
+  <button id="mnTools" onclick="mobNav('tools')"><b>☰</b>Tools<span class="mn-n" id="mnInbox" style="display:none"></span></button>
+</nav>
 <div class="layout">
   <div class="sidebar">
     <div class="tabs">
@@ -1896,7 +1937,18 @@ async function moveEval(id,name,date){
 }
 // ── LAYOUT HELPERS ──
 function localISO(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
-function toggleSide(){const on=document.body.classList.toggle('show-side');document.getElementById('menuBtn').textContent=on?'✕ Close':'☰ Tools';}
+function updMnav(){
+  const side=document.body.classList.contains('show-side');
+  const set=(id,on)=>{const b=document.getElementById(id);if(b)b.classList.toggle('on',on);};
+  set('mnTools',side);set('mnBoard',!side&&!calOn);set('mnCal',!side&&!!calOn);
+}
+function mobNav(w){
+  const side=document.body.classList.contains('show-side');
+  if(w==='tools'){toggleSide();window.scrollTo(0,0);return;}
+  if(side)toggleSide();
+  setView(w);updMnav();window.scrollTo(0,0);
+}
+function toggleSide(){const on=document.body.classList.toggle('show-side');document.getElementById('menuBtn').textContent=on?'✕ Close':'☰ Tools';updMnav();}
 function closeSidePhone(){if(window.innerWidth<=680&&document.body.classList.contains('show-side'))toggleSide();}
 function showStuckBoard(){
   fil='stuck';
@@ -1966,8 +2018,9 @@ function attentionGroups(){
   G.forEach(g=>g.rows.sort((a,b)=>b.urgent-a.urgent||b.days-a.days));
   return G.filter(g=>g.rows.length);
 }
-function attnHidden(){try{return localStorage.getItem('mmhcAttnHide')===localISO();}catch(_){return false;}}
-function attnToggle(){try{if(attnHidden())localStorage.removeItem('mmhcAttnHide');else localStorage.setItem('mmhcAttnHide',localISO());}catch(_){}renderAttn();}
+// Needs-attention list: shown on a computer, collapsed on a phone (tap Show to open it); either choice lasts for the day
+function attnHidden(){try{const v=localStorage.getItem('mmhcAttnHide');if(v===localISO())return true;if(v==='show:'+localISO())return false;}catch(_){}return window.innerWidth<=680;}
+function attnToggle(){try{if(attnHidden())localStorage.setItem('mmhcAttnHide','show:'+localISO());else localStorage.setItem('mmhcAttnHide',localISO());}catch(_){}renderAttn();}
 function attnGo(id){
   fil='all';document.querySelectorAll('.fb').forEach(b=>b.classList.remove('on'));const all=document.querySelector('.fb');if(all)all.classList.add('on');
   const ms=document.getElementById('monthFilter');if(ms)ms.value='';
@@ -2517,7 +2570,7 @@ async function loadInbox(){
   updInboxBadge();
   if(!document.getElementById('tp-inbox').classList.contains('hidden'))renderInbox();
 }
-function updInboxBadge(){const b=document.getElementById('inboxN');if(!b)return;b.textContent=inbox.length;b.style.display=inbox.length?'inline-block':'none';}
+function updInboxBadge(){const m=document.getElementById('mnInbox');if(m){m.textContent=inbox.length;m.style.display=inbox.length?'inline-block':'none';}const b=document.getElementById('inboxN');if(!b)return;b.textContent=inbox.length;b.style.display=inbox.length?'inline-block':'none';}
 function renderInbox(){
   const el=document.getElementById('inboxList');if(!el)return;
   el.innerHTML=inbox.length?inbox.map(r=>`<div class="qa-card" style="margin:8px 0;padding:10px;border:1px solid ${r.urgent?'var(--red)':'var(--border)'};border-radius:8px;background:var(--bg)">
