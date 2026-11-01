@@ -548,6 +548,12 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <button class="fb" onclick="sf('assigned',this)">Assigned</button>
         <button class="fb" onclick="sf('urgent',this)">🚨 Urgent</button>
         <button class="fb" id="fbStuck" onclick="sf('stuck',this)">⚠ Stuck</button>
+        <select id="sortSel" onchange="setSort(this.value)" title="Order of evals on the board, QA and History" style="background:var(--bg);border:1px solid var(--border);border-radius:20px;color:var(--muted);font-family:inherit;font-size:11px;padding:4px 10px;outline:none;cursor:pointer;">
+          <option value="visit">Sort: visit date</option>
+          <option value="added">Sort: oldest added</option>
+          <option value="newest">Sort: newest added</option>
+          <option value="urgent">Sort: urgent first</option>
+        </select>
         <select id="monthFilter" onchange="render()" style="background:var(--bg);border:1px solid var(--border);border-radius:20px;color:var(--muted);font-family:inherit;font-size:11px;padding:4px 10px;outline:none;cursor:pointer;">
           <option value="">All Months</option>
         </select>
@@ -763,6 +769,7 @@ function getSuggestedClinician(location, zip, date) {
 }
 
 window.onload = async () => {
+  {const ss=document.getElementById('sortSel');if(ss)ss.value=sortMode;}
   document.getElementById('wd').value = localISO();
   updateWk();
   setDisc('PT');
@@ -865,9 +872,25 @@ function evalToDB(e) {
 // ── UI ──
 function sw(name,el){document.querySelectorAll('.tab').forEach(t=>t.classList.remove('on'));document.querySelectorAll('.panel').forEach(p=>p.classList.add('hidden'));el.classList.add('on');document.getElementById('tp-'+name).classList.remove('hidden');if(name==='tpl')renderTpl();if(name==='inbox')loadInbox();if(name==='set'&&me&&me.is_super_admin)loadPortal();if(name==='qa')renderQA();if(name==='stuck')renderStuck();if(name==='hist')renderHistory();if(name==='cap')renderCapacity();if(name==='set'&&me&&me.is_super_admin){if(Date.now()-(window.__ctChecked||0)>60000){window.__ctChecked=Date.now();checkCt();}if(!ctUsers.length)loadCtUsers();}if(name==='avail'){if(!avData&&!avBusy)loadAvail();else renderAvail();}}
 
+// ── SORT: one order used by the board, QA and History ──
+let sortMode=(()=>{try{return localStorage.getItem('mmhcSort')||'visit';}catch(_){return 'visit';}})();
+function setSort(v){sortMode=v;try{localStorage.setItem('mmhcSort',v);}catch(_){}render();renderQA();renderHistory();}
+// "added" order is the database order (newest first), not the Week-of date typed on the paste panel
+function addedIdx(e){const i=evals.indexOf(e);return i<0?0:i;}
+function cmpEval(a,b){
+  const old=addedIdx(b)-addedIdx(a),neu=addedIdx(a)-addedIdx(b);
+  if(sortMode==='newest')return neu;
+  if(sortMode==='added')return old;
+  if(sortMode==='urgent'){const po={urgent:0,asap:1,normal:2};return (po[a.priority]??2)-(po[b.priority]??2)||old;}
+  const va=(a.qa&&a.qa.visitDate)||'9999-99-99',vb=(b.qa&&b.qa.visitDate)||'9999-99-99';
+  return va<vb?-1:va>vb?1:old; // soonest visit first; evals with no date yet follow, oldest first
+}
 function renderHistory(){
   const list=document.getElementById('histList');if(!list)return;
-  const completed=evals.filter(inHistory).sort((a,b)=>new Date(b.dateAdded)-new Date(a.dateAdded));
+  const completed=evals.filter(inHistory).sort((a,b)=>{ // History: most recent first, unless sorting by oldest added
+    if(sortMode==='added')return cmpEval(a,b);
+    if(sortMode==='visit'){const va=(a.qa&&a.qa.visitDate)||'',vb=(b.qa&&b.qa.visitDate)||'';return va<vb?1:va>vb?-1:cmpEval(b,a);}
+    return addedIdx(a)-addedIdx(b);});
   if(!completed.length){list.innerHTML='<div class="qa-empty">Nothing in history yet.</div>';return;}
   list.innerHTML=completed.map(e=>{
     const qa=e.qa||{};
@@ -2034,7 +2057,23 @@ function render(){
   else if(fil==='stuck')list=list.filter(e=>stuckReasons(e).length>0);
   if(selectedMonth)list=list.filter(e=>String(e.dateAdded||'').startsWith(selectedMonth));
   const so=e=>(e.status==='pending'||isHeld(e))?0:1,po={urgent:0,asap:1,normal:2};
-  list.sort((a,b)=>so(a)!==so(b)?so(a)-so(b):(po[a.priority]||2)-(po[b.priority]||2));
+  // same patient (same agency) with more than one order, like PT + OT: keep the cards together, in the earliest section
+  const gk=e=>{const p=String(e.patient||'').trim().toLowerCase();return p?p+'|'+String(e.agency||'').trim().toLowerCase():'';};
+  const gSo=new Map(),gN=new Map();
+  list.forEach(e=>{const k=gk(e);if(!k)return;gSo.set(k,Math.min(gSo.has(k)?gSo.get(k):9,so(e)));gN.set(k,(gN.get(k)||0)+1);});
+  const soE=e=>{const k=gk(e);return k&&gN.get(k)>1?gSo.get(k):so(e);};
+  const byDate=list.slice().sort(cmpEval),ordered=[];
+  for(const sec of [0,1]){
+    const doneG=new Set();
+    for(const e of byDate){
+      if(soE(e)!==sec)continue;
+      const k=gk(e);
+      if(k&&gN.get(k)>1){if(doneG.has(k))continue;doneG.add(k);byDate.filter(x=>gk(x)===k).sort((x,y)=>String(x.discipline).localeCompare(String(y.discipline))).forEach(x=>ordered.push(x));}
+      else ordered.push(e);
+    }
+  }
+  list=ordered;
+  const linked=e=>{const k=gk(e);return k&&gN.get(k)>1?list.filter(x=>x!==e&&gk(x)===k).map(x=>x.discipline):null;};
   document.getElementById('sP').textContent=evals.filter(e=>e.status==='pending'&&!isArchived(e)).length;
   document.getElementById('sA').textContent=evals.filter(e=>e.status==='assigned'&&!isArchived(e)).length;
   document.getElementById('sC').textContent=evals.filter(e=>e.status==='complete').length;
@@ -2043,9 +2082,9 @@ function render(){
   if(!list.length){g.innerHTML='<div class="empty"><div class="ei">📋</div><div class="et">No evals on the board</div><div style="font-size:13px;line-height:1.5">Paste a referral list using the panel on the left.</div></div>';return;}
   let lastSec=-1;
   const secHead=(n,t,c)=>`<div style="grid-column:1/-1;display:flex;align-items:center;gap:8px;margin:${n?'18px':'0'} 0 2px;padding-top:${n?'12px':'0'};${n?'border-top:2px dashed var(--border);':''}font-size:12px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--muted)">${t}<span class="badge">${c}</span></div>`;
-  const secCount=[list.filter(e=>so(e)===0).length,list.filter(e=>so(e)===1).length];
+  const secCount=[list.filter(e=>soE(e)===0).length,list.filter(e=>soE(e)===1).length];
   g.innerHTML=list.map(e=>{
-    const sc=so(e);let head='';if(sc!==lastSec){head=secHead(sc,sc===0?'⏳ Pending · needs a clinician or scheduling':'✅ Assigned · scheduled',secCount[sc]);lastSec=sc;}
+    const sc=soE(e);let head='';if(sc!==lastSec){head=secHead(sc,sc===0?'⏳ Pending · needs a clinician or scheduling':'✅ Assigned · scheduled',secCount[sc]);lastSec=sc;}
     const a=age(e.dateAdded),ac=a<=1?'af':a<=3?'aa':'ao',al=a===0?'Today':a===1?'1 day ago':`${a} days ago`;
     const opts=clins.map(c=>`<option value="${c.name}"${e.clinician===c.name?' selected':''}>${c.name} (${c.role})</option>`).join('');
     return head+`<div class="card s${e.status[0]} p${e.priority[0]}" id="card-${esc(e.id)}">
@@ -2072,6 +2111,7 @@ function render(){
         <span class="agebadge ${ac}">${al}</span>
       </div>
       ${e.assignedBy?`<div style="font-size:10px;color:var(--muted)">Assigned by ${e.assignedBy}</div>`:''}
+      ${(()=>{const l=linked(e);return l?`<div style="font-size:10px;color:var(--blue);margin-bottom:3px">🔗 Same patient also ordered: ${l.map(esc).join(', ')}</div>`:'';})()}
       <div style="margin-bottom:4px"><input class="csel" style="font-size:11px;padding:5px 7px;" placeholder="Patient last name (shows on schedule)" value="${e.patient||''}" onchange="updPat('${e.id}',this.value)"></div>
       ${e.status!=='complete'?`<div><div class="vis-cap"><span>📅 Visit date</span>${e.qa&&e.qa.ctShiftId?'<span class="ct-ok">✓ Connecteam</span>':''}${e.status==='assigned'&&e.clinician?`<a href="#" style="font-size:10px;color:var(--muted);margin-left:6px" title="${e.qa&&e.qa.msgClin?'Messaged '+esc(e.qa.msgClin):'Not messaged yet'}" onclick="ctMessage('${e.id}','assigned',true);return false">✉ ${e.qa&&e.qa.msgClin===e.clinician?'again':'message'}</a>`:''}</div><div class="vis-in"><input type="date" value="${(e.qa&&e.qa.visitDate)||''}" onchange="setVisit('${e.id}','visitDate',this.value)">${e.qa&&e.qa.visitTime?`<span style="font-size:11px;color:var(--muted);white-space:nowrap;align-self:center">at ${esc(e.qa.visitTime)} <a href="#" title="Remove the time (the shift becomes all day)" onclick="setVisit('${e.id}','visitTime','');return false">✕</a></span>`:''}</div></div>`:''}
       ${(()=>{const sd=e.qa&&e.qa.visitDate,s=getSuggestedClinician(e.location,e.zip,sd);const sdy=s&&sd?asstDay(s.name,sd):null;return s?`<div style="font-size:10px;color:var(--accent);margin-bottom:4px;">💡 ${s.name} available${s.region?' · '+s.region:''}${sdy&&hasPref(sdy)?' · ✓ prefers to work that day':''}</div>`:''})()}
@@ -2093,6 +2133,7 @@ function render(){
         ${e.ptaClinician?`<div style="font-size:10px;color:var(--blue);margin-top:2px;">🤝 PTA: ${e.ptaClinician}${e.qa&&e.qa.ptaDate?(e.qa.ctPtaShiftId?' · starts '+esc(e.qa.ptaDate)+' ✓ on their Connecteam calendar':' · starts '+esc(e.qa.ptaDate)):' · start date is set after the eval is seen'}</div>`:''}
       </div>
       ${(e.clinician||e.ptaClinician)?`<div style="margin-top:4px;text-align:right"><a href="#" style="font-size:11px;color:var(--accent)" onclick="askOpen('${e.id}');return false">💬 Admin question${(e.qa&&e.qa.asks&&e.qa.asks.length)?' ('+e.qa.asks.length+' sent)':''}</a></div>`:''}
+      ${(()=>{const a=e.qa&&e.qa.asks&&e.qa.asks[e.qa.asks.length-1];if(!a)return '';const dt=new Date(a.at).toLocaleString([],{month:'numeric',day:'numeric',hour:'numeric',minute:'2-digit'});return `<div style="font-size:10px;color:var(--muted);text-align:right;line-height:1.35;margin-top:2px" title="${esc(a.text)}">Asked ${esc(a.to)} · ${esc(a.by||'admin')} · ${dt}<br><i>${esc(String(a.text).slice(0,70))}${String(a.text).length>70?'…':''}</i></div>`;})()}
     </div>`;
   }).join('');
 }
@@ -2153,6 +2194,7 @@ async function setAgency(id,val){
   if(ctReady&&e.clinician&&e.qa&&e.qa.visitDate&&!e.qa.ctShiftId)await ctSync(id); // quiet: an existing shift is not re-sent just for an agency change
 }
 async function updPat(id,val){const e=evals.find(e=>e.id===id);if(!e)return;e.patient=val;await sb.from('evals').update({patient:val}).eq('id',id);
+  if(String(val||'').trim()&&e.status==='assigned'&&e.qa&&e.qa.seen&&e.qa.orders&&e.qa.sysScheduled&&!isArchived(e)){e.status='complete';await sb.from('evals').update({status:'complete'}).eq('id',id);render();renderQA();renderHistory();flash('✓ All steps were done: moved to History');}
   // quiet: an existing shift is not re-sent just for a name change; the name goes out with the next date or clinician change
 }
 async function asgnPTA(id,name){
@@ -2240,7 +2282,7 @@ function renderQA(){
   const list=document.getElementById('qaList');if(!list)return;
 
   // Split into active (assigned, not fully QA'd) and completed QA
-  const assigned=evals.filter(e=>e.status==='assigned'&&!isArchived(e));
+  const assigned=evals.filter(e=>e.status==='assigned'&&!isArchived(e)).sort(cmpEval);
   const completedQA=evals.filter(e=>e.status==='complete'&&(e.qa?.seen||e.qa?.orders||e.qa?.scheduled));
 
   // Active QA
@@ -2264,6 +2306,7 @@ function renderQA(){
           <div class="qa-check${qa.pta?' done':''}"><input type="checkbox" ${qa.pta?'checked':''} onchange="toggleQA('${e.id}','pta',this.checked)"><span>PTA assigned</span></div>
           <div class="qa-check${qa.scheduled?' done':''}"><input type="checkbox" ${qa.scheduled?'checked':''} onchange="toggleQA('${e.id}','scheduled',this.checked)"><span>Follow-up scheduled</span></div>
           <div class="qa-check${qa.sysScheduled?' done':''}"><input type="checkbox" ${qa.sysScheduled?'checked':''} onchange="toggleQA('${e.id}','sysScheduled',this.checked)"><span>Scheduled in agency system</span></div>
+          ${allDone?`<button class="cbtn done" style="margin-top:6px" onclick="mkDone('${e.id}')">✓ Move to History</button>`:''}
           <div class="qa-check${qa.ct?' done':''}"><input type="checkbox" ${qa.ct?'checked':''} onchange="toggleQA('${e.id}','ct',this.checked)"><span>Shift in Connecteam</span></div>
         </div>
         <textarea class="qa-note" placeholder="QA notes..." onchange="toggleQA('${e.id}','notes',this.value)">${qa.notes||''}</textarea>
@@ -2280,8 +2323,13 @@ async function toggleQA(id,field,val){
   if(['seen','orders','pta','scheduled','sysScheduled','ct'].includes(field))e.qa[field+'At']=val?new Date().toISOString():'';
   // the last step of the cycle is "Scheduled in agency system": it completes only once seen + orders added + scheduled in the agency system are all ticked
   const allDone=['seen','orders','sysScheduled'].includes(field)&&val&&e.qa.seen&&e.qa.orders&&e.qa.sysScheduled&&e.status!=='complete';
-  if(allDone&&!String(e.patient||'').trim())flash('All steps are done. Add the patient last name or ID on the board card to move it to History.');
-  else if(allDone){e.status='complete';await sb.from('evals').update({status:'complete'}).eq('id',id);render();}
+  if(allDone&&!String(e.patient||'').trim()){
+    const v=(prompt('All steps are done. Add the patient last name or ID to move this to History:','')||'').trim();
+    if(v){e.patient=v;await sb.from('evals').update({patient:v}).eq('id',id);}
+  }
+  if(allDone&&String(e.patient||'').trim()){e.status='complete';await sb.from('evals').update({status:'complete'}).eq('id',id);render();}
+  else if(allDone)flash('Not moved yet: add the patient last name or ID, then use ✓ Move to History on the QA card.');
+  else if(false){e.status='complete';await sb.from('evals').update({status:'complete'}).eq('id',id);render();}
   renderQA();renderStuck();render();
   await sb.from('evals').update({qa:e.qa}).eq('id',id);
 }
