@@ -219,6 +219,19 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
 </style>
 </head>
 <body>
+<div id="askModal" class="modal hidden">
+  <div class="modal-box">
+    <div class="auth-title" style="text-align:left">💬 Admin question</div>
+    <div id="askWho" class="modal-sum"></div>
+    <select id="askTo" style="margin-top:4px"></select>
+    <textarea id="askText" maxlength="700" style="height:110px;min-height:110px;flex:none;resize:vertical" placeholder="Type your question for the clinician…"></textarea>
+    <div class="modal-sum">Goes to their Connecteam chat. It starts with the place and agency, so you can leave those out.</div>
+    <div style="display:flex;gap:6px;margin-top:4px">
+      <button class="btn btn-g" id="askGo" style="flex:2" onclick="askSend()">Send in Connecteam</button>
+      <button class="btn btn-o" style="flex:1" onclick="askClose()">Cancel</button>
+    </div>
+  </div>
+</div>
 <div id="smartModal" class="modal hidden">
   <div class="modal-box" style="max-width:620px;width:96%">
     <div class="auth-title" style="text-align:left">✨ Check these referrals</div>
@@ -1626,7 +1639,7 @@ async function restoreEval(id){
   await sb.from('evals').update({qa:e.qa}).eq('id',id);
   flash('✓ Restored to the board');
 }
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){closeClearBoard();if(dupResolve)dupAnswer('cancel');else smartClose();}});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){closeClearBoard();if(dupResolve)dupAnswer('cancel');else{smartClose();askClose();}}});
 
 // ── AVAILABILITY CALENDAR (read from Connecteam through the connecteam-shift function) ──
 let avStart=null,avData=null,avSel=null,avSort=null,avBusy=false,avErr='',avRows=[];
@@ -2079,8 +2092,43 @@ function render(){
         </select>
         ${e.ptaClinician?`<div style="font-size:10px;color:var(--blue);margin-top:2px;">🤝 PTA: ${e.ptaClinician}${e.qa&&e.qa.ptaDate?(e.qa.ctPtaShiftId?' · starts '+esc(e.qa.ptaDate)+' ✓ on their Connecteam calendar':' · starts '+esc(e.qa.ptaDate)):' · start date is set after the eval is seen'}</div>`:''}
       </div>
+      ${(e.clinician||e.ptaClinician)?`<div style="margin-top:4px;text-align:right"><a href="#" style="font-size:11px;color:var(--accent)" onclick="askOpen('${e.id}');return false">💬 Admin question${(e.qa&&e.qa.asks&&e.qa.asks.length)?' ('+e.qa.asks.length+' sent)':''}</a></div>`:''}
     </div>`;
   }).join('');
+}
+
+let askId=null;
+function askOpen(id){
+  const e=evals.find(x=>x.id===id);if(!e)return;
+  const who=[];if(e.clinician)who.push([e.clinician,'evaluator']);if(e.ptaClinician)who.push([e.ptaClinician,'PTA/COTA']);
+  if(!who.length){flash('Assign someone first');return;}
+  askId=id;
+  document.getElementById('askWho').textContent=[e.location,e.zip,e.agency].filter(Boolean).join(' · ')+(e.qa&&e.qa.asks&&e.qa.asks.length?' · last question '+new Date(e.qa.asks[e.qa.asks.length-1].at).toLocaleDateString([],{month:'numeric',day:'numeric'}):'');
+  document.getElementById('askTo').innerHTML=who.map(w=>'<option value="'+esc(w[0])+'">'+esc(w[0])+' ('+w[1]+')</option>').join('');
+  document.getElementById('askText').value='';
+  document.getElementById('askModal').classList.remove('hidden');
+  setTimeout(()=>document.getElementById('askText').focus(),30);
+}
+function askClose(){document.getElementById('askModal').classList.add('hidden');askId=null;}
+async function askSend(){
+  const e=evals.find(x=>x.id===askId);if(!e)return;
+  const to=document.getElementById('askTo').value,q=document.getElementById('askText').value.trim();
+  if(!q){flash('Type your question first');return;}
+  const head='Question about '+[e.location,e.zip].filter(Boolean).join(' ')+(e.agency?' ('+e.agency+')':'')+(userName?' from '+userName:'')+': ';
+  const btn=document.getElementById('askGo');btn.disabled=true;
+  try{
+    const r=await ctApi('send_text',{to_name:to,text:(head+q).slice(0,1000)});
+    if(r&&r.sent){
+      if(!e.qa)e.qa={};
+      e.qa.asks=[...(e.qa.asks||[]),{at:new Date().toISOString(),by:userName||'',to,text:q}].slice(-10);
+      await sb.from('evals').update({qa:e.qa}).eq('id',e.id);
+      askClose();render();flash('✉ Question sent to '+to);
+    }
+    else if(r&&r.warning==='no_ct_user')flash('⚠ '+to+' is not linked to Connecteam yet');
+    else if(r&&r.warning==='no_sender')flash('⚠ Messages are not set up yet (sender secret)');
+    else flash('Not sent');
+  }catch(err){flash('⚠ Could not send: '+err.message);}
+  finally{btn.disabled=false;}
 }
 
 async function editEval(id){
