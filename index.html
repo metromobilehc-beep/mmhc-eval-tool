@@ -208,7 +208,14 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
 .pf-q{width:100%;font-size:14px;padding:9px 12px;margin-bottom:6px;}
 .pf-r{display:flex;flex-wrap:wrap;gap:6px;}
 .pf-r select{flex:1 1 calc(50% - 6px);min-width:0;font-size:13px;padding:7px 8px;border-radius:8px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;}
-.pf-n{font-size:11px;color:var(--muted);margin-top:5px;}
+.pf-n{font-size:12px;color:var(--muted);margin-top:5px;}
+@media(min-width:681px){#qaView .pf-q,#histView .pf-q{max-width:520px;}#qaView .pf-r select,#histView .pf-r select{flex:0 1 220px;}}
+#qaList,#histList{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:12px;align-items:start;}
+#qaList>.qa-empty,#histList>.qa-empty{grid-column:1/-1;}
+#qaList>div,#histList>div{margin-bottom:0!important;}
+#qaView,#histView{min-width:0;}
+.layout{grid-template-columns:290px minmax(0,1fr);}
+.board{min-width:0;}
 .mnav{display:none;}
 #fClin,#fArea,#fAgency{background:var(--bg);border:1px solid var(--border);border-radius:20px;color:var(--text);font-family:inherit;font-size:14px;padding:8px 14px;outline:none;cursor:pointer;}
 #fClear{color:var(--red);}
@@ -263,7 +270,8 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
   .attn-r{font-size:12px;padding:8px;}
   .mnav{display:flex;position:fixed;left:0;right:0;bottom:0;z-index:900;background:var(--surface);border-top:1px solid var(--border);padding:6px 8px calc(6px + env(safe-area-inset-bottom));gap:6px;}
   .mnav button{flex:1;display:flex;flex-direction:column;align-items:center;gap:1px;padding:6px 4px;border-radius:10px;border:1px solid transparent;background:none;color:var(--muted);font-family:inherit;font-size:11px;font-weight:700;cursor:pointer;min-height:46px;}
-  .mnav button b{font-size:18px;line-height:1;}
+  .mnav button b{font-size:17px;line-height:1;}
+  .mnav button{font-size:10px;padding:6px 2px;}
   .mnav button.on{color:var(--accent);border-color:var(--accent);background:rgba(251,191,36,.08);}
   .mnav .mn-n{position:absolute;margin:-4px 0 0 22px;background:var(--red);color:#fff;border-radius:9px;font-size:10px;padding:1px 5px;font-family:monospace;}
 }
@@ -367,6 +375,8 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
 <nav class="mnav" id="mnav">
   <button id="mnBoard" class="on" onclick="mobNav('board')"><b>📋</b>Board</button>
   <button id="mnCal" onclick="mobNav('cal')"><b>📅</b>Calendar</button>
+  <button id="mnQa" onclick="mobNav('qa')"><b>✅</b>QA</button>
+  <button id="mnHist" onclick="mobNav('hist')"><b>📁</b>History</button>
   <button id="mnTools" onclick="mobNav('tools')"><b>☰</b>Tools<span class="mn-n" id="mnInbox" style="display:none"></span></button>
 </nav>
 <div class="layout">
@@ -374,12 +384,10 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
     <div class="tabs">
       <button class="tab on" onclick="sw('paste',this)">📋 Paste</button>
       <button class="tab" onclick="sw('stuck',this)">🚨 Stuck <span id="stuckN"></span></button>
-      <button class="tab" onclick="sw('qa',this)">✅ QA</button>
       <button class="tab" onclick="sw('avail',this)">🟢 Who's free</button>
       <button class="tab" onclick="sw('cap',this)">👥 Capacity</button>
       <button class="tab" onclick="sw('inbox',this)">📥 Inbox<span id="inboxN" class="badge" style="margin-left:4px;display:none"></span></button>
       <!-- Templates tab hidden for now: restore this button to bring the messenger back -->
-      <button class="tab" onclick="sw('hist',this)">📁 History</button>
       <button class="tab" onclick="sw('set',this)">⚙️ Settings</button>
     </div>
 
@@ -454,23 +462,6 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
       <div id="tplNote" style="font-size:10px;color:var(--muted);margin-top:4px;line-height:1.4">Sends from Metro Evals to the person's Connecteam chat. Agency messages are copy-only (agencies are not in Connecteam). Patient names are never filled in; only a last name if you entered one.</div>
     </div>
 
-    <div class="panel hidden" id="tp-qa">
-      <div class="lbl">QA Tracker</div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.5">Track evals after assignment.</div>
-      <div class="pf" id="qaFilt">
-        <input id="qaQ" class="pf-q" type="search" placeholder="Search name, place, zip, clinician…" oninput="renderQA()">
-        <div class="pf-r">
-          <select id="qaC" onchange="renderQA()"><option value="">All clinicians</option></select>
-          <select id="qaA" onchange="renderQA()"><option value="">All areas</option></select>
-          <select id="qaG" onchange="renderQA()"><option value="">All agencies</option></select>
-          <button class="fb" id="qaX" onclick="pfClear('qa')" style="display:none">✕ Clear</button>
-        </div>
-        <div class="pf-n" id="qaN"></div>
-      </div>
-      <div id="qaList"></div>
-
-    </div>
-
     <div class="panel hidden" id="tp-avail">
       <div class="lbl">Clinician availability (from Connecteam)</div>
       <div style="font-size:11px;color:var(--muted);line-height:1.5;margin-bottom:8px">Shifts already on each clinician's calendar out of their daily eval limit (set it on the Calendar view), plus unavailable time and approved time off. Tap a day to rank clinicians by who has the most room that day. Tap a box for the details.</div>
@@ -508,25 +499,6 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
       <div style="font-size:11px;color:var(--muted);line-height:1.5">Evals that have sat too long at a step, worst first. Fix the step on the board or QA tab and it drops off this list.</div>
       <button class="btn btn-o" onclick="showStuckBoard()">Show these on the board</button>
       <div id="stuckList"><div class="qa-empty">Nothing stuck.</div></div>
-    </div>
-
-    <div class="panel hidden" id="tp-hist">
-      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
-        <div class="lbl" style="margin-bottom:0">History</div>
-        <button class="admin-only hidden" onclick="clrHistory()" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:3px 8px;cursor:pointer;font-family:inherit;">Clear All</button>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">Completed evals and evals cleared from the board. Restore brings an archived eval back to the board.</div>
-      <div class="pf" id="histFilt">
-        <input id="histQ" class="pf-q" type="search" placeholder="Search name, place, zip, clinician…" oninput="renderHistory()">
-        <div class="pf-r">
-          <select id="histC" onchange="renderHistory()"><option value="">All clinicians</option></select>
-          <select id="histA" onchange="renderHistory()"><option value="">All areas</option></select>
-          <select id="histG" onchange="renderHistory()"><option value="">All agencies</option></select>
-          <button class="fb" id="histX" onclick="pfClear('hist')" style="display:none">✕ Clear</button>
-        </div>
-        <div class="pf-n" id="histN"></div>
-      </div>
-      <div id="histList"><div class="qa-empty">No completed evals yet.</div></div>
     </div>
 
     <div class="panel hidden" id="tp-set">
@@ -608,7 +580,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
   </div>
 
   <div class="board">
-    <div class="vsw"><button id="vbBoard" class="on" onclick="setView('board')">📋 Eval Board</button><button id="vbCal" onclick="setView('cal')">📅 Calendar</button></div>
+    <div class="vsw"><button id="vbBoard" class="on" onclick="setView('board')">📋 Eval Board</button><button id="vbCal" onclick="setView('cal')">📅 Calendar</button><button id="vbQa" onclick="setView('qa')">✅ QA</button><button id="vbHist" onclick="setView('hist')">📁 History</button></div>
     <div id="boardView" style="display:contents">
     <div class="bh">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -639,6 +611,40 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
     </div>
     <div id="attn"></div>
     <div class="grid" id="grid"><div class="empty"><div class="ei">⏳</div><div class="et">Loading...</div></div></div>
+    </div>
+    <div id="qaView" style="display:none">
+      <div class="bt">✅ QA Tracker</div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:6px;line-height:1.5">Track evals after assignment.</div>
+      <div class="pf" id="qaFilt">
+        <input id="qaQ" class="pf-q" type="search" placeholder="Search name, place, zip, clinician…" oninput="renderQA()">
+        <div class="pf-r">
+          <select id="qaC" onchange="renderQA()"><option value="">All clinicians</option></select>
+          <select id="qaA" onchange="renderQA()"><option value="">All areas</option></select>
+          <select id="qaG" onchange="renderQA()"><option value="">All agencies</option></select>
+          <button class="fb" id="qaX" onclick="pfClear('qa')" style="display:none">✕ Clear</button>
+        </div>
+        <div class="pf-n" id="qaN"></div>
+      </div>
+      <div id="qaList"></div>
+
+    </div>
+    <div id="histView" style="display:none">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+        <div class="bt">📁 History</div>
+        <button class="admin-only hidden" onclick="clrHistory()" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:3px 8px;cursor:pointer;font-family:inherit;">Clear All</button>
+      </div>
+      <div style="font-size:13px;color:var(--muted);margin-bottom:10px;line-height:1.5">Completed evals and evals cleared from the board. Restore brings an archived eval back to the board.</div>
+      <div class="pf" id="histFilt">
+        <input id="histQ" class="pf-q" type="search" placeholder="Search name, place, zip, clinician…" oninput="renderHistory()">
+        <div class="pf-r">
+          <select id="histC" onchange="renderHistory()"><option value="">All clinicians</option></select>
+          <select id="histA" onchange="renderHistory()"><option value="">All areas</option></select>
+          <select id="histG" onchange="renderHistory()"><option value="">All agencies</option></select>
+          <button class="fb" id="histX" onclick="pfClear('hist')" style="display:none">✕ Clear</button>
+        </div>
+        <div class="pf-n" id="histN"></div>
+      </div>
+      <div id="histList"><div class="qa-empty">No completed evals yet.</div></div>
     </div>
     <div id="calView" style="display:none">
       <div class="cal-bar">
@@ -1913,12 +1919,16 @@ function renderAvail(){
 
 // ── BIG CALENDAR VIEW ──
 let calOn=false,calStart=null,calDays=7,calData=null,calBusy=false,calErr='';
+let curView='board';
 function setView(v){
-  calOn=(v==='cal');
-  document.getElementById('boardView').style.display=calOn?'none':'contents';
+  curView=v;calOn=(v==='cal');
+  document.getElementById('boardView').style.display=v==='board'?'contents':'none';
   document.getElementById('calView').style.display=calOn?'block':'none';
-  document.getElementById('vbBoard').classList.toggle('on',!calOn);
-  document.getElementById('vbCal').classList.toggle('on',calOn);
+  document.getElementById('qaView').style.display=v==='qa'?'block':'none';
+  document.getElementById('histView').style.display=v==='hist'?'block':'none';
+  [['vbBoard','board'],['vbCal','cal'],['vbQa','qa'],['vbHist','hist']].forEach(([id,k])=>document.getElementById(id).classList.toggle('on',v===k));
+  if(v==='qa')renderQA();if(v==='hist')renderHistory();
+  updMnav();
   if(calOn){if(!calData&&!calBusy)loadCal();else renderCal();}
 }
 function calShift(n){calStart=addDaysISO(calStart||mondayISO(localISO()),n*calDays);calData=null;loadCal();}
@@ -2018,7 +2028,7 @@ function localISO(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMont
 function updMnav(){
   const side=document.body.classList.contains('show-side');
   const set=(id,on)=>{const b=document.getElementById(id);if(b)b.classList.toggle('on',on);};
-  set('mnTools',side);set('mnBoard',!side&&!calOn);set('mnCal',!side&&!!calOn);
+  set('mnTools',side);set('mnBoard',!side&&curView==='board');set('mnCal',!side&&curView==='cal');set('mnQa',!side&&curView==='qa');set('mnHist',!side&&curView==='hist');
 }
 function mobNav(w){
   const side=document.body.classList.contains('show-side');
