@@ -181,6 +181,24 @@ td.cal-drop{outline:2px dashed var(--accent);outline-offset:-3px;background:var(
 .av-day.on{border-color:var(--accent);color:var(--accent);font-weight:700;}
 @keyframes calspin{to{transform:rotate(360deg)}}
 .vsw{display:flex;gap:6px;flex-shrink:0;}
+.adm-tabs{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;}
+.adm-tabs button{padding:9px 16px;border-radius:20px;border:1px solid var(--border);background:transparent;color:var(--text);font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;}
+.adm-tabs button.on{border-color:var(--accent);color:var(--accent);background:rgba(251,191,36,.08);}
+.adm-tiles{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:12px;}
+.adm-t{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;}
+.adm-n{font-size:22px;font-weight:800;font-family:monospace;}.adm-l{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;margin-top:2px;}
+.adm-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px;margin-bottom:12px;}
+.adm-fade{opacity:.55;}.adm-h{font-weight:700;margin-bottom:8px;}.adm-m{font-size:11px;color:var(--muted);}
+.adm-scroll{overflow-x:auto;}.adm-tbl{border-collapse:collapse;width:100%;font-size:13px;}
+.adm-tbl th{text-align:left;font-size:11px;color:var(--muted);text-transform:uppercase;padding:6px 8px;border-bottom:1px solid var(--border);white-space:nowrap;}
+.adm-tbl td{padding:7px 8px;border-bottom:1px solid var(--border);white-space:nowrap;}
+.adm-chart{display:flex;gap:18px;flex-wrap:wrap;}.adm-grp{display:flex;gap:6px;align-items:flex-end;flex:1;min-width:240px;}
+.adm-bc{flex:1;text-align:center;display:flex;flex-direction:column;justify-content:flex-end;align-items:center;min-height:110px;}
+.adm-bar{width:100%;max-width:28px;border-radius:4px 4px 0 0;min-height:2px;}.adm-bv{font-size:11px;font-weight:700;}.adm-bl{font-size:10px;color:var(--muted);margin-top:3px;}
+.adm-form{display:flex;gap:8px;flex-wrap:wrap;}.adm-form input,.adm-form select{padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit;font-size:14px;}.adm-form input[type=text],.adm-form input:not([type]){flex:1;min-width:160px;}
+.adm-chk{display:grid;gap:6px;margin:10px 0;}.adm-chk label{display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer;}.adm-chk input{margin-top:2px;width:18px;height:18px;}
+.adm-bar2{display:flex;gap:10px;align-items:center;margin-bottom:10px;}.adm-bar2 select{padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;}
+.acc-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:11px;}.acc-row label{display:flex;gap:4px;align-items:center;cursor:pointer;}
 .vsw button{padding:10px 24px;border-radius:24px;border:1px solid var(--border);background:transparent;color:var(--text);font-weight:700;font-size:15px;cursor:pointer;font-family:inherit;}
 .vsw button.on{border-color:var(--accent);color:var(--accent);background:rgba(251,191,36,.08);}
 .cal-bar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
@@ -377,13 +395,13 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
   <button id="mnCal" onclick="mobNav('cal')"><b>📅</b>Calendar</button>
   <button id="mnQa" onclick="mobNav('qa')"><b>✅</b>QA</button>
   <button id="mnHist" onclick="mobNav('hist')"><b>📁</b>History</button>
+  <button id="mnAdmin" onclick="mobNav('admin')" style="display:none"><b>🗂</b>Admin</button>
   <button id="mnTools" onclick="mobNav('tools')"><b>☰</b>Tools<span class="mn-n" id="mnInbox" style="display:none"></span></button>
 </nav>
 <div class="layout">
   <div class="sidebar">
     <div class="tabs">
       <button class="tab on" onclick="sw('paste',this)">📋 Paste</button>
-      <button class="tab" onclick="sw('stuck',this)">🚨 Stuck <span id="stuckN"></span></button>
       <button class="tab" onclick="sw('avail',this)">🟢 Who's free</button>
       <button class="tab" onclick="sw('cap',this)">👥 Capacity</button>
       <button class="tab" onclick="sw('inbox',this)">📥 Inbox<span id="inboxN" class="badge" style="margin-left:4px;display:none"></span></button>
@@ -580,7 +598,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
   </div>
 
   <div class="board">
-    <div class="vsw"><button id="vbBoard" class="on" onclick="setView('board')">📋 Eval Board</button><button id="vbCal" onclick="setView('cal')">📅 Calendar</button><button id="vbQa" onclick="setView('qa')">✅ QA</button><button id="vbHist" onclick="setView('hist')">📁 History</button></div>
+    <div class="vsw"><button id="vbBoard" class="on" onclick="setView('board')">📋 Eval Board</button><button id="vbCal" onclick="setView('cal')">📅 Calendar</button><button id="vbQa" onclick="setView('qa')">✅ QA</button><button id="vbHist" onclick="setView('hist')">📁 History</button><button id="vbAdmin" onclick="setView('admin')" style="display:none">🗂 Admin</button></div>
     <div id="boardView" style="display:contents">
     <div class="bh">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
@@ -645,6 +663,11 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <div class="pf-n" id="histN"></div>
       </div>
       <div id="histList"><div class="qa-empty">No completed evals yet.</div></div>
+    </div>
+    <div id="adminView" style="display:none">
+      <div class="bt" style="margin-bottom:10px">🗂 Admin</div>
+      <div class="adm-tabs" id="admTabs"></div>
+      <div id="adminBody"></div>
     </div>
     <div id="calView" style="display:none">
       <div class="cal-bar">
@@ -1361,6 +1384,152 @@ async function addOne(){
   closeSidePhone();
 }
 
+
+// ── ADMIN DASHBOARD (gated: each section needs access granted in Settings; enforced in the database too) ──
+let adminSecs=[],admTab='',admAR=null,admPay=null,admHires=null,admErr='',admBusy=false,admPeriod='';
+const ADM_LABELS={ar:'💵 AR aging',pipeline:'📈 Eval pipeline',payroll:'🧾 Payroll & visits',onboard:'🧑‍⚕️ New hires'};
+const HIRE_ITEMS=[['contract','Contract / W-2 or 1099 paperwork signed'],['license','License & CPR verified'],['bg','Background check cleared'],['ct','Added to Connecteam'],['evaltool','Added to eval tool clinicians list (and linked to Connecteam)'],['login','Tool logins created (staff-admin)'],['agency','Added to agency systems (HCHB / Careficient etc.)'],['billing','Billing staff record + pay rates set'],['orient','Orientation & competencies done']];
+async function loadAdminAccess(){
+  try{const {data,error}=await sb.rpc('my_admin_sections');adminSecs=error?[]:(data||[]);}catch(_){adminSecs=[];}
+  const on=adminSecs.length>0;
+  const a=document.getElementById('vbAdmin'),b=document.getElementById('mnAdmin');
+  if(a)a.style.display=on?'':'none';if(b)b.style.display=on?'':'none';
+  if(!on&&curView==='admin')setView('board');
+}
+function admFmt(n){return '$'+(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
+function admDays(iso){if(!iso)return null;const a=new Date(iso+'T00:00:00'),b=new Date(localISO()+'T00:00:00');return Math.round((b-a)/86400000);}
+function renderAdmin(){
+  const el=document.getElementById('adminBody');if(!el)return;
+  if(!adminSecs.length){el.innerHTML='<div class="qa-empty">You do not have access to the Admin dashboard.</div>';return;}
+  if(!adminSecs.includes(admTab))admTab=adminSecs[0];
+  document.getElementById('admTabs').innerHTML=['ar','pipeline','payroll','onboard'].filter(k=>adminSecs.includes(k)).map(k=>`<button class="${k===admTab?'on':''}" onclick="admGo('${k}')">${ADM_LABELS[k]}</button>`).join('');
+  if(admErr){el.innerHTML='<div class="qa-empty" style="color:var(--red)">'+esc(admErr)+'<br><br><button class="btn btn-o" onclick="admGo(admTab,true)">Try again</button></div>';return;}
+  if(admBusy){el.innerHTML='<div class="qa-empty">Loading…</div>';return;}
+  if(admTab==='ar')return admRenderAR(el);
+  if(admTab==='pipeline')return admRenderPipe(el);
+  if(admTab==='payroll')return admRenderPay(el);
+  if(admTab==='onboard')return admRenderHires(el);
+}
+async function admGo(k,force){
+  admTab=k;admErr='';
+  try{
+    if(k==='ar'&&(force||!admAR)){admBusy=true;renderAdmin();const {data,error}=await sb.rpc('admin_ar');admBusy=false;if(error)throw error;admAR=data||[];}
+    if(k==='payroll'&&(force||!admPay)){admBusy=true;renderAdmin();const {data,error}=await sb.rpc('admin_visits');admBusy=false;if(error)throw error;admPay=data||[];}
+    if(k==='onboard'&&(force||!admHires)){admBusy=true;renderAdmin();const {data,error}=await sb.from('admin_hires').select('*').order('created_at',{ascending:false});admBusy=false;if(error)throw error;admHires=data||[];}
+  }catch(e){admBusy=false;admErr='Could not load: '+(e.message||e);}
+  renderAdmin();
+}
+// AR: due 30 days after the sent date; unpaid past 30 days is past due
+function admRenderAR(el){
+  const open=[],unsent=[];
+  (admAR||[]).forEach(r=>{
+    const inv=Number(r.invoiced_amount)||0,paid=Number(r.paid_amount)||0,bal=Math.round((inv-paid)*100)/100;
+    if(inv<=0||bal<=0.005)return;
+    const d=admDays(r.invoice_sent_date);
+    (d==null?unsent:open).push({...r,bal,age:d});
+  });
+  const bk=a=>a<=30?0:a<=60?1:a<=90?2:3;
+  const by={};
+  open.forEach(r=>{const g=by[r.agency]=by[r.agency]||{b:[0,0,0,0],t:0,n:0};g.b[bk(r.age)]+=r.bal;g.t+=r.bal;g.n++;});
+  const tot=open.reduce((s,r)=>s+r.bal,0),late=open.filter(r=>r.age>30).reduce((s,r)=>s+r.bal,0),old=open.reduce((m,r)=>Math.max(m,r.age),0);
+  const unsentTot=unsent.reduce((s,r)=>s+r.bal,0);
+  const rows=Object.entries(by).sort((a,b)=>b[1].t-a[1].t);
+  el.innerHTML=`<div class="adm-tiles">
+    <div class="adm-t"><div class="adm-n">${admFmt(tot)}</div><div class="adm-l">Outstanding</div></div>
+    <div class="adm-t"><div class="adm-n" style="color:var(--red)">${admFmt(late)}</div><div class="adm-l">Past due (30+ days)</div></div>
+    <div class="adm-t"><div class="adm-n">${old?old+' d':'—'}</div><div class="adm-l">Oldest unpaid</div></div>
+    <div class="adm-t"><div class="adm-n" style="color:var(--blue)">${admFmt(unsentTot)}</div><div class="adm-l">Invoiced, no sent date</div></div></div>
+    <div class="adm-card"><div class="adm-h">By agency (days since invoice sent)</div>
+    ${rows.length?`<div class="adm-scroll"><table class="adm-tbl"><tr><th>Agency</th><th>0–30</th><th>31–60</th><th>61–90</th><th>90+</th><th>Total</th></tr>
+      ${rows.map(([n,g])=>`<tr><td>${esc(n)} <span class="adm-m">(${g.n})</span></td>${g.b.map((v,i)=>`<td${v&&i?' style="color:var(--red);font-weight:700"':''}>${v?admFmt(v):'—'}</td>`).join('')}<td><b>${admFmt(g.t)}</b></td></tr>`).join('')}</table></div>`:'<div class="qa-empty">Nothing outstanding.</div>'}</div>
+    <div class="adm-card"><div class="adm-h">Unpaid invoices, oldest first</div>
+    ${open.length?`<div class="adm-scroll"><table class="adm-tbl"><tr><th>Agency</th><th>Period</th><th>Sent</th><th>Age</th><th>Balance</th></tr>
+      ${open.sort((a,b)=>b.age-a.age).map(r=>`<tr><td>${esc(r.agency)}</td><td>${esc(r.period_label||'')} ${esc(r.period_year||'')}</td><td>${esc(r.invoice_sent_date||'')}</td><td${r.age>30?' style="color:var(--red);font-weight:700"':''}>${r.age} d${r.age>30?' · past due':''}</td><td>${admFmt(r.bal)}</td></tr>`).join('')}</table></div>`:'<div class="qa-empty">None.</div>'}</div>
+    ${unsent.length?`<div class="adm-card"><div class="adm-h">Invoiced but no sent date entered</div><div class="adm-scroll"><table class="adm-tbl"><tr><th>Agency</th><th>Period</th><th>Amount</th></tr>${unsent.map(r=>`<tr><td>${esc(r.agency)}</td><td>${esc(r.period_label||'')} ${esc(r.period_year||'')}</td><td>${admFmt(r.bal)}</td></tr>`).join('')}</table></div></div>`:''}
+    <div class="adm-m" style="margin-top:6px">Read from the billing tool. Update payments there; this view is read-only. <a href="#" onclick="admGo('ar',true);return false" style="color:var(--accent)">Refresh</a></div>`;
+}
+// Pipeline: from the evals already loaded on the board
+function admRenderPipe(el){
+  const live=evals.filter(e=>!(e.qa&&e.qa.archived&&e.qa.cancelReason));
+  const wk=mondayISO(localISO());
+  const weeks=[];for(let i=7;i>=0;i--)weeks.push(addDaysISO(wk,-7*i));
+  const bucket=d=>{if(!d)return -1;const m=mondayISO(String(d).slice(0,10));return weeks.indexOf(m);};
+  const added=weeks.map(()=>0),seen=weeks.map(()=>0);
+  live.forEach(e=>{const a=bucket(e.dateAdded);if(a>=0)added[a]++;const s=bucket(e.qa&&e.qa.seenDate);if(s>=0)seen[s]++;});
+  const turn=[];live.forEach(e=>{const a=e.dateAdded&&String(e.dateAdded).slice(0,10),s=e.qa&&e.qa.seenDate;if(a&&s){const d=Math.round((new Date(s+'T00:00:00')-new Date(a+'T00:00:00'))/86400000);if(d>=0&&d<120)turn.push(d);}});
+  const avg=turn.length?(turn.reduce((x,y)=>x+y,0)/turn.length).toFixed(1):'—';
+  const st=k=>live.filter(e=>k==='open'?e.status!=='complete':e.status===k).length;
+  const ag={};live.forEach(e=>{const n=e.agency||'(none)';const g=ag[n]=ag[n]||{t:0,done:0,open:0};g.t++;if(e.status==='complete')g.done++;else g.open++;});
+  const mx=Math.max(1,...added,...seen);
+  const bar=(arr,c)=>arr.map((v,i)=>`<div class="adm-bc"><div class="adm-bv">${v||''}</div><div class="adm-bar" style="height:${Math.round(v/mx*80)}px;background:${c}"></div><div class="adm-bl">${weeks[i].slice(5).replace('-','/')}</div></div>`).join('');
+  el.innerHTML=`<div class="adm-tiles">
+    <div class="adm-t"><div class="adm-n">${st('pending')}</div><div class="adm-l">Waiting to assign</div></div>
+    <div class="adm-t"><div class="adm-n">${st('assigned')}</div><div class="adm-l">In QA</div></div>
+    <div class="adm-t"><div class="adm-n">${st('complete')}</div><div class="adm-l">Completed</div></div>
+    <div class="adm-t"><div class="adm-n">${avg}${avg==='—'?'':' d'}</div><div class="adm-l">Avg days added → seen</div></div></div>
+    <div class="adm-card"><div class="adm-h">Added per week (gold) and seen per week (blue), last 8 weeks</div>
+    <div class="adm-chart"><div class="adm-grp">${bar(added,'var(--accent)')}</div><div class="adm-grp">${bar(seen,'var(--blue)')}</div></div></div>
+    <div class="adm-card"><div class="adm-h">By agency</div><div class="adm-scroll"><table class="adm-tbl"><tr><th>Agency</th><th>Total</th><th>Open</th><th>Completed</th></tr>
+    ${Object.entries(ag).sort((a,b)=>b[1].t-a[1].t).map(([n,g])=>`<tr><td>${esc(n)}</td><td>${g.t}</td><td>${g.open}</td><td>${g.done}</td></tr>`).join('')}</table></div></div>
+    <div class="adm-m">Based on the evals in this tool (board, QA and History). Weeks run Monday–Sunday.</div>`;
+}
+function admRenderPay(el){
+  const rows=admPay||[];
+  const keyOf=r=>(r.period_year||'')+'|'+(r.period_label||'');
+  const per={};rows.forEach(r=>{const k=keyOf(r);const p=per[k]=per[k]||{k,y:r.period_year,l:r.period_label,last:''};if((r.last_visit||'')>p.last)p.last=r.last_visit||'';});
+  const periods=Object.values(per).sort((a,b)=>b.last.localeCompare(a.last));
+  if(!periods.length){el.innerHTML='<div class="qa-empty">No visit data in the billing tool yet.</div>';return;}
+  if(!periods.some(p=>p.k===admPeriod))admPeriod=periods[0].k;
+  const sel=rows.filter(r=>keyOf(r)===admPeriod).sort((a,b)=>String(a.staff).localeCompare(String(b.staff)));
+  const sum=f=>sel.reduce((s,r)=>s+(Number(r[f])||0),0);
+  el.innerHTML=`<div class="adm-bar2"><select onchange="admPeriod=this.value;renderAdmin()">${periods.map(p=>`<option value="${esc(p.k)}"${p.k===admPeriod?' selected':''}>${esc((p.l||'')+' '+(p.y||''))}</option>`).join('')}</select>
+    <a href="#" onclick="admGo('payroll',true);return false" style="color:var(--accent);font-size:12px">Refresh</a></div>
+    <div class="adm-tiles">
+    <div class="adm-t"><div class="adm-n">${sum('visits')}</div><div class="adm-l">Visits</div></div>
+    <div class="adm-t"><div class="adm-n">${admFmt(sum('pay'))}</div><div class="adm-l">Visit pay</div></div>
+    <div class="adm-t"><div class="adm-n">${admFmt(sum('charge'))}</div><div class="adm-l">Billed to agencies</div></div>
+    <div class="adm-t"><div class="adm-n">${sel.length}</div><div class="adm-l">Clinicians</div></div></div>
+    <div class="adm-card"><div class="adm-scroll"><table class="adm-tbl"><tr><th>Clinician</th><th>Role</th><th>Visits</th><th>Counted</th><th>Pay</th><th>Billed</th></tr>
+    ${sel.map(r=>`<tr><td>${esc(r.staff)}</td><td>${esc(r.discipline||'')}</td><td>${r.visits}</td><td>${r.countable}</td><td>${admFmt(r.pay)}</td><td>${admFmt(r.charge)}</td></tr>`).join('')}</table></div></div>
+    <div class="adm-m">Visit totals from the billing tool. Mileage and adjustments are not included here.</div>`;
+}
+function admRenderHires(el){
+  const hs=admHires||[];
+  el.innerHTML=`<div class="adm-card"><div class="adm-h">Add a new employee</div>
+    <div class="adm-form"><input id="hrName" placeholder="Full name"><select id="hrRole"><option>PT</option><option>PTA</option><option>OT</option><option>COTA</option><option>SLP</option><option>Admin</option></select><input id="hrDate" type="date" title="Start date"><button class="btn" onclick="hireAdd()">+ Add</button></div></div>
+    ${hs.length?hs.map(h=>{const it=h.items||{},n=HIRE_ITEMS.filter(([k])=>it[k]).length;return`<div class="adm-card${h.status==='done'?' adm-fade':''}">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start"><div><b style="font-size:15px">${esc(h.name)}</b> <span class="adm-m">${esc(h.role||'')}${h.start_date?' · starts '+esc(h.start_date):''}</span><div class="adm-m">${n} of ${HIRE_ITEMS.length} done</div></div>
+      <div style="display:flex;gap:5px"><button class="cbtn" onclick="hireStatus('${h.id}','${h.status==='done'?'active':'done'}')">${h.status==='done'?'Reopen':'✓ Finish'}</button><button class="cbtn del" onclick="hireDel('${h.id}')">Delete</button></div></div>
+      <div class="adm-chk">${HIRE_ITEMS.map(([k,t])=>`<label><input type="checkbox" ${it[k]?'checked':''} onchange="hireToggle('${h.id}','${k}',this.checked)"> <span${it[k]?' style="text-decoration:line-through;color:var(--muted)"':''}>${esc(t)}</span></label>`).join('')}</div>
+      <textarea class="qa-note" placeholder="Notes…" onchange="hireNote('${h.id}',this.value)">${esc(h.notes||'')}</textarea></div>`;}).join(''):'<div class="qa-empty">No new hires being onboarded.</div>'}`;
+}
+async function hireAdd(){
+  const name=document.getElementById('hrName').value.trim();if(!name){flash('Enter a name');return;}
+  const row={name,role:document.getElementById('hrRole').value,start_date:document.getElementById('hrDate').value||null};
+  const {data,error}=await sb.from('admin_hires').insert(row).select().single();
+  if(error){alert('Could not add: '+error.message);return;}
+  admHires=[data,...(admHires||[])];renderAdmin();
+}
+async function hireToggle(id,k,v){
+  const h=(admHires||[]).find(x=>x.id===id);if(!h)return;h.items={...(h.items||{}),[k]:v};renderAdmin();
+  const {error}=await sb.from('admin_hires').update({items:h.items}).eq('id',id);if(error)alert('Not saved: '+error.message);
+}
+async function hireNote(id,v){const h=(admHires||[]).find(x=>x.id===id);if(!h)return;h.notes=v;const {error}=await sb.from('admin_hires').update({notes:v}).eq('id',id);if(error)alert('Not saved: '+error.message);}
+async function hireStatus(id,s){const h=(admHires||[]).find(x=>x.id===id);if(!h)return;h.status=s;renderAdmin();const {error}=await sb.from('admin_hires').update({status:s}).eq('id',id);if(error)alert('Not saved: '+error.message);}
+async function hireDel(id){if(!confirm('Delete this onboarding checklist?'))return;const {error}=await sb.from('admin_hires').delete().eq('id',id);if(error){alert(error.message);return;}admHires=(admHires||[]).filter(x=>x.id!==id);renderAdmin();}
+// Settings: who gets which Admin section (admins only)
+let admAccessMap={};
+async function loadAdminAccessMap(){
+  try{const {data,error}=await sb.rpc('list_admin_access');if(error)throw error;admAccessMap={};(data||[]).forEach(r=>admAccessMap[r.user_id]=r.sections||[]);}catch(_){admAccessMap={};}
+}
+async function setAdmAccess(uid,sec,on){
+  const cur=new Set(admAccessMap[uid]||[]);on?cur.add(sec):cur.delete(sec);
+  const arr=[...cur];
+  const {error}=await sb.rpc('set_admin_access',{p_user:uid,p_sections:arr});
+  if(error){flash('✕ '+error.message);loadStaffAdmin();return;}
+  admAccessMap[uid]=arr;flash('✓ Access updated');
+}
+
 // ── AUTH (same login + profiles table + staff-admin function as the quote tool) ──
 const METRO_COMPANY_ID='b00ca9bc-d669-492d-8ad5-2d2783321ade';
 let me=null;
@@ -1446,6 +1615,7 @@ async function afterLogin(user){
   if(p.active===false){await deny('This account is inactive. Contact an admin.');return;}
   me=p;userName=p.full_name||user.email||'';
   hideGate();renderAccount();
+  loadAdminAccess();
   await startApp();
 }
 async function doSignOut(){await sb.auth.signOut();location.reload();}
@@ -1482,7 +1652,8 @@ async function staffApi(action,payload){
 let staffRows=[];
 async function loadStaffAdmin(){
   const el=document.getElementById('staffList');if(!el)return;
-  const {data,error}=await sb.from('profiles').select('id, full_name, email, phone, active').eq('company_id',METRO_COMPANY_ID).order('full_name');
+  const {data,error}=await sb.from('profiles').select('id, full_name, email, phone, active, is_super_admin').eq('company_id',METRO_COMPANY_ID).order('full_name');
+  await loadAdminAccessMap();
   if(error){el.innerHTML='<div style="font-size:11px;color:var(--red)">Could not load staff: '+esc(error.message)+'</div>';return;}
   staffRows=data||[];
   if(!staffRows.length){el.innerHTML='<div style="font-size:11px;color:var(--muted)">No staff yet.</div>';return;}
@@ -1490,7 +1661,8 @@ async function loadStaffAdmin(){
     const off=r.active===false;
     return `<div class="staff-row" style="opacity:${off?.55:1}">
       <div style="min-width:0"><div style="font-weight:600">${esc(r.full_name||'—')}${off?' <span style="color:var(--red);font-weight:400">(inactive)</span>':''}</div>
-      <div style="color:var(--muted);font-size:11px;overflow-wrap:anywhere">${esc(r.email||'')}</div></div>
+      <div style="color:var(--muted);font-size:11px;overflow-wrap:anywhere">${esc(r.email||'')}</div>
+      <div class="acc-row">${r.is_super_admin?'<span style="color:var(--accent)">Admin dashboard: full access</span>':'<span style="color:var(--muted)">Admin dashboard:</span>'+[['ar','AR'],['pipeline','Pipeline'],['payroll','Payroll'],['onboard','Hires']].map(([k,t])=>`<label><input type="checkbox" ${(admAccessMap[r.id]||[]).includes(k)?'checked':''} onchange="setAdmAccess('${esc(r.id)}','${k}',this.checked)">${t}</label>`).join('')}</div></div>
       <div style="display:flex;gap:5px">
         <button class="cbtn" onclick="resetStaffPw('${esc(r.id)}')">Reset password</button>
         <button class="cbtn${off?'':' del'}" onclick="toggleStaff('${esc(r.id)}',${off})">${off?'Reactivate':'Deactivate'}</button>
@@ -1926,8 +2098,9 @@ function setView(v){
   document.getElementById('calView').style.display=calOn?'block':'none';
   document.getElementById('qaView').style.display=v==='qa'?'block':'none';
   document.getElementById('histView').style.display=v==='hist'?'block':'none';
-  [['vbBoard','board'],['vbCal','cal'],['vbQa','qa'],['vbHist','hist']].forEach(([id,k])=>document.getElementById(id).classList.toggle('on',v===k));
-  if(v==='qa')renderQA();if(v==='hist')renderHistory();
+  document.getElementById('adminView').style.display=v==='admin'?'block':'none';
+  [['vbBoard','board'],['vbCal','cal'],['vbQa','qa'],['vbHist','hist'],['vbAdmin','admin']].forEach(([id,k])=>document.getElementById(id).classList.toggle('on',v===k));
+  if(v==='qa')renderQA();if(v==='hist')renderHistory();if(v==='admin'){renderAdmin();admGo(admTab||adminSecs[0]||'ar');}
   updMnav();
   if(calOn){if(!calData&&!calBusy)loadCal();else renderCal();}
 }
@@ -2028,7 +2201,7 @@ function localISO(d){d=d||new Date();return d.getFullYear()+'-'+String(d.getMont
 function updMnav(){
   const side=document.body.classList.contains('show-side');
   const set=(id,on)=>{const b=document.getElementById(id);if(b)b.classList.toggle('on',on);};
-  set('mnTools',side);set('mnBoard',!side&&curView==='board');set('mnCal',!side&&curView==='cal');set('mnQa',!side&&curView==='qa');set('mnHist',!side&&curView==='hist');
+  set('mnTools',side);set('mnBoard',!side&&curView==='board');set('mnCal',!side&&curView==='cal');set('mnQa',!side&&curView==='qa');set('mnHist',!side&&curView==='hist');set('mnAdmin',!side&&curView==='admin');
 }
 function mobNav(w){
   const side=document.body.classList.contains('show-side');
