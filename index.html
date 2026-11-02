@@ -204,6 +204,11 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
 .cal-ev.noct{border:1px dashed var(--accent);background:rgba(251,191,36,.08);}
 .cal-ev.seen{opacity:.55;}
 .menu-btn{display:none;padding:6px 12px;border-radius:20px;border:1px solid var(--accent);background:transparent;color:var(--accent);font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;}
+.pf{margin:4px 0 10px;}
+.pf-q{width:100%;font-size:14px;padding:9px 12px;margin-bottom:6px;}
+.pf-r{display:flex;flex-wrap:wrap;gap:6px;}
+.pf-r select{flex:1 1 calc(50% - 6px);min-width:0;font-size:13px;padding:7px 8px;border-radius:8px;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:inherit;}
+.pf-n{font-size:11px;color:var(--muted);margin-top:5px;}
 .mnav{display:none;}
 #fClin,#fArea,#fAgency{background:var(--bg);border:1px solid var(--border);border-radius:20px;color:var(--text);font-family:inherit;font-size:14px;padding:8px 14px;outline:none;cursor:pointer;}
 #fClear{color:var(--red);}
@@ -452,6 +457,16 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
     <div class="panel hidden" id="tp-qa">
       <div class="lbl">QA Tracker</div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:6px;line-height:1.5">Track evals after assignment.</div>
+      <div class="pf" id="qaFilt">
+        <input id="qaQ" class="pf-q" type="search" placeholder="Search name, place, zip, clinician…" oninput="renderQA()">
+        <div class="pf-r">
+          <select id="qaC" onchange="renderQA()"><option value="">All clinicians</option></select>
+          <select id="qaA" onchange="renderQA()"><option value="">All areas</option></select>
+          <select id="qaG" onchange="renderQA()"><option value="">All agencies</option></select>
+          <button class="fb" id="qaX" onclick="pfClear('qa')" style="display:none">✕ Clear</button>
+        </div>
+        <div class="pf-n" id="qaN"></div>
+      </div>
       <div id="qaList"></div>
 
     </div>
@@ -501,6 +516,16 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <button class="admin-only hidden" onclick="clrHistory()" style="font-size:10px;color:var(--red);background:none;border:1px solid rgba(248,113,113,0.3);border-radius:4px;padding:3px 8px;cursor:pointer;font-family:inherit;">Clear All</button>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:10px;line-height:1.5">Completed evals and evals cleared from the board. Restore brings an archived eval back to the board.</div>
+      <div class="pf" id="histFilt">
+        <input id="histQ" class="pf-q" type="search" placeholder="Search name, place, zip, clinician…" oninput="renderHistory()">
+        <div class="pf-r">
+          <select id="histC" onchange="renderHistory()"><option value="">All clinicians</option></select>
+          <select id="histA" onchange="renderHistory()"><option value="">All areas</option></select>
+          <select id="histG" onchange="renderHistory()"><option value="">All agencies</option></select>
+          <button class="fb" id="histX" onclick="pfClear('hist')" style="display:none">✕ Clear</button>
+        </div>
+        <div class="pf-n" id="histN"></div>
+      </div>
       <div id="histList"><div class="qa-empty">No completed evals yet.</div></div>
     </div>
 
@@ -954,13 +979,38 @@ function cmpEval(a,b){
   const va=(a.qa&&a.qa.visitDate)||'9999-99-99',vb=(b.qa&&b.qa.visitDate)||'9999-99-99';
   return va<vb?-1:va>vb?1:old; // soonest visit first; evals with no date yet follow, oldest first
 }
+// ── QA / HISTORY filters: search + clinician + area + agency, one set per panel ──
+function pfVals(k){const g=id=>{const el=document.getElementById(k+id);return el?el.value:'';};return {q:g('Q').trim().toLowerCase(),c:g('C'),a:g('A'),g:g('G')};}
+function passPF(e,k,v){
+  v=v||pfVals(k);
+  if(v.c){if(v.c==='__none'){if(e.clinician)return false;}else if(e.clinician!==v.c&&e.ptaClinician!==v.c)return false;}
+  if(v.a&&String(e.location||'').trim().toLowerCase()!==v.a)return false;
+  if(v.g){if(v.g==='__none'){if(e.agency)return false;}else if(e.agency!==v.g)return false;}
+  if(v.q){const hay=[e.location,e.zip,e.patient,e.clinician,e.ptaClinician,e.agency,e.discipline,e.note].join(' ').toLowerCase();if(!v.q.split(/\s+/).every(w=>hay.includes(w)))return false;}
+  return true;
+}
+function pfFill(k,pool){
+  const clins_=[...new Set(pool.flatMap(e=>[e.clinician,e.ptaClinician]).filter(Boolean))].sort();
+  const areas=new Map();pool.forEach(e=>{const l=String(e.location||'').trim();if(l&&!areas.has(l.toLowerCase()))areas.set(l.toLowerCase(),l);});
+  const ags=[...new Set(pool.map(e=>e.agency).filter(Boolean))].sort();
+  const fill=(id,first,opts)=>{const el=document.getElementById(k+id);if(!el)return;const cur=el.value;
+    el.innerHTML='<option value="">'+first+'</option>'+opts.map(o=>'<option value="'+esc(o[0])+'">'+esc(o[1])+'</option>').join('');
+    el.value=opts.some(o=>o[0]===cur)?cur:'';};
+  fill('C','All clinicians',[['__none','Unassigned'],...clins_.map(c=>[c,c])]);
+  fill('A','All areas',[...areas.entries()].sort((a,b)=>a[1].localeCompare(b[1])));
+  fill('G','All agencies',[['__none','No agency'],...ags.map(a=>[a,a])]);
+  const v=pfVals(k),on=!!(v.q||v.c||v.a||v.g),x=document.getElementById(k+'X');if(x)x.style.display=on?'':'none';
+}
+function pfCount(k,shown,total){const n=document.getElementById(k+'N');if(n)n.textContent=(shown===total?total+' eval'+(total===1?'':'s'):'Showing '+shown+' of '+total);}
+function pfClear(k){['Q','C','A','G'].forEach(x=>{const el=document.getElementById(k+x);if(el)el.value='';});(k==='qa'?renderQA:renderHistory)();}
 function renderHistory(){
   const list=document.getElementById('histList');if(!list)return;
-  const completed=evals.filter(inHistory).sort((a,b)=>{ // History: most recent first, unless sorting by oldest added
+  const allHist=evals.filter(inHistory);pfFill('hist',allHist);const completed=allHist.filter(e=>passPF(e,'hist')).sort((a,b)=>{ // History: most recent first, unless sorting by oldest added
     if(sortMode==='added')return cmpEval(a,b);
     if(sortMode==='visit'){const va=(a.qa&&a.qa.visitDate)||'',vb=(b.qa&&b.qa.visitDate)||'';return va<vb?1:va>vb?-1:cmpEval(b,a);}
     return addedIdx(a)-addedIdx(b);});
-  if(!completed.length){list.innerHTML='<div class="qa-empty">Nothing in history yet.</div>';return;}
+  pfCount('hist',completed.length,allHist.length);
+  if(!completed.length){list.innerHTML='<div class="qa-empty">'+(allHist.length?'No evals match these filters.':'Nothing in history yet.')+'</div>';return;}
   list.innerHTML=completed.map(e=>{
     const qa=e.qa||{};
     const checks=[qa.seen?'✓ Seen':'',qa.orders?'✓ Orders':'',qa.pta?'✓ PTA':'',qa.scheduled?'✓ Scheduled':''].filter(Boolean).join(' · ');
@@ -2400,12 +2450,12 @@ function renderQA(){
   const list=document.getElementById('qaList');if(!list)return;
 
   // Split into active (assigned, not fully QA'd) and completed QA
-  const _f=filtVals();const assigned=evals.filter(e=>e.status==='assigned'&&!isArchived(e)&&passFilt(e,_f)).sort(cmpEval);
+  const allQA=evals.filter(e=>e.status==='assigned'&&!isArchived(e));pfFill('qa',allQA);const assigned=allQA.filter(e=>passPF(e,'qa')).sort(cmpEval);pfCount('qa',assigned.length,allQA.length);
   const completedQA=evals.filter(e=>e.status==='complete'&&(e.qa?.seen||e.qa?.orders||e.qa?.scheduled));
 
   // Active QA
   if(!assigned.length){
-    list.innerHTML='<div class="qa-empty">No assigned evals yet.<br>Assign clinicians on the board first.</div>';
+    list.innerHTML=allQA.length?'<div class="qa-empty">No evals match these filters.</div>':'<div class="qa-empty">No assigned evals yet.<br>Assign clinicians on the board first.</div>';
   } else {
     list.innerHTML=assigned.map(e=>{
       const qa=e.qa||{};const allDone=qa.seen&&qa.orders&&qa.sysScheduled;
