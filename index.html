@@ -315,6 +315,24 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
     </div>
   </div>
 </div>
+<div id="mailModal" class="modal hidden">
+  <div class="modal-box" style="max-width:560px">
+    <div class="auth-title" style="text-align:left">✉ Email the form</div>
+    <div id="mailWho" class="modal-sum"></div>
+    <div class="modal-sum" style="margin-top:4px">To</div>
+    <div id="mailTo" style="display:grid;gap:6px"></div>
+    <input id="mailOther" placeholder="Another address (optional)">
+    <div style="display:grid;gap:6px;margin-top:2px">
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="mailMode" id="mailNotice" checked onchange="mailMode()" style="width:18px;height:18px;margin-top:1px"> <span><b>Notice only</b> (no patient details). Says a form is ready; send the full form by fax or portal. The form stays in "To send".</span></label>
+      <label style="display:flex;gap:8px;align-items:flex-start;font-size:13px"><input type="radio" name="mailMode" id="mailFull" onchange="mailMode()" style="width:18px;height:18px;margin-top:1px"> <span><b>Full form</b> with patient details and attachments. Only use from a HIPAA-covered mailbox.</span></label>
+    </div>
+    <input id="mailSubj" placeholder="Subject" maxlength="200">
+    <textarea id="mailText" style="height:240px;min-height:160px;flex:none;resize:vertical"></textarea>
+    <label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" id="mailAtt" style="width:18px;height:18px"> Attach the signature and photos</label>
+    <div class="modal-sum">Sends from the Metro mailbox. Check the addresses before you send.</div>
+    <div style="display:flex;gap:6px;margin-top:4px"><button class="btn btn-g" id="mailGo" style="flex:2" onclick="mailSend()">Send email</button><button class="btn btn-o" style="flex:1" onclick="mailClose()">Cancel</button></div>
+  </div>
+</div>
 <div id="idModal" class="modal hidden">
   <div class="modal-box">
     <div class="auth-title" style="text-align:left">Patient last name or ID</div>
@@ -1609,9 +1627,11 @@ function formTypeName(f){return admTypeNames[formTypeKey(f)]||f.form_title||'For
 async function admLoadForms(){
   const {data,error}=await sb.from('form_submissions').select('*').order('submitted_at',{ascending:false}).limit(300);
   if(error)throw error;admForms=data||[];
+  await admLoadContacts();
   try{const t=await sb.from('form_types').select('*');admTypeNames={};(t.data||[]).forEach(x=>admTypeNames[String(x.form_id)]=x.name);}catch(_){}
   const n=admForms.filter(f=>f.status==='new').length,b=document.getElementById('vbAdmin');if(b)b.textContent='🗂 Admin'+(n?' ('+n+')':'');
 }
+function agList(){return [...new Set([...agencies,...(admForms||[]).map(f=>f.agency).filter(Boolean)])].sort();}
 function admRenderForms(el){
   const all=admForms||[];
   const cnt=s=>all.filter(f=>f.status===s).length;
@@ -1622,7 +1642,9 @@ function admRenderForms(el){
   el.innerHTML=`<div class="adm-bar2" style="flex-wrap:wrap">
     ${[['new','To send ('+cnt('new')+')'],['sent','Sent ('+cnt('sent')+')'],['na','Not needed ('+cnt('na')+')'],['all','All']].map(([k,t])=>`<button class="fb${admFormFilt===k?' on':''}" onclick="admFormFilt='${k}';renderAdmin()">${t}</button>`).join('')}
     <select onchange="admFormAg=this.value;renderAdmin()"><option value="">All agencies</option><option value="__none"${admFormAg==='__none'?' selected':''}>No agency set</option>${ags.map(a=>`<option${admFormAg===a?' selected':''}>${esc(a)}</option>`).join('')}</select>
-    <a href="#" onclick="admGo('forms',true);return false" style="color:var(--accent);font-size:12px">Refresh</a></div>
+    <a href="#" onclick="admGo('forms',true);return false" style="color:var(--accent);font-size:12px">Refresh</a>
+    <button class="fb${admShowContacts?' on':''}" onclick="admShowContacts=!admShowContacts;renderAdmin()">✉ Agency emails</button></div>
+    ${admShowContacts?(window.__acAgs=agList(),admContactsPanel(window.__acAgs)):''}
     <div class="adm-bar2" style="flex-wrap:wrap;margin-top:-2px"><span class="adm-m">Form type:</span>
       <button class="fb${!admFormType?' on':''}" onclick="admFormType='';renderAdmin()">All (${inStatus.length})</button>
       ${Object.entries(tcount).sort((a,b)=>a[1].name.localeCompare(b[1].name)).map(([k,v])=>`<button class="fb${admFormType===k?' on':''}" onclick="admFormType='${esc(k)}';renderAdmin()">${esc(v.name)} (${v.n})</button>`).join('')}</div>
@@ -1637,8 +1659,8 @@ function admRenderForms(el){
         <div style="margin-top:6px;display:grid;gap:6px">${ans.map(a=>`<div style="font-size:13px"><div class="adm-m">${esc(a.label||'Question '+a.q)}</div><div style="white-space:pre-wrap;overflow-wrap:anywhere">${/^https?:\/\//.test(a.value)?a.value.split('\n').map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener" style="color:var(--accent)">${/^(signature|image|scanDocument)$/.test(a.type)?`<img src="${esc(u)}" alt="${esc(a.type==='signature'?'Signature':'Photo')}" loading="lazy" style="max-width:100%;max-height:140px;background:#fff;border-radius:6px;display:block;margin-bottom:2px" onerror="this.style.display='none'">`:''}${esc(a.type==='signature'?'Open signature':'Open attachment')}</a>`).join('<br>'):esc(a.value)}</div></div>`).join('')||'<div class="adm-m">No answers saved.</div>'}</div></details>
       ${f.status==='new'?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
         <select id="fv${f.id}" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px"><option>Faxed</option><option>Emailed</option><option>Portal</option><option>Other</option></select>
-        <button class="cbtn done" onclick="formSent('${f.id}')">✓ Mark sent</button><button class="cbtn" onclick="formSet('${f.id}',{status:'na'})">Not needed</button></div>`
-      :`<div class="adm-m">${f.status==='sent'?'Sent'+(f.sent_via?' by '+esc(f.sent_via):'')+(f.sent_by?' · '+esc(f.sent_by):'')+(f.sent_at?' · '+esc(new Date(f.sent_at).toLocaleDateString()):''):'Marked not needed'} <a href="#" onclick="formSet('${f.id}',{status:'new',sent_via:'',sent_by:'',sent_at:null});return false" style="color:var(--accent)">Reopen</a></div>`}
+        <button class="cbtn done" onclick="mailOpen('${f.id}')">✉ Email agency</button><button class="cbtn" onclick="formSent('${f.id}')">✓ Mark sent</button><button class="cbtn" onclick="formSet('${f.id}',{status:'na'})">Not needed</button></div>`
+      :`<div class="adm-m">${f.status==='sent'?'Sent'+(f.sent_via?' by '+esc(f.sent_via):'')+(f.sent_to?' to '+esc(f.sent_to):'')+(f.sent_by?' · '+esc(f.sent_by):'')+(f.sent_at?' · '+esc(new Date(f.sent_at).toLocaleDateString()):''):'Marked not needed'} <a href="#" onclick="formSet('${f.id}',{status:'new',sent_via:'',sent_by:'',sent_at:null});return false" style="color:var(--accent)">Reopen</a></div>`}
       <textarea class="qa-note" placeholder="Notes…" onchange="formSet('${f.id}',{notes:this.value},true)" style="margin-top:6px">${esc(f.notes||'')}</textarea></div>`;}).join(''):'<div class="qa-empty">Nothing here. Forms staff submit in Connecteam show up automatically.</div>'}`;
 }
 async function formSet(id,patch,quiet){
@@ -1655,6 +1677,87 @@ async function formRename(key){
   admTypeNames[key]=name;admRenaming=null;renderAdmin();
 }
 function formSent(id){formSet(id,{status:'sent',sent_via:document.getElementById('fv'+id).value,sent_by:userName||'',sent_at:new Date().toISOString()});}
+
+// ── Agency email contacts + emailing a form to the agency ──
+let admContacts={},admShowContacts=false,mailId=null;
+async function admLoadContacts(){
+  try{const {data}=await sb.from('agency_contacts').select('*');admContacts={};(data||[]).forEach(r=>admContacts[r.agency_name]=r);}catch(_){admContacts={};}
+}
+function acRows(name){const c=admContacts[name]||{};return [1,2,3].map(i=>({e:c['email_'+i]||'',l:c['label_'+i]||''})).filter(x=>x.e);}
+function admContactsPanel(ags){
+  return `<div class="adm-card"><div class="adm-h">Agency email contacts</div>
+    <div class="adm-m" style="margin-bottom:8px">Up to three addresses per agency (for example Intake, Billing, Clinical manager). They show as choices when you email a form. Saves when you leave a box.</div>
+    ${ags.map((a,i)=>{const c=admContacts[a]||{};return `<div style="border-top:1px solid var(--border);padding:8px 0"><b>${esc(a)}</b>
+      ${[1,2,3].map(n=>`<div class="adm-form" style="margin-top:4px"><input id="acL${n}_${i}" class="adm-in" style="width:130px" placeholder="Label" value="${esc(c['label_'+n]||'')}" onchange="acSave(${i})"><input id="acE${n}_${i}" class="adm-in" style="flex:1;min-width:200px" placeholder="email@agency.com" value="${esc(c['email_'+n]||'')}" onchange="acSave(${i})"></div>`).join('')}</div>`;}).join('')}
+    <div class="adm-form" style="border-top:1px solid var(--border);padding-top:10px;margin-top:6px"><input id="acTest" class="adm-in" style="flex:1;min-width:200px" placeholder="Send a test email to…" value="${esc((me&&me.email)||'')}"><button class="btn btn-o" style="width:auto;margin:0" onclick="acTest()">Send test email</button></div></div>`;
+}
+async function acSave(i){
+  const name=window.__acAgs&&window.__acAgs[i];if(!name)return;
+  const row={agency_name:name,updated_at:new Date().toISOString()};
+  for(const n of [1,2,3]){
+    const e=document.getElementById('acE'+n+'_'+i).value.trim().toLowerCase(),l=document.getElementById('acL'+n+'_'+i).value.trim();
+    if(e&&!/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(e)){flash('"'+e+'" is not a valid email');return;}
+    row['email_'+n]=e;row['label_'+n]=l;
+  }
+  const {error}=await sb.from('agency_contacts').upsert(row);
+  if(error){alert('Not saved (has email_setup.sql been run?): '+error.message);return;}
+  admContacts[name]=row;flash('✓ Saved');
+}
+async function mailApi(body){
+  const {data,error}=await sb.functions.invoke('admin-send-email',{body});
+  if(error){let msg=error.message||'Request failed';try{const j=await error.context.json();if(j&&j.error)msg=j.error;}catch(_){}throw new Error(msg);}
+  if(data&&data.error)throw new Error(data.error);
+  return data;
+}
+async function acTest(){
+  const to=document.getElementById('acTest').value.trim();if(!to){flash('Enter an address');return;}
+  try{await mailApi({action:'test',to:[to],subject:'Test',body:'test'});flash('✓ Test email sent to '+to);}catch(e){alert(e.message);}
+}
+function mailBody(f){
+  const when=new Date(f.submitted_at).toLocaleString('en-US',{dateStyle:'medium',timeStyle:'short'});
+  const lines=(f.answers||[]).filter(a=>a.value).map(a=>{
+    const name=a.label||'Question';
+    if(/^(signature|image|scanDocument|files)$/.test(a.type))return name+': '+(a.type==='signature'?'(signature attached)':'(attachment)');
+    return name+': '+a.value;
+  });
+  return 'Hello,\n\nPlease see the form below from Metro Mobile Health Care.\n\nForm: '+formTypeName(f)+'\nSubmitted by: '+(f.submitter_name||'')+' on '+when+'\n\n'+lines.join('\n')+'\n\nThank you,\n'+(userName||'Metro Mobile Health Care');
+}
+function mailNoticeBody(f){
+  const when=new Date(f.submitted_at).toLocaleDateString('en-US',{dateStyle:'medium'});
+  return 'Hello,\n\nMetro Mobile Health Care has a form ready for your agency: '+formTypeName(f)+', submitted '+when+' by '+(f.submitter_name||'our clinician')+'.\n\nFor patient privacy, this email does not include patient details. We will send the full form by a secure method (fax or your portal). Please reply or call us if you need it sent again.\n\nThank you,\n'+(userName||'Metro Mobile Health Care');
+}
+function mailMode(){
+  const f=(admForms||[]).find(x=>x.id===mailId);if(!f)return;
+  const notice=document.getElementById('mailNotice').checked;
+  document.getElementById('mailText').value=notice?mailNoticeBody(f):mailBody(f);
+  const att=document.getElementById('mailAtt');att.checked=!notice;att.disabled=notice;
+  document.getElementById('mailGo').textContent=notice?'Send notice':'Send email';
+}
+function mailOpen(id){
+  const f=(admForms||[]).find(x=>x.id===id);if(!f)return;mailId=id;
+  const rows=acRows(f.agency);
+  document.getElementById('mailWho').textContent=formTypeName(f)+(f.agency?' → '+f.agency:'');
+  document.getElementById('mailTo').innerHTML=rows.length?rows.map((r,i)=>`<label style="display:flex;gap:8px;align-items:center;font-size:13px"><input type="checkbox" class="mailChk" value="${esc(r.e)}" ${rows.length===1?'checked':''} style="width:18px;height:18px"> <span>${esc(r.l?r.l+' · ':'')}${esc(r.e)}</span></label>`).join(''):'<div class="modal-sum">'+(f.agency?'No email saved for '+esc(f.agency)+' yet. Add one under "Agency emails", or type an address below.':'Pick an agency on the card first, or type an address below.')+'</div>';
+  document.getElementById('mailOther').value='';
+  document.getElementById('mailSubj').value='Form: '+formTypeName(f)+' – '+new Date(f.submitted_at).toLocaleDateString('en-US');
+  document.getElementById('mailText').value=mailBody(f);
+  document.getElementById('mailNotice').checked=true;mailMode();
+  document.getElementById('mailGo').disabled=false;
+  document.getElementById('mailModal').classList.remove('hidden');
+}
+function mailClose(){document.getElementById('mailModal').classList.add('hidden');mailId=null;}
+async function mailSend(){
+  const f=(admForms||[]).find(x=>x.id===mailId);if(!f)return;
+  const to=[...document.querySelectorAll('.mailChk:checked')].map(c=>c.value);
+  document.getElementById('mailOther').value.split(/[,;\s]+/).filter(Boolean).forEach(x=>to.push(x));
+  if(!to.length){flash('Choose who to send it to');return;}
+  const go=document.getElementById('mailGo');go.disabled=true;go.textContent='Sending…';
+  try{
+    const r=await mailApi({to,subject:document.getElementById('mailSubj').value,body:document.getElementById('mailText').value,attach:document.getElementById('mailAtt').checked,notice:document.getElementById('mailNotice').checked,submission_id:f.id});
+    mailClose();flash(r.notice?'✓ Notice emailed to '+r.sent_to+'. The form is still in To send.':'✓ Emailed to '+r.sent_to+(r.attached?' · '+r.attached+' attached':'')+(r.skipped?' · '+r.skipped+' attachment(s) could not be added':''));
+    await admLoadForms();renderAdmin();
+  }catch(e){go.disabled=false;go.textContent='Send email';alert(e.message);}
+}
 
 // Settings: who gets which Admin section (admins only)
 let admAccessMap={};
