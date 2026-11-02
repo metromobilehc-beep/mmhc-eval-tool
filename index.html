@@ -553,6 +553,8 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         <button class="btn btn-o" style="margin-top:4px" onclick="loadCtUsers()">Link clinicians to Connecteam users</button>
         <div id="ctMap" style="margin-top:8px"></div>
         <details style="margin-top:8px"><summary style="font-size:11px;color:var(--muted);cursor:pointer">Troubleshooting (rarely needed)</summary>
+          <button class="btn btn-o" style="margin-top:6px" onclick="formsHook('list_webhooks')">Show Connecteam webhooks</button>
+          <button class="btn btn-o" style="margin-top:4px" onclick="formsHook('register_forms_webhook')">Register the forms webhook</button>
           <button class="btn btn-o" style="margin-top:6px" onclick="webhookLog()">Show recent availability webhook events</button>
           <div style="display:flex;gap:6px;margin-top:4px"><select id="ctRawWho" style="flex:1"></select><button class="btn btn-o" style="width:auto;margin:0" onclick="rawUser()">Show raw availability</button></div>
           <pre id="ctRaw" style="display:none;white-space:pre-wrap;word-break:break-all;font-size:10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;padding:8px;margin-top:6px;max-height:240px;overflow:auto"></pre>
@@ -1757,6 +1759,11 @@ function ctWords(x){return String(x==null?'':x).toLowerCase().split(/[^a-z0-9]+/
 function ctJobExact(agency,jobs){const a=ctNorm(agency);if(!a)return null;const live=(jobs||[]).filter(j=>j&&!j.parentId);
   return live.find(j=>ctNorm(j.title)===a)||live.find(j=>{const t=ctNorm(j.title);return t.length>=3&&(a.includes(t)||t.includes(a));})||live.find(j=>{const aw=ctWords(agency),jw=ctWords(j.title);return aw.length>0&&aw.every(w=>jw.includes(w));})||null;}
 function ctJobFor(agency,jobs){const alias=CT_SYSTEM_ALIAS[ctNorm(agency)];return ctJobExact(agency,jobs)||(alias?ctJobExact(alias,jobs):null);}
+async function formsHook(action){
+  const pre=document.getElementById('ctRaw');pre.style.display='block';pre.textContent='Working…';
+  try{const r=await ctApi(action,{});pre.textContent=(action==='register_forms_webhook'?(r.status>=200&&r.status<300?'Registered. Now submit a test form.\n\n':'Connecteam said no (see below).\n\n'):'')+'HTTP '+r.status+'\n'+r.body;}
+  catch(e){pre.textContent='Error: '+e.message;}
+}
 async function ctApi(action,payload){
   const {data,error}=await sb.functions.invoke('connecteam-shift',{body:{action,...(payload||{})}});
   if(error){
