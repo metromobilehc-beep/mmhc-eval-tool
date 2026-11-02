@@ -235,6 +235,12 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
   .fr .fb{min-width:0;white-space:nowrap;text-align:center;padding:10px 0;font-size:11px;}
   .fr #sortSel{grid-column:1 / 4;}
   .fr #monthFilter{grid-column:4 / 6;}
+  .fr .fb{order:0;}
+  .fr #sortSel{order:1;}.fr #monthFilter{order:2;}.fr #fClin{order:3;}.fr #fArea{order:4;}.fr #fAgency{order:5;}.fr #fClear{order:6;}
+  .fr #fClin{grid-column:1 / 4;}
+  .fr #fArea{grid-column:4 / 6;}
+  .fr #fAgency{grid-column:1 / 4;}
+  .fr #fClear{grid-column:4 / 6;}
   .fr select{min-width:0;min-height:40px;width:100%;padding:6px 10px;}
   .board{padding:10px;gap:10px;}
   .bh .bt{font-size:15px;}
@@ -269,14 +275,14 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
     </div>
   </div>
 </div>
-<div id="smartModal" class="modal hidden">
-  <div class="modal-box" style="max-width:620px;width:96%">
-    <div class="auth-title" style="text-align:left">✨ Check these referrals</div>
-    <div class="modal-sum">Pick the agency, confirm who is free and set the visit date. Confirm adds them to the board and, with a clinician and date, creates the Connecteam shift. Leave the date or clinician blank to just add the card.</div>
-    <div id="smartList" style="max-height:55vh;overflow:auto"></div>
-    <div style="display:flex;gap:6px;margin-top:8px">
-      <button class="btn btn-g" id="smartGo" style="flex:2" onclick="smartConfirm()">Confirm &amp; add</button>
-      <button class="btn btn-o" style="flex:1" onclick="smartClose()">Cancel</button>
+<div id="idModal" class="modal hidden">
+  <div class="modal-box">
+    <div class="auth-title" style="text-align:left">Patient last name or ID</div>
+    <div id="idMsg" class="modal-sum"></div>
+    <input id="idIn" maxlength="40" placeholder="Last name or ID" onkeydown="if(event.key==='Enter')idAnswer(true)">
+    <div style="display:flex;gap:6px;margin-top:4px">
+      <button class="btn btn-g" style="flex:2" onclick="idAnswer(true)">Save &amp; move to History</button>
+      <button class="btn btn-o" style="flex:1" onclick="idAnswer(false)">Cancel</button>
     </div>
   </div>
 </div>
@@ -364,7 +370,7 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
       <button class="tab" onclick="sw('avail',this)">🟢 Who's free</button>
       <button class="tab" onclick="sw('cap',this)">👥 Capacity</button>
       <button class="tab" onclick="sw('inbox',this)">📥 Inbox<span id="inboxN" class="badge" style="margin-left:4px;display:none"></span></button>
-      <button class="tab" onclick="sw('tpl',this)">💬 Templates</button>
+      <!-- Templates tab hidden for now: restore this button to bring the messenger back -->
       <button class="tab" onclick="sw('hist',this)">📁 History</button>
       <button class="tab" onclick="sw('set',this)">⚙️ Settings</button>
     </div>
@@ -399,8 +405,6 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
         </div>
       </div>
       <button class="btn btn-g" id="parseBtn" onclick="parseAdd()">⚡ Parse &amp; Add to Board</button>
-      <button class="btn" id="smartBtn" onclick="smartPaste()" style="margin-top:6px;width:100%">✨ Smart paste (AI reads it, you confirm)</button>
-      <div style="font-size:10px;color:var(--muted);margin-top:3px">Paste places, zips and IDs only. Do not paste patient names, phone numbers or addresses.</div>
       <div class="hr"></div>
       <div><div class="lbl">Add Single Eval</div>
         <input id="sl" placeholder="Location / City" style="margin-bottom:5px">
@@ -596,6 +600,10 @@ table.cal{border-collapse:separate;border-spacing:0;width:100%;min-width:880px;t
           <option value="newest">Sort: newest added</option>
           <option value="urgent">Sort: urgent first</option>
         </select>
+        <select id="fClin" onchange="filtChanged()" title="Who is seeing it"><option value="">All clinicians</option></select>
+        <select id="fArea" onchange="filtChanged()" title="Area / city"><option value="">All areas</option></select>
+        <select id="fAgency" onchange="filtChanged()" title="Agency"><option value="">All agencies</option></select>
+        <button class="fb" id="fClear" onclick="filtClear()" style="display:none">✕ Clear</button>
         <select id="monthFilter" onchange="render()" style="background:var(--bg);border:1px solid var(--border);border-radius:20px;color:var(--muted);font-family:inherit;font-size:11px;padding:4px 10px;outline:none;cursor:pointer;">
           <option value="">All Months</option>
         </select>
@@ -810,6 +818,22 @@ function getSuggestedClinician(location, zip, date) {
   return bestScore >= 60 ? best : null;
 }
 
+// A page left open (or a phone app resumed) the next day: move "Week of" and the Calendar to the current week.
+// Only a week that was still on the previous "today" is moved, so a week you picked yourself is left alone.
+let lastDay=localISO();
+function dayRollover(today){
+  today=today||localISO();
+  if(today===lastDay)return false;
+  const prev=lastDay;lastDay=today;
+  const wd=document.getElementById('wd');
+  if(wd&&(!wd.value||wd.value===prev)){wd.value=today;updateWk();}
+  if(calStart&&calStart===mondayISO(prev)&&mondayISO(today)!==calStart){calStart=mondayISO(today);calData=null;if(calOn)loadCal();}
+  render();
+  return true;
+}
+document.addEventListener('visibilitychange',()=>{if(!document.hidden)dayRollover();});
+window.addEventListener('focus',()=>dayRollover());
+setInterval(()=>dayRollover(),60000);
 window.onload = async () => {
   {const ss=document.getElementById('sortSel');if(ss)ss.value=sortMode;}
   document.getElementById('wd').value = localISO();
@@ -969,7 +993,7 @@ async function clrHistory(){
 }
 function sp(p){pri=p;document.getElementById('pbN').className='pb'+(p==='normal'?' pn':'');document.getElementById('pbA').className='pb'+(p==='asap'?' pa':'');document.getElementById('pbU').className='pb'+(p==='urgent'?' pu':'');}
 function setThisWeek(){document.getElementById('wd').value=localISO();updateWk();}
-function updateWk(){const d=new Date(document.getElementById('wd').value+'T12:00:00');const s=new Date(d);s.setDate(d.getDate()-d.getDay());const e=new Date(s);e.setDate(s.getDate()+6);const f=x=>x.toLocaleDateString('en-US',{month:'short',day:'numeric'});document.getElementById('wk').textContent=`Week of ${f(s)} – ${f(e)}`;}
+function updateWk(){const d=new Date(document.getElementById('wd').value+'T12:00:00');const s=new Date(d);s.setDate(d.getDate()-((d.getDay()+6)%7));const e=new Date(s);e.setDate(s.getDate()+6);const f=x=>x.toLocaleDateString('en-US',{month:'short',day:'numeric'});document.getElementById('wk').textContent=`Week of ${f(s)} – ${f(e)}`;}
 let defaultDisc = 'PT';
 function disc(){return defaultDisc;}
 function setDisc(d){
@@ -1704,7 +1728,7 @@ async function restoreEval(id){
   await sb.from('evals').update({qa:e.qa}).eq('id',id);
   flash('✓ Restored to the board');
 }
-document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){closeClearBoard();if(dupResolve)dupAnswer('cancel');else{smartClose();askClose();}}});
+document.addEventListener('keydown',ev=>{if(ev.key==='Escape'){closeClearBoard();if(dupResolve)dupAnswer('cancel');else if(idResolve)idAnswer(false);else askClose();}});
 
 // ── AVAILABILITY CALENDAR (read from Connecteam through the connecteam-shift function) ──
 let avStart=null,avData=null,avSel=null,avSort=null,avBusy=false,avErr='',avRows=[];
@@ -2095,6 +2119,32 @@ function age(d){if(!d)return 0;const str=String(d).trim();const parsed=str.inclu
 const hold={};
 function isHeld(e){const t=hold[e.id];if(!t||e.status!=='assigned')return false;if(Date.now()-t>20*60000){delete hold[e.id];return false;}const q=e.qa||{};return !q.visitDate;}
 function releaseHold(id){delete hold[id];render();}
+// ── FILTERS: who is seeing it, area, agency (board and QA) ──
+const FSEL=['fClin','fArea','fAgency'];
+function filtVals(){const g=id=>{const el=document.getElementById(id);return el?el.value:'';};return {c:g('fClin'),a:g('fArea'),g:g('fAgency')};}
+function passFilt(e,f){
+  f=f||filtVals();
+  if(f.c){if(f.c==='__none'){if(e.clinician)return false;}else if(e.clinician!==f.c&&e.ptaClinician!==f.c)return false;}
+  if(f.a&&String(e.location||'').trim().toLowerCase()!==f.a)return false;
+  if(f.g){if(f.g==='__none'){if(e.agency)return false;}else if(e.agency!==f.g)return false;}
+  return true;
+}
+function updFilterOptions(){
+  const live=evals.filter(e=>e.status!=='complete'&&!isArchived(e));
+  const clins_=[...new Set(live.flatMap(e=>[e.clinician,e.ptaClinician]).filter(Boolean))].sort();
+  const areas=new Map();live.forEach(e=>{const l=String(e.location||'').trim();if(l&&!areas.has(l.toLowerCase()))areas.set(l.toLowerCase(),l);});
+  const ags=[...new Set(live.map(e=>e.agency).filter(Boolean))].sort();
+  const fill=(id,first,opts)=>{const el=document.getElementById(id);if(!el)return;const cur=el.value;
+    el.innerHTML='<option value="">'+first+'</option>'+opts.map(o=>'<option value="'+esc(o[0])+'">'+esc(o[1])+'</option>').join('');
+    el.value=opts.some(o=>o[0]===cur)?cur:'';};
+  fill('fClin','All clinicians',[['__none','Unassigned'],...clins_.map(c=>[c,c])]);
+  fill('fArea','All areas',[...areas.entries()].sort((a,b)=>a[1].localeCompare(b[1])).map(([k,v])=>[k,v]));
+  fill('fAgency','All agencies',[['__none','No agency yet'],...ags.map(a=>[a,a])]);
+  const on=FSEL.some(id=>{const el=document.getElementById(id);return el&&el.value;});
+  const b=document.getElementById('fClear');if(b)b.style.display=on?'':'none';
+}
+function filtChanged(){render();renderQA();}
+function filtClear(){FSEL.forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});filtChanged();}
 function render(){
   if(typeof calOn!=='undefined'&&calOn)renderCal();
   const monthSel=document.getElementById('monthFilter');
@@ -2102,7 +2152,8 @@ function render(){
   const months=[...new Set(evals.map(e=>String(e.dateAdded||'').substring(0,7)).filter(d=>d&&d.length>=7))].sort().reverse();
   if(monthSel){const cur=monthSel.value;monthSel.innerHTML='<option value="">All Months</option>'+months.map(m=>{const[y,mo]=m.split('-');const label=new Date(y,mo-1).toLocaleDateString('en-US',{month:'long',year:'numeric'});return`<option value="${m}"${m===cur?' selected':''}>${label}</option>`;}).join('');}
 
-  let list=evals.slice();
+  updFilterOptions();
+  let list=evals.filter(e=>passFilt(e));
   // Main board never shows complete — they go to History tab
   list=list.filter(e=>e.status!=='complete'&&!isArchived(e));
   if(fil==='pending')list=list.filter(e=>e.status==='pending');
@@ -2291,16 +2342,26 @@ async function asgn(id,name){
   if(name&&changed)await ctMessage(id,'assigned');
 }
 let lastAsgnAt=0;
+let idResolve=null;
+function askPatientId(msg){ // an in-page box (browsers can silently block pop-up prompts)
+  return new Promise(res=>{idResolve=res;document.getElementById('idMsg').textContent=msg;const i=document.getElementById('idIn');i.value='';document.getElementById('idModal').classList.remove('hidden');setTimeout(()=>i.focus(),30);});
+}
+function idAnswer(ok){const v=document.getElementById('idIn').value.trim();document.getElementById('idModal').classList.add('hidden');if(idResolve){const r=idResolve;idResolve=null;r(ok&&v?v:null);}}
 async function mkDone(id){const e=evals.find(e=>e.id===id);if(!e)return;
   if(Date.now()-lastAsgnAt<2500)return; // a tap on the assign list can land on this button
   // an identifier is required first, otherwise History fills with identical "Tulsa 74136" rows
   if(!String(e.patient||'').trim()){
-    const v=(prompt('Add the patient last name or ID before this goes to History:','')||'').trim();
+    const v=await askPatientId('Add the patient last name or ID before this goes to History:');
     if(!v){flash('Not moved. Add the patient last name or ID first.');return;}
     await updPat(id,v);
   }
-  if(!confirm('Mark this eval done and move it to History?'))return;
-  e.status='complete';render();renderQA();renderHistory();await sb.from('evals').update({status:'complete'}).eq('id',id);}
+  if(e.status==='complete')return; // adding the ID already moved a finished eval
+  const finished=e.qa&&e.qa.seen&&e.qa.orders&&e.qa.sysScheduled;
+  if(!finished&&!confirm('Mark this eval done and move it to History?'))return;
+  const was=e.status;e.status='complete';render();renderQA();renderHistory();
+  const {error}=await sb.from('evals').update({status:'complete'}).eq('id',id);
+  if(error){e.status=was;render();renderQA();renderHistory();alert('Could not move it to History: '+error.message+'\n\nSend this message to Claude.');}
+}
 // Agency cancelled / eval missed: keep the record in History with the reason, take the visit off Connecteam
 async function dropEval(id){
   const e=evals.find(x=>x.id===id);if(!e)return;
@@ -2336,7 +2397,7 @@ function renderQA(){
   const list=document.getElementById('qaList');if(!list)return;
 
   // Split into active (assigned, not fully QA'd) and completed QA
-  const assigned=evals.filter(e=>e.status==='assigned'&&!isArchived(e)).sort(cmpEval);
+  const _f=filtVals();const assigned=evals.filter(e=>e.status==='assigned'&&!isArchived(e)&&passFilt(e,_f)).sort(cmpEval);
   const completedQA=evals.filter(e=>e.status==='complete'&&(e.qa?.seen||e.qa?.orders||e.qa?.scheduled));
 
   // Active QA
@@ -2378,7 +2439,7 @@ async function toggleQA(id,field,val){
   // the last step of the cycle is "Scheduled in agency system": it completes only once seen + orders added + scheduled in the agency system are all ticked
   const allDone=['seen','orders','sysScheduled'].includes(field)&&val&&e.qa.seen&&e.qa.orders&&e.qa.sysScheduled&&e.status!=='complete';
   if(allDone&&!String(e.patient||'').trim()){
-    const v=(prompt('All steps are done. Add the patient last name or ID to move this to History:','')||'').trim();
+    const v=await askPatientId('All steps are done. Add the patient last name or ID to move this to History:');
     if(v){e.patient=v;await sb.from('evals').update({patient:v}).eq('id',id);}
   }
   if(allDone&&String(e.patient||'').trim()){e.status='complete';await sb.from('evals').update({status:'complete'}).eq('id',id);render();}
@@ -2489,76 +2550,6 @@ async function addAgency(){const n=document.getElementById('na').value.trim();if
 async function rmAgency(name){agencies=agencies.filter(a=>a!==name);renderAgencies();await sb.from('agencies').delete().eq('name',name);}
 
 // ── TEMPLATES ──
-// ── SMART PASTE: AI reads messy text, rows land in the Inbox for approval (agency blank, chosen on the card) ──
-async function smartPaste(){
-  const ta=document.getElementById('rt'),txt=(ta.value||'').trim();
-  if(!txt){flash('Paste the referral text first');return;}
-  if(!confirm('The pasted text is sent to an AI service to be read.\n\nOnly continue if it has NO patient names, phone numbers or addresses (places, zips and IDs are fine).\n\nContinue?'))return;
-  const b=document.getElementById('smartBtn');b.disabled=true;b.textContent='Reading…';
-  try{
-    const {data,error}=await sb.functions.invoke('referral-intake',{body:{text:txt}});
-    if(error){let m=error.message||'Request failed';try{const j=await error.context.json();if(j&&j.error)m=j.error;}catch(_){}throw new Error(m);}
-    if(data&&data.error)throw new Error(data.error);
-    const rows=(data&&data.referrals)||[];
-    if(!rows.length){flash('No referrals found in that text');return;}
-    smartOpen(rows);
-  }catch(e){flash('✕ Smart paste: '+e.message);}
-  finally{b.disabled=false;b.textContent='✨ Smart paste (AI reads it, you confirm)';}
-}
-let smartRows=[];
-function smartSuggest(r){const sg=getSuggestedClinician(r.location,r.zip,r.date||'');return sg?sg.name:'';}
-function smartOpen(rows){
-  smartRows=rows.map(r=>{const x={...r,on:true,agency:'',date:'',manual:false};x.clin=smartSuggest(x);return x;});
-  renderSmart();document.getElementById('smartModal').classList.remove('hidden');
-}
-function smartClose(){document.getElementById('smartModal').classList.add('hidden');}
-function renderSmart(){
-  const ag=agencies.map(a=>'<option>'+esc(a)+'</option>').join('');
-  const cl=clins.filter(c=>!isAsst(c));
-  document.getElementById('smartList').innerHTML=smartRows.map((r,i)=>{
-    const tag=r.clin&&r.date?asstTag(r.clin,r.date):'';
-    return `<div style="margin:6px 0;padding:8px;border:1px solid var(--border);border-radius:8px;opacity:${r.on?1:.5}">
-      <label style="display:flex;gap:6px;align-items:center;font-size:13px"><input type="checkbox" style="width:auto;flex:none;margin:0" ${r.on?'checked':''} onchange="smartRows[${i}].on=this.checked;renderSmart()"> <b>${esc(r.location)}${r.zip&&r.zip!==r.location?' '+esc(r.zip):''}</b> <span class="badge d${esc(r.discipline)}">${esc(r.discipline)}</span> <span style="color:var(--muted);font-size:11px">${esc(vtLabel(r.visit_type)||'type not given')}${r.urgent?' · 🚨 urgent':''}${r.patient?' · '+esc(r.patient):''}</span></label>
-      ${r.note?`<div style="font-size:11px;color:var(--muted);margin:2px 0 0 22px">${esc(r.note)}</div>`:''}
-      <div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:6px">
-        <select style="flex:1;min-width:130px" onchange="smartRows[${i}].agency=this.value"><option value="">Agency…</option>${ag.replace('<option>'+esc(r.agency)+'</option>','<option selected>'+esc(r.agency)+'</option>')}</select>
-        <input type="date" value="${esc(r.date)}" style="flex:1;min-width:130px" onchange="smartDate(${i},this.value)">
-        <select style="flex:1;min-width:150px" onchange="smartRows[${i}].clin=this.value;smartRows[${i}].manual=true;renderSmart()"><option value="">— Clinician —</option>${cl.map(c=>'<option value="'+esc(c.name)+'"'+(r.clin===c.name?' selected':'')+'>'+esc(c.name)+' ('+esc(c.role)+')</option>').join('')}</select>
-      </div>
-      <div style="font-size:10px;color:var(--accent);margin:3px 0 0 2px">${r.clin?'💡 '+esc(r.clin)+(r.manual?' (your pick)':' looks free for this area')+esc(tag):'No one matched this area: add it unassigned or pick someone.'}</div>
-    </div>`;}).join('');
-}
-function smartDate(i,v){const r=smartRows[i];r.date=v;if(!r.manual)r.clin=smartSuggest(r);renderSmart();}
-async function smartConfirm(){
-  const picked=smartRows.filter(r=>r.on);
-  if(!picked.length){smartClose();return;}
-  const miss=picked.find(r=>r.clin&&r.date&&!r.agency);
-  if(miss){flash('Pick an agency for '+miss.location+' so its shift has the right Job');return;}
-  const wd=localISO(),clinOf={};
-  const items=picked.map(r=>{const id=String(Date.now()+Math.random());clinOf[id]=r.clin;
-    const qa={visitType:r.visit_type||''};if(r.date){qa.visitDate=r.date;qa.visitSetAt=new Date().toISOString();}
-    return {id,location:r.location,zip:r.zip||'',discipline:r.discipline||'PT',agency:r.agency||'',priority:r.urgent?'urgent':'normal',note:r.note||'',patient:r.patient||'',status:'pending',clinician:'',ptaClinician:'',addedBy:'Smart paste',assignedBy:'',dateAdded:wd,weekDate:wd,qa};});
-  const btn=document.getElementById('smartGo');btn.disabled=true;
-  try{
-    const keep=await dupGate(items);
-    if(keep===null)return;
-    let n=0,asg=0,firstErr='';
-    saving=true;
-    for(const ev of keep){
-      const {error}=await sb.from('evals').insert(evalToDB(ev));
-      if(error){console.error('insert error:',error);if(!firstErr)firstErr=error.message||String(error);continue;}
-      evals=[ev,...evals];n++;
-    }
-    saving=false;render();
-    if(firstErr){alert('Not saved to the database: '+firstErr+'\n\nSend this message to Claude.');}
-    for(const ev of keep){const c=clinOf[ev.id];if(c&&evals.find(x=>x.id===ev.id)){await asgn(ev.id,c);asg++;}}
-    smartClose();document.getElementById('rt').value='';
-    await loadAll(); // re-read from the database so the board shows exactly what was saved
-    const onBoard=keep.filter(ev=>evals.find(x=>x.id===ev.id)).length;
-    if(onBoard<n)alert(n+' saved but only '+onBoard+' showed up after reloading. Send this to Claude.');
-    else flash('✓ '+n+' added to the board'+(asg?', '+asg+' assigned':''));
-  }finally{btn.disabled=false;}
-}
 // ── PARTNER PORTAL: Inbox of referrals agencies sent, and the private link for each agency ──
 let inbox=[],inboxDoneRows=[],portalCodes={};
 const VT_ORDER=['eval','recert','soc','roc','reeval','dc'];
