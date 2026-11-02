@@ -2456,8 +2456,11 @@ async function clrDone(){if(!confirm('Permanently remove everything in History (
 async function clrAll(){if(!confirm('Permanently delete ALL evals, including history? This cannot be undone.'))return;evals=[];render();await sb.from('evals').delete().neq('id','');}
 
 // ── QA ──
+let qaDefer=false;
+document.addEventListener('focusout',()=>{if(qaDefer)setTimeout(()=>{const a=document.activeElement;if(!(a&&a.closest&&a.closest('#qaList')&&/^(INPUT|TEXTAREA)$/.test(a.tagName)&&a.type!=='checkbox')){qaDefer=false;renderQA();}},60);});
 function renderQA(){
   const list=document.getElementById('qaList');if(!list)return;
+  {const a=document.activeElement;if(a&&a.closest&&a.closest('#qaList')&&/^(INPUT|TEXTAREA)$/.test(a.tagName)&&a.type!=='checkbox'){qaDefer=true;return;}} // don't wipe a date or note being typed
 
   // Split into active (assigned, not fully QA'd) and completed QA
   const allQA=evals.filter(e=>e.status==='assigned'&&!isArchived(e));pfFill('qa',allQA);const assigned=allQA.filter(e=>passPF(e,'qa')).sort(cmpEval);pfCount('qa',assigned.length,allQA.length);
