@@ -198,6 +198,7 @@ td.cal-drop{outline:2px dashed var(--accent);outline-offset:-3px;background:var(
 .adm-form{display:flex;gap:8px;flex-wrap:wrap;}.adm-form input,.adm-form select{padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-family:inherit;font-size:14px;}.adm-form input[type=text],.adm-form input:not([type]){flex:1;min-width:160px;}
 .adm-chk{display:grid;gap:6px;margin:10px 0;}.adm-chk label{display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer;}.adm-chk input{margin-top:2px;width:18px;height:18px;}
 .adm-bar2{display:flex;gap:10px;align-items:center;margin-bottom:10px;}.adm-bar2 select{padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;}
+.adm-card select,.adm-bar2 select{width:auto;max-width:100%;}
 .acc-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:11px;}.acc-row label{display:flex;gap:4px;align-items:center;cursor:pointer;}
 .vsw button{padding:10px 24px;border-radius:24px;border:1px solid var(--border);background:transparent;color:var(--text);font-weight:700;font-size:15px;cursor:pointer;font-family:inherit;}
 .vsw button.on{border-color:var(--accent);color:var(--accent);background:rgba(251,191,36,.08);}
@@ -1387,7 +1388,7 @@ async function addOne(){
 
 // ── ADMIN DASHBOARD (gated: each section needs access granted in Settings; enforced in the database too) ──
 let adminSecs=[],admTab='',admAR=null,admPay=null,admHires=null,admErr='',admBusy=false,admPeriod='';
-const ADM_LABELS={ar:'💵 AR aging',pipeline:'📈 Eval pipeline',payroll:'🧾 Payroll & visits',onboard:'🧑‍⚕️ New hires'};
+const ADM_LABELS={ar:'💵 AR aging',pipeline:'📈 Eval pipeline',payroll:'🧾 Payroll & visits',onboard:'🧑‍⚕️ New hires',forms:'📨 Forms'};
 const HIRE_ITEMS=[['contract','Contract / W-2 or 1099 paperwork signed'],['license','License & CPR verified'],['bg','Background check cleared'],['ct','Added to Connecteam'],['evaltool','Added to eval tool clinicians list (and linked to Connecteam)'],['login','Tool logins created (staff-admin)'],['agency','Added to agency systems (HCHB / Careficient etc.)'],['billing','Billing staff record + pay rates set'],['orient','Orientation & competencies done']];
 async function loadAdminAccess(){
   try{const {data,error}=await sb.rpc('my_admin_sections');adminSecs=error?[]:(data||[]);}catch(_){adminSecs=[];}
@@ -1395,6 +1396,7 @@ async function loadAdminAccess(){
   const a=document.getElementById('vbAdmin'),b=document.getElementById('mnAdmin');
   if(a)a.style.display=on?'':'none';if(b)b.style.display=on?'':'none';
   if(!on&&curView==='admin')setView('board');
+  if(adminSecs.includes('forms'))admLoadForms().catch(()=>{});
 }
 function admFmt(n){return '$'+(Number(n)||0).toLocaleString('en-US',{minimumFractionDigits:2,maximumFractionDigits:2});}
 function admDays(iso){if(!iso)return null;const a=new Date(iso+'T00:00:00'),b=new Date(localISO()+'T00:00:00');return Math.round((b-a)/86400000);}
@@ -1402,19 +1404,21 @@ function renderAdmin(){
   const el=document.getElementById('adminBody');if(!el)return;
   if(!adminSecs.length){el.innerHTML='<div class="qa-empty">You do not have access to the Admin dashboard.</div>';return;}
   if(!adminSecs.includes(admTab))admTab=adminSecs[0];
-  document.getElementById('admTabs').innerHTML=['ar','pipeline','payroll','onboard'].filter(k=>adminSecs.includes(k)).map(k=>`<button class="${k===admTab?'on':''}" onclick="admGo('${k}')">${ADM_LABELS[k]}</button>`).join('');
+  document.getElementById('admTabs').innerHTML=['forms','ar','pipeline','payroll','onboard'].filter(k=>adminSecs.includes(k)).map(k=>`<button class="${k===admTab?'on':''}" onclick="admGo('${k}')">${ADM_LABELS[k]}</button>`).join('');
   if(admErr){el.innerHTML='<div class="qa-empty" style="color:var(--red)">'+esc(admErr)+'<br><br><button class="btn btn-o" onclick="admGo(admTab,true)">Try again</button></div>';return;}
   if(admBusy){el.innerHTML='<div class="qa-empty">Loading…</div>';return;}
   if(admTab==='ar')return admRenderAR(el);
   if(admTab==='pipeline')return admRenderPipe(el);
   if(admTab==='payroll')return admRenderPay(el);
   if(admTab==='onboard')return admRenderHires(el);
+  if(admTab==='forms')return admRenderForms(el);
 }
 async function admGo(k,force){
   admTab=k;admErr='';
   try{
     if(k==='ar'&&(force||!admAR)){admBusy=true;renderAdmin();const {data,error}=await sb.rpc('admin_ar');admBusy=false;if(error)throw error;admAR=data||[];}
     if(k==='payroll'&&(force||!admPay)){admBusy=true;renderAdmin();const {data,error}=await sb.rpc('admin_visits');admBusy=false;if(error)throw error;admPay=data||[];}
+    if(k==='forms'&&(force||!admForms)){admBusy=true;renderAdmin();await admLoadForms();admBusy=false;}
     if(k==='onboard'&&(force||!admHires)){admBusy=true;renderAdmin();const {data,error}=await sb.from('admin_hires').select('*').order('created_at',{ascending:false});admBusy=false;if(error)throw error;admHires=data||[];}
   }catch(e){admBusy=false;admErr='Could not load: '+(e.message||e);}
   renderAdmin();
@@ -1517,6 +1521,45 @@ async function hireToggle(id,k,v){
 async function hireNote(id,v){const h=(admHires||[]).find(x=>x.id===id);if(!h)return;h.notes=v;const {error}=await sb.from('admin_hires').update({notes:v}).eq('id',id);if(error)alert('Not saved: '+error.message);}
 async function hireStatus(id,s){const h=(admHires||[]).find(x=>x.id===id);if(!h)return;h.status=s;renderAdmin();const {error}=await sb.from('admin_hires').update({status:s}).eq('id',id);if(error)alert('Not saved: '+error.message);}
 async function hireDel(id){if(!confirm('Delete this onboarding checklist?'))return;const {error}=await sb.from('admin_hires').delete().eq('id',id);if(error){alert(error.message);return;}admHires=(admHires||[]).filter(x=>x.id!==id);renderAdmin();}
+// ── Forms inbox (Connecteam form submissions to send to agencies) ──
+let admForms=null,admFormFilt='new',admFormAg='';
+async function admLoadForms(){
+  const {data,error}=await sb.from('form_submissions').select('*').order('submitted_at',{ascending:false}).limit(300);
+  if(error)throw error;admForms=data||[];
+  const n=admForms.filter(f=>f.status==='new').length,b=document.getElementById('vbAdmin');if(b)b.textContent='🗂 Admin'+(n?' ('+n+')':'');
+}
+function admRenderForms(el){
+  const all=admForms||[];
+  const cnt=s=>all.filter(f=>f.status===s).length;
+  const show=all.filter(f=>(admFormFilt==='all'||f.status===admFormFilt)&&(!admFormAg||(admFormAg==='__none'?!f.agency:f.agency===admFormAg)));
+  const ags=[...new Set([...agencies,...all.map(f=>f.agency).filter(Boolean)])].sort();
+  el.innerHTML=`<div class="adm-bar2" style="flex-wrap:wrap">
+    ${[['new','To send ('+cnt('new')+')'],['sent','Sent ('+cnt('sent')+')'],['na','Not needed ('+cnt('na')+')'],['all','All']].map(([k,t])=>`<button class="fb${admFormFilt===k?' on':''}" onclick="admFormFilt='${k}';renderAdmin()">${t}</button>`).join('')}
+    <select onchange="admFormAg=this.value;renderAdmin()"><option value="">All agencies</option><option value="__none"${admFormAg==='__none'?' selected':''}>No agency set</option>${ags.map(a=>`<option${admFormAg===a?' selected':''}>${esc(a)}</option>`).join('')}</select>
+    <a href="#" onclick="admGo('forms',true);return false" style="color:var(--accent);font-size:12px">Refresh</a></div>
+    ${show.length?show.map(f=>{
+      const when=new Date(f.submitted_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'});
+      const ans=(f.answers||[]).filter(a=>a.value);
+      return`<div class="adm-card${f.status!=='new'?' adm-fade':''}">
+      <div style="display:flex;justify-content:space-between;gap:8px;align-items:flex-start;flex-wrap:wrap">
+        <div><b style="font-size:15px">${esc(f.form_title||'Form')}</b>${f.edited?' <span class="adm-m">(edited)</span>':''}<div class="adm-m">${esc(f.submitter_name||'')} · ${esc(when)}</div></div>
+        <select onchange="formSet('${f.id}',{agency:this.value})" style="padding:7px;border-radius:8px;border:1px solid ${f.agency?'var(--border)':'var(--accent)'};background:var(--bg);color:var(--text);font-size:13px"><option value="">Agency…</option>${ags.map(a=>`<option${f.agency===a?' selected':''}>${esc(a)}</option>`).join('')}</select></div>
+      <details style="margin:8px 0"><summary style="cursor:pointer;color:var(--accent);font-size:13px">View answers (${ans.length})</summary>
+        <div style="margin-top:6px;display:grid;gap:6px">${ans.map(a=>`<div style="font-size:13px"><div class="adm-m">${esc(a.label||'Question '+a.q)}</div><div style="white-space:pre-wrap;overflow-wrap:anywhere">${/^https?:\/\//.test(a.value)?a.value.split('\n').map(u=>`<a href="${esc(u)}" target="_blank" rel="noopener" style="color:var(--accent)">${esc(a.type==='signature'?'Signature':'Open attachment')}</a>`).join('<br>'):esc(a.value)}</div></div>`).join('')||'<div class="adm-m">No answers saved.</div>'}</div></details>
+      ${f.status==='new'?`<div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+        <select id="fv${f.id}" style="padding:8px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text);font-size:13px"><option>Faxed</option><option>Emailed</option><option>Portal</option><option>Other</option></select>
+        <button class="cbtn done" onclick="formSent('${f.id}')">✓ Mark sent</button><button class="cbtn" onclick="formSet('${f.id}',{status:'na'})">Not needed</button></div>`
+      :`<div class="adm-m">${f.status==='sent'?'Sent'+(f.sent_via?' by '+esc(f.sent_via):'')+(f.sent_by?' · '+esc(f.sent_by):'')+(f.sent_at?' · '+esc(new Date(f.sent_at).toLocaleDateString()):''):'Marked not needed'} <a href="#" onclick="formSet('${f.id}',{status:'new',sent_via:'',sent_by:'',sent_at:null});return false" style="color:var(--accent)">Reopen</a></div>`}
+      <textarea class="qa-note" placeholder="Notes…" onchange="formSet('${f.id}',{notes:this.value},true)" style="margin-top:6px">${esc(f.notes||'')}</textarea></div>`;}).join(''):'<div class="qa-empty">Nothing here. Forms staff submit in Connecteam show up automatically.</div>'}`;
+}
+async function formSet(id,patch,quiet){
+  const f=(admForms||[]).find(x=>x.id===id);if(!f)return;Object.assign(f,patch);
+  const {error}=await sb.from('form_submissions').update(patch).eq('id',id);
+  if(error){alert('Not saved: '+error.message);return;}
+  if(!quiet){admLoadForms().catch(()=>{});renderAdmin();}
+}
+function formSent(id){formSet(id,{status:'sent',sent_via:document.getElementById('fv'+id).value,sent_by:userName||'',sent_at:new Date().toISOString()});}
+
 // Settings: who gets which Admin section (admins only)
 let admAccessMap={};
 async function loadAdminAccessMap(){
@@ -1662,7 +1705,7 @@ async function loadStaffAdmin(){
     return `<div class="staff-row" style="opacity:${off?.55:1}">
       <div style="min-width:0"><div style="font-weight:600">${esc(r.full_name||'—')}${off?' <span style="color:var(--red);font-weight:400">(inactive)</span>':''}</div>
       <div style="color:var(--muted);font-size:11px;overflow-wrap:anywhere">${esc(r.email||'')}</div>
-      <div class="acc-row">${r.is_super_admin?'<span style="color:var(--accent)">Admin dashboard: full access</span>':'<span style="color:var(--muted)">Admin dashboard:</span>'+[['ar','AR'],['pipeline','Pipeline'],['payroll','Payroll'],['onboard','Hires']].map(([k,t])=>`<label><input type="checkbox" ${(admAccessMap[r.id]||[]).includes(k)?'checked':''} onchange="setAdmAccess('${esc(r.id)}','${k}',this.checked)">${t}</label>`).join('')}</div></div>
+      <div class="acc-row">${r.is_super_admin?'<span style="color:var(--accent)">Admin dashboard: full access</span>':'<span style="color:var(--muted)">Admin dashboard:</span>'+[['forms','Forms'],['ar','AR'],['pipeline','Pipeline'],['payroll','Payroll'],['onboard','Hires']].map(([k,t])=>`<label><input type="checkbox" ${(admAccessMap[r.id]||[]).includes(k)?'checked':''} onchange="setAdmAccess('${esc(r.id)}','${k}',this.checked)">${t}</label>`).join('')}</div></div>
       <div style="display:flex;gap:5px">
         <button class="cbtn" onclick="resetStaffPw('${esc(r.id)}')">Reset password</button>
         <button class="cbtn${off?'':' del'}" onclick="toggleStaff('${esc(r.id)}',${off})">${off?'Reactivate':'Deactivate'}</button>
