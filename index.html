@@ -199,6 +199,11 @@ td.cal-drop{outline:2px dashed var(--accent);outline-offset:-3px;background:var(
 .adm-chk{display:grid;gap:6px;margin:10px 0;}.adm-chk label{display:flex;gap:8px;align-items:flex-start;font-size:13px;cursor:pointer;}.adm-chk input{margin-top:2px;width:18px;height:18px;}
 .adm-bar2{display:flex;gap:10px;align-items:center;margin-bottom:10px;}.adm-bar2 select{padding:9px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:14px;}
 .adm-card select,.adm-bar2 select{width:auto;max-width:100%;}
+.adm-in{background:var(--bg);color:var(--text);border:1px solid var(--border);border-radius:6px;padding:5px 6px;font-size:12px;font-family:inherit;width:122px;}
+.ar-tbl td{padding:4px 5px;}.ar-tbl th{position:sticky;top:0;background:var(--surface);z-index:2;}
+.ar-stick{position:sticky;left:0;background:var(--surface);z-index:3;white-space:nowrap;}
+.ar-paid{background:rgba(74,222,128,.16);}.ar-sent{background:rgba(251,191,36,.16);}.ar-late{background:rgba(248,113,113,.24);}.ar-inv{background:rgba(148,163,184,.16);}
+.ar-key{display:inline-block;width:12px;height:12px;border-radius:3px;vertical-align:-2px;margin-right:3px;border:1px solid var(--border);}
 .acc-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:6px;font-size:11px;}.acc-row label{display:flex;gap:4px;align-items:center;cursor:pointer;}
 .vsw button{padding:10px 24px;border-radius:24px;border:1px solid var(--border);background:transparent;color:var(--text);font-weight:700;font-size:15px;cursor:pointer;font-family:inherit;}
 .vsw button.on{border-color:var(--accent);color:var(--accent);background:rgba(251,191,36,.08);}
@@ -1418,15 +1423,89 @@ function renderAdmin(){
 async function admGo(k,force){
   admTab=k;admErr='';
   try{
-    if(k==='ar'&&(force||!admAR)){admBusy=true;renderAdmin();const {data,error}=await sb.rpc('admin_ar');admBusy=false;if(error)throw error;admAR=data||[];}
+    if(k==='ar'&&(force||!admAR)){admBusy=true;renderAdmin();const [a,g]=await Promise.all([sb.rpc('admin_ar'),sb.rpc('admin_ar_agencies')]);admBusy=false;if(a.error)throw a.error;if(g.error)throw g.error;admAR=a.data||[];admAgs=g.data||[];}
     if(k==='payroll'&&(force||!admPay)){admBusy=true;renderAdmin();const {data,error}=await sb.rpc('admin_visits');admBusy=false;if(error)throw error;admPay=data||[];}
     if(k==='forms'&&(force||!admForms)){admBusy=true;renderAdmin();await admLoadForms();admBusy=false;}
     if(k==='onboard'&&(force||!admHires)){admBusy=true;renderAdmin();const {data,error}=await sb.from('admin_hires').select('*').order('created_at',{ascending:false});admBusy=false;if(error)throw error;admHires=data||[];}
   }catch(e){admBusy=false;admErr='Could not load: '+(e.message||e);}
   renderAdmin();
 }
-// AR: due 30 days after the sent date; unpaid past 30 days is past due
+// AR grid: period rows x agency (Invoiced / Sent / Paid), editable, same layout as the billing tool's "All periods overview"
+let admArView='grid',admAgs=null,admExtra=[];
+const AR_ORDER=['careficient','complete','millennium','faith','bios','rice','vital','caring'];
+const MONTHS=['january','february','march','april','may','june','july','august','september','october','november','december'];
+function arKey(l,y){return (l||'')+'|'+(y||'');}
+function arSortVal(p){
+  const m=MONTHS.findIndex(x=>(p.l||'').toLowerCase().startsWith(x.slice(0,3))),d=((p.l||'').match(/(\d{1,2})\s*-/)||[])[1],y=parseInt(p.y,10)||0;
+  return (y<100?y+2000:y)*10000+(m<0?0:m+1)*100+(Number(d)||0);
+}
+function arStatus(r){
+  if(!r)return '';
+  const inv=Number(r.invoiced_amount)||0;
+  if(r.paid_date)return 'paid';
+  if(inv<=0&&!r.invoice_sent_date)return '';
+  if(r.invoice_sent_date)return admDays(r.invoice_sent_date)>30?'late':'sent';
+  return 'inv';
+}
+function arOwed(r){if(!r||r.paid_date)return 0;return Math.max(0,(Number(r.invoiced_amount)||0)-(Number(r.paid_amount)||0));}
+function arTotals(){
+  let owed=0,late=0;(admAR||[]).forEach(r=>{const o=arOwed(r);owed+=o;if(arStatus(r)==='late')late+=o;});
+  return {owed,late};
+}
+function arSummaryHtml(){const t=arTotals();return `Total owed: <b>${admFmt(t.owed)}</b> &nbsp; <span style="color:var(--red);font-weight:700">Past due (30+ days): ${admFmt(t.late)}</span>`;}
 function admRenderAR(el){
+  const tabs=`<div class="adm-bar2"><button class="fb${admArView==='grid'?' on':''}" onclick="admArView='grid';renderAdmin()">All periods (edit)</button><button class="fb${admArView==='aging'?' on':''}" onclick="admArView='aging';renderAdmin()">Aging summary</button><a href="#" onclick="admGo('ar',true);return false" style="color:var(--accent);font-size:12px">Refresh</a></div>`;
+  if(admArView==='aging'){const d=document.createElement('div');admRenderAging(d);el.innerHTML=tabs+d.innerHTML;return;}
+  const rows=admAR||[],agList=admAgs||[];
+  const byAg={};rows.forEach(r=>{(byAg[r.agency_id]=byAg[r.agency_id]||0);byAg[r.agency_id]+=Number(r.invoiced_amount)||0;});
+  const ags=agList.filter(a=>byAg[a.id]!=null||true).slice().sort((a,b)=>{
+    const ia=AR_ORDER.findIndex(k=>a.name.toLowerCase().includes(k)),ib=AR_ORDER.findIndex(k=>b.name.toLowerCase().includes(k));
+    return (ia<0?99:ia)-(ib<0?99:ib)||a.name.localeCompare(b.name);
+  }).filter(a=>byAg[a.id]!=null);
+  const per={};rows.forEach(r=>{per[arKey(r.period_label,r.period_year)]={l:r.period_label,y:r.period_year};});
+  admExtra.forEach(p=>{per[arKey(p.l,p.y)]=p;});
+  const periods=Object.values(per).sort((a,b)=>arSortVal(a)-arSortVal(b));
+  const cell=(ag,p)=>{
+    const r=rows.find(x=>x.agency_id===ag.id&&x.period_label===p.l&&x.period_year===p.y);
+    const a=`'${esc(ag.id)}','${esc(p.l)}','${esc(p.y)}'`,id=esc(ag.id+'|'+arKey(p.l,p.y));
+    const inv=r&&Number(r.invoiced_amount)?Number(r.invoiced_amount).toFixed(2):'';
+    return `<td class="ar-c ar-${arStatus(r)}" id="arc_${id}"><input class="adm-in" style="width:84px" inputmode="decimal" value="${inv}" placeholder="$" onchange="admArSet(${a},'invoiced',this)"></td>
+      <td class="ar-c ar-${arStatus(r)}" id="ars_${id}"><input class="adm-in" type="date" value="${esc((r&&r.invoice_sent_date)||'')}" onchange="admArSet(${a},'sent',this)"></td>
+      <td class="ar-c ar-${arStatus(r)}" id="arp_${id}"><input class="adm-in" type="date" value="${esc((r&&r.paid_date)||'')}" onchange="admArSet(${a},'paid',this)"></td>`;
+  };
+  el.innerHTML=tabs+`<div style="font-size:14px;margin-bottom:6px" id="arSum">${arSummaryHtml()}</div>
+    <div class="adm-m" style="margin-bottom:8px"><span class="ar-key ar-paid"></span>paid · <span class="ar-key ar-sent"></span>sent, due within 30 days · <span class="ar-key ar-late"></span>unpaid past 30 days · <span class="ar-key ar-inv"></span>invoiced, no sent date. Change an amount or date and it saves automatically.</div>
+    <div class="adm-scroll" style="max-height:70vh"><table class="adm-tbl ar-tbl"><thead>
+      <tr><th rowspan="2" class="ar-stick">Invoice period</th>${ags.map(a=>`<th colspan="3" style="text-align:center">${esc(a.name)}</th>`).join('')}</tr>
+      <tr>${ags.map(()=>'<th>Invoiced</th><th>Sent</th><th>Paid</th>').join('')}</tr></thead><tbody>
+      ${periods.map(p=>`<tr><td class="ar-stick"><b>${esc(p.l||'')} ${esc(p.y||'')}</b></td>${ags.map(a=>cell(a,p)).join('')}</tr>`).join('')}
+    </tbody></table></div>
+    <div class="adm-form" style="margin-top:10px"><input id="arNewL" placeholder="New period, e.g. November 01-15" style="min-width:240px"><input id="arNewY" placeholder="Year" style="width:80px;min-width:0" value="${esc((periods[periods.length-1]||{}).y||'')}"><button class="btn" onclick="admArAddPeriod()">+ Add period</button></div>`;
+}
+function admArAddPeriod(){
+  const l=document.getElementById('arNewL').value.trim(),y=document.getElementById('arNewY').value.trim();
+  if(!l||!y){flash('Enter the period and year');return;}
+  admExtra.push({l,y});renderAdmin();
+}
+async function admArSet(agId,label,year,field,inp){
+  let val=(inp.value||'').trim();
+  if(field==='invoiced'&&val&&isNaN(Number(val.replace(/[$,]/g,'')))){flash('Enter a dollar amount');return;}
+  const {error}=await sb.rpc('admin_ar_set',{p_agency:agId,p_label:label,p_year:year,p_field:field,p_value:val});
+  if(error){alert('Not saved: '+error.message);return;}
+  // update the local copy, then recolor just this row's cells and the totals (the page is not redrawn, so tabbing between cells keeps working)
+  let r=admAR.find(x=>x.agency_id===agId&&x.period_label===label&&x.period_year===year);
+  if(!r){r={agency_id:agId,agency:'',period_label:label,period_year:year,invoiced_amount:0,invoice_sent_date:null,paid_date:null,paid_amount:0};admAR.push(r);}
+  if(field==='invoiced')r.invoiced_amount=Number(val.replace(/[$,]/g,''))||0;
+  else if(field==='sent')r.invoice_sent_date=val||null;
+  else{r.paid_date=val||null;if(!val)r.paid_amount=0;else if(!(Number(r.paid_amount)>0))r.paid_amount=r.invoiced_amount;}
+  const st=arStatus(r),id=agId+'|'+arKey(label,year);
+  ['arc_','ars_','arp_'].forEach(p=>{const td=document.getElementById(p+id);if(td)td.className='ar-c ar-'+st;});
+  const s=document.getElementById('arSum');if(s)s.innerHTML=arSummaryHtml();
+  flash('✓ Saved');
+}
+
+// Aging summary: due 30 days after the sent date; unpaid past 30 days is past due
+function admRenderAging(el){
   const open=[],unsent=[];
   (admAR||[]).forEach(r=>{
     const inv=Number(r.invoiced_amount)||0,paid=Number(r.paid_amount)||0,bal=Math.round((inv-paid)*100)/100;
